@@ -130,21 +130,25 @@ func _build_grid_lines() -> void:
 ## build() reruns, e.g. after a feetPerSquare change, which would look like the
 ## floor texture flickering/changing under the party for no in-fiction reason).
 func _build_real_floor_tiles() -> void:
-	# How far each tile needs shifting so its actual top surface lands at
-	# world y=0, measured once per distinct scene rather than per cell (see
-	# _measure_top_offset) -- both scenes get scaled identically per cell, so
-	# this offset is the same for every instance of the same scene.
+	# Measured once from the PLAIN floor tile only, then reused for
+	# floor-detail too -- deliberately not measured per-scene. A first attempt
+	# did measure floor-detail.glb separately and it came out visibly sunken
+	# (a dark gap around every detail tile): that scene has raised rubble
+	# props sitting ON TOP of the same base plate floor.glb has, so its own
+	# highest point is the top of a rock, not the shared walkable surface --
+	# using that as the seat reference pushed the whole tile down by the
+	# rock's height. Both pieces are modular tile-kit-mates meant to sit at
+	# the same base height so they tile interchangeably, so the plain tile's
+	# measurement is the correct shared reference for both.
 	var floor_offset := _measure_top_offset(_floor_scene)
-	var detail_offset := _measure_top_offset(_floor_detail_scene) if _floor_detail_scene else floor_offset
 
 	for gx in range(1, columns + 1):
 		for gy in range(1, rows + 1):
 			var use_detail := _floor_detail_scene and (gx * 7 + gy * 3) % 11 == 0
 			var scene: PackedScene = _floor_detail_scene if use_detail else _floor_scene
-			var offset: float = detail_offset if use_detail else floor_offset
 			var tile := scene.instantiate() as Node3D
 			tile.scale = Vector3(cell_size, cell_size, cell_size)
-			tile.position = cell_to_world(gx, gy) - Vector3(0, offset, 0)
+			tile.position = cell_to_world(gx, gy) - Vector3(0, floor_offset, 0)
 			add_child(tile)
 
 ## Instantiates `scene` at the same scale real tiles use, just to measure how
