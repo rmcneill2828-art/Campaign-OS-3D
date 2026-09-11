@@ -68,19 +68,19 @@ client + placeholder art, wired end to end -- is proven out.
   `feetPerSquare` differs, e.g. a 10 ft/square map renders visibly bigger
   tiles.
 
-### Needs live verification (same reasoning as Phase 0 -- none of this has been
-seen rendered; no Godot install in the environment that built it)
+- [x] **Verified live in Godot, 2026-09-11 (user-confirmed).** Attack (select
+  then right-click a target) fires correctly and a right-drag-only orbit does
+  NOT also attack; Next Turn advances round/active token correctly in the
+  status label; default 5 ft/square map renders unchanged. Bonus, unprompted
+  confirmation the server-authoritative architecture is paying off already:
+  dropping a goblin to 0 HP surfaced a real "starts making death saves"
+  message with **zero client-side code written for death saves at all** --
+  it's a rules consequence the engine already handles (see Campaign-OS's own
+  `CLAUDE.md` "Death saves" section), and it just showed up for free because
+  the Godot client renders whatever the server's log says, nothing more
+  specific than that.
 
-- [ ] Selecting a token, then right-clicking a different token, sends a real
-  attack (confirm via the status HUD message and/or `curl .../state` showing
-  HP changed) -- and a right-drag used purely to orbit the camera does NOT
-  also fire an attack
-- [ ] "Next Turn" advances the round/active token, shown correctly in the
-  status label, and a moved-but-not-yet-its-turn token still moves freely
-  (unconstrained) while the active token's movement is speed-limited
-- [ ] Default map (5 ft/square) still renders at the same tile size as before
-  this change -- a quick visual regression check, not a new feature to test
-- [ ] Fix whatever the above turns up
+Phase 1 complete.
   once movement/range start mattering to the player, not just to the server.
 
 ## Phase 2 -- Real assets (medium, after Phase 1 proves the interaction loop)
