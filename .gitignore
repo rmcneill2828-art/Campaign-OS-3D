@@ -17,13 +17,24 @@ engine-server/state/*.json
 .DS_Store
 Thumbs.db
 
-# --- Quaternius character assets (Phase 2) ---
-# Licensed under the Quaternius Asset License v1.0 (https://quaternius.com/license.html):
-# free to USE in this project, but section 3(a) prohibits redistributing the
-# raw asset files themselves -- committing them to a git repo (which anyone
-# who clones it could then pull back out as standalone files) risks exactly
-# that, so they're kept local-only instead. Kenney's dungeon-kit is separate
-# and NOT covered by this -- it's CC0 and safe to commit (see godot/assets/README.md).
+# --- Creatures/ raw pack dumps + flattened copies ---
+# Two different reasons live in this one ignored tree now, not just one:
+# - The Quaternius packs (hero-pack/, monster-pack/, animation-library/'s
+#   Universal Animation Library folders) are QAL v1.0 licensed
+#   (https://quaternius.com/license.html) -- free to USE here, but section
+#   3(a) prohibits redistributing the raw asset files themselves, so they
+#   stay local-only rather than risk that via a git clone.
+# - The KayKit packs living inside those SAME folders (hero-pack/
+#   KayKit_Adventurers_*, monster-pack/KayKit_Skeletons_*, animation-library/
+#   KayKit_Character_Animations_*) are genuinely CC0 -- no license reason to
+#   exclude them at all. They're swept up by this same blanket ignore purely
+#   for convenience (they share a parent folder with QAL content) and repo
+#   hygiene (each raw download bundles FBX/OBJ/glTF variants of everything at
+#   once) -- not because they need to be. Un-ignore/flatten specific KayKit
+#   files the same way creatures/hero and creatures/monster already do for
+#   Quaternius once a real model is actually wired up.
+# Kenney's dungeon-kit is separate and NOT covered by any of this -- it's CC0
+# and committed directly (see godot/assets/README.md).
 godot/assets/Creatures/
 godot/assets/creatures/
 
@@ -57,3 +68,8 @@ godot/assets/Environment/kenney-dungeon/
 godot/assets/Environment/quaternius-buildings/
 godot/assets/Environment/quaternius-nature/
 godot/assets/Environment/quaternius-props/
+
+# --- KayKit Dungeon Remastered -- genuinely CC0 (confirmed directly), same
+# repo-hygiene-only ignore reasoning as the Quaternius MegaKits above (a raw
+# download bundling gltf/obj/texture variants of ~200 pieces at once).
+godot/assets/Environment/kaykit-dundeons/

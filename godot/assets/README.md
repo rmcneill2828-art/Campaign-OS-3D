@@ -38,6 +38,15 @@
   at once, most of which won't end up in any given map. No flattened copies
   exist yet since nothing has used them yet; see "Why flattened copies" below
   for the pattern once a real map picks specific pieces.
+- **`Creatures/hero-pack/KayKit_Adventurers_2.0_FREE/`**,
+  **`Creatures/monster-pack/KayKit_Skeletons_1.1_FREE/`**,
+  **`Creatures/animation-library/KayKit_Character_Animations_1.1/`**,
+  **`Environment/kaykit-dundeons/`** -- Kay Lousberg's "KayKit" packs,
+  downloaded as a real per-name monster/hero option (see KayKit below) and a
+  stylistically-different dungeon-kit alternative. **Genuinely CC0**
+  (confirmed per-pack). Not yet wired into `Token.gd`/`GridManager.gd` --
+  downloaded and cataloged only so far, same "gather now, integrate when a
+  real feature needs it" pattern as the Quaternius MegaKits above.
 
 ## Licensing -- read before adding more assets from either site
 
@@ -120,6 +129,58 @@ scene's node structure, which would depend on Godot's glTF importer producing
 identical scene layouts across different files, an assumption this project
 got burned by more than once already this phase (see `ROADMAP.md`'s Phase 2
 entry on the floating-model/floor-height bugs).
+
+### KayKit (Kay Lousberg)
+
+Downloaded to fix a real, named gap: every monster token renders as the same
+Imp model today regardless of which SRD stat block it actually is (see
+"Adding more monsters/heroes later" below). **Genuinely CC0 for all four
+packs** (confirmed by reading each `License.txt` directly, not assumed from
+Quaternius's own precedent in this same file -- different creator, no reason
+to assume the same terms), attribution optional, not required.
+
+- **KayKit Adventurers** (`Creatures/hero-pack/KayKit_Adventurers_2.0_FREE/`)
+  -- 6 self-contained hero models (`Characters/gltf/*.glb`): Barbarian,
+  Knight, Mage, Ranger, Rogue, Rogue_Hooded. Plus weapon/shield/prop
+  accessories under `Assets/gltf/` (swords, bows, staffs, shields, etc.) as
+  separate attachable meshes, not currently used.
+- **KayKit Skeletons** (`Creatures/monster-pack/KayKit_Skeletons_1.1_FREE/`)
+  -- 4 self-contained skeleton models (`characters/gltf/*.glb`):
+  Skeleton_Warrior, Skeleton_Mage, Skeleton_Rogue, Skeleton_Minion -- a real
+  match for the engine's actual "skeleton" SRD monster, not a reuse of
+  something else. Plus weapon accessories under `assets/gltf/`.
+- **KayKit Character Animations** (`Creatures/animation-library/KayKit_Character_Animations_1.1/`)
+  -- the full shared animation library, split by rig size
+  (`Animations/gltf/Rig_Medium/`, `Rig_Large/`) and further by category into
+  8 files per rig (`Rig_Medium_General.glb`, `_MovementBasic.glb`,
+  `_MovementAdvanced.glb`, `_CombatMelee.glb`, `_CombatRanged.glb`,
+  `_Simulation.glb`, `_Special.glb`, `_Tools.glb`) -- together 130+
+  individual clips, well beyond Quaternius's ~40. Both Adventurers and
+  Skeletons also bundle a 2-file subset of this same library locally
+  (`General` + `MovementBasic` only) for convenience; this full pack is the
+  one to actually use as the shared animation source, same "one shared
+  source, not a per-character copy" pattern `mannequin_animations.glb`
+  already established for Quaternius.
+- **KayKit Dungeon Remastered** (`Environment/kaykit-dundeons/`) -- 200+
+  dungeon pieces (`.../Assets/gltf/`), a stylistically different alternative
+  to Kenney's `dungeon-kit`. Packaged as a Godot addon folder structure
+  (`addons/kaykit_dungeon_remastered/`) from its GitHub distribution rather
+  than itch.io's plain zip -- the actual models live at
+  `addons/kaykit_dungeon_remastered/Assets/gltf/` either way.
+
+**Rig compatibility, verified the same way as Quaternius's -- not assumed
+from Adventurers/Skeletons both shipping a "Rig_Medium" folder name alone**:
+before wiring any of this into `Token.gd`, confirm Adventurers' and
+Skeletons' actual skeleton bone names match the Character Animations pack's
+`Rig_Medium` skeleton the same direct-comparison way `imp.glb`/
+`superhero_male.gltf` were checked against Quaternius's UAL1 earlier in this
+file -- don't assume a shared rig NAME implies shared bone names without
+checking. **KayKit's rig is a different, separate skeleton from
+Quaternius's** (different creator, no shared convention) -- a KayKit model
+would need `Token.gd`'s single `ANIMATION_SOURCE_PATH` generalized into a
+per-model-family setting (Quaternius models keep using
+`mannequin_animations.glb`, KayKit models use a KayKit animation source
+instead), not a drop-in replacement for it.
 
 ## Why flattened copies instead of referencing the raw pack folders directly
 
