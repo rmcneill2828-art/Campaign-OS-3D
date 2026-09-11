@@ -288,12 +288,16 @@ func _animate_to(target: Vector3) -> void:
 ## than hand-derived trig specifically to remove one whole class of mistake
 ## this project has already hit more than once this phase (getting an axis/
 ## sign wrong by reasoning about it instead of using a well-tested built-in).
-## The one thing look_at() can't remove: whether this model's own AUTHORED
-## "forward" actually IS Godot's -Z convention look_at() assumes -- if
-## characters turn out visibly backward or sideways once seen, that's the
-## remaining possible mismatch, fixable with a single rotation.y += PI (or
-## PI/2) here rather than reworking this function's logic.
+##
+## The `+ PI` matters and is not arbitrary: look_at() points the node's local
+## -Z at the target, but this specific model's authored "forward" turned out
+## to be +Z instead -- confirmed by testing (without it, tokens correctly
+## turned to face their destination but then visibly walked backward toward
+## it, exactly what facing 180 degrees off looks like with a walk cycle
+## playing). If a future model swap ever walks backward again, this is the
+## line to revisit.
 func _face_direction(direction: Vector3) -> void:
 	if direction.length_squared() < 0.0001:
 		return
 	look_at(global_position + direction, Vector3.UP)
+	rotation.y += PI
