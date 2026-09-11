@@ -34,8 +34,12 @@ const FALLBACK_CAPSULE_HEIGHT := 1.6
 ## exactly, and the monster model's bones are a strict subset of the same set
 ## -- so this one animation source can drive both. See _setup_animation().
 const ANIMATION_SOURCE_PATH := "res://assets/creatures/animations/mannequin_animations.glb"
-const IDLE_ANIMATION := "Idle_Loop"
-const WALK_ANIMATION := "Walk_Loop"
+# Not "Idle_Loop"/"Walk_Loop" -- confirmed via this project's own diagnostic
+# print() that Godot's glTF importer strips a trailing "_Loop" from an
+# animation's name and folds that into the clip's own loop_mode property
+# instead, so the actually-imported names are just "Idle"/"Walk".
+const IDLE_ANIMATION := "Idle"
+const WALK_ANIMATION := "Walk"
 
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
