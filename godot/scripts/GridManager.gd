@@ -17,13 +17,14 @@ const TILE_MARGIN := 0.06
 const TILE_HEIGHT := 0.1
 
 ## Kenney's Mini Dungeon floor piece -- CC0, committed to this repo (unlike the
-## Quaternius character models), so this one CAN safely preload(). Its own
-## bounding box is exactly a 1x1x1 unit cube with the origin at its bottom
-## center (confirmed by reading its glTF accessor bounds directly), so a
-## uniform scale of `cell_size` makes it fill exactly one grid cell with no
-## per-axis distortion, and `-Vector3(0, cell_size, 0)` puts its top surface at
-## world y=0 -- the same "floor top = ground level" convention every token/
-## collision box in this project already assumes.
+## Quaternius character models), so this one CAN safely preload(). Its
+## footprint is a 1x1 unit square, so a uniform scale of `cell_size` fills
+## exactly one grid cell with no per-axis distortion -- but exactly where its
+## top surface actually ends up after that scale is measured at runtime
+## (_measure_top_offset), not assumed from the file's own raw bounds, which
+## turned out not to match the real rendered result (see that function's
+## comment). The goal either way is the same "floor top = ground level"
+## convention every token/collision box in this project already assumes.
 const FLOOR_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor.glb"
 const FLOOR_DETAIL_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor-detail.glb"
 
@@ -129,14 +130,46 @@ func _build_grid_lines() -> void:
 ## build() reruns, e.g. after a feetPerSquare change, which would look like the
 ## floor texture flickering/changing under the party for no in-fiction reason).
 func _build_real_floor_tiles() -> void:
+	# How far each tile needs shifting so its actual top surface lands at
+	# world y=0, measured once per distinct scene rather than per cell (see
+	# _measure_top_offset) -- both scenes get scaled identically per cell, so
+	# this offset is the same for every instance of the same scene.
+	var floor_offset := _measure_top_offset(_floor_scene)
+	var detail_offset := _measure_top_offset(_floor_detail_scene) if _floor_detail_scene else floor_offset
+
 	for gx in range(1, columns + 1):
 		for gy in range(1, rows + 1):
 			var use_detail := _floor_detail_scene and (gx * 7 + gy * 3) % 11 == 0
 			var scene: PackedScene = _floor_detail_scene if use_detail else _floor_scene
+			var offset: float = detail_offset if use_detail else floor_offset
 			var tile := scene.instantiate() as Node3D
 			tile.scale = Vector3(cell_size, cell_size, cell_size)
-			tile.position = cell_to_world(gx, gy) - Vector3(0, cell_size, 0)
+			tile.position = cell_to_world(gx, gy) - Vector3(0, offset, 0)
 			add_child(tile)
+
+## Instantiates `scene` at the same scale real tiles use, just to measure how
+## far above its own local origin its highest rendered point actually sits,
+## then discards it. Deliberately NOT trusted from this model's raw glTF
+## accessor bounds -- those suggested a plain 1x1x1 box with a bottom-center
+## origin, which turned out to be wrong once actually rendered (same lesson
+## Token.gd's _ground_model() learned the hard way: a file's authored
+## coordinate space and Godot's final resolved position aren't guaranteed to
+## match, e.g. via a parent node's own rotation/offset). Measuring the real
+## thing after Godot has already resolved it is robust regardless of why.
+func _measure_top_offset(scene: PackedScene) -> float:
+	var probe := scene.instantiate() as Node3D
+	probe.scale = Vector3(cell_size, cell_size, cell_size)
+	add_child(probe)
+	var highest_y := -INF
+	for visual in probe.find_children("*", "VisualInstance3D", true, false):
+		var mesh_instance := visual as VisualInstance3D
+		var aabb: AABB = mesh_instance.get_aabb()
+		for i in range(8):
+			var world_corner: Vector3 = mesh_instance.global_transform * aabb.get_endpoint(i)
+			highest_y = max(highest_y, world_corner.y)
+	remove_child(probe)
+	probe.queue_free()
+	return highest_y if is_finite(highest_y) else 0.0
 
 ## Only used if the real floor model is missing for some reason (see _ready())
 ## -- Phase 0's original flat-colored-box checkerboard.
