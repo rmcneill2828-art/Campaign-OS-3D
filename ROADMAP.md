@@ -23,32 +23,22 @@ before investing in anything real-art-shaped or feature-complete.
   capsule-primitive "miniatures" colored by token type (blue hero / red monster /
   grey at 0 HP) with a floating name+HP label, click-to-select and click-to-move
   wired to `POST /action`, and a status readout showing the connection state and
-  latest combat-log line. **Not yet verified inside the Godot editor** -- no Godot
-  install was available in the environment this was scaffolded in (see "Needs
-  verification" below). Hand-written `.tscn`/`.gd` files following standard Godot
-  4.3 conventions; the engine-server half (server logic, action dispatch, state
-  persistence) IS independently verified via its own test suite above, since that
-  part runs under plain Node either way.
-- [ ] **Needs verification: open `godot/project.godot` in a real Godot 4.3+
-  editor and confirm it actually loads and runs** -- install Godot
-  (https://godotengine.org/download), open the project, press Play with
-  `engine-server` running, and work through the checklist below. This is the
-  single most important next step before building anything further on top of this
-  scaffold, since none of it has been visually confirmed yet:
-  - [ ] Board renders as a checkerboard grid at the right size (12x8 by default)
-  - [ ] Two blue hero capsules and two red goblin capsules appear, each labeled
-  - [ ] Right-drag orbits, middle-drag pans, wheel zooms, and the camera never
-    flips upside down or clips through the floor
-  - [ ] Left-clicking a token shows its selection ring; left-clicking a floor tile
-    afterward moves it there (both instantly in the 3D view and confirmed via
-    `curl http://127.0.0.1:8787/state` showing the new x/y)
-  - [ ] Status label updates with the combat log line after a move
-  - [ ] Stopping/restarting `node server.js` and reconnecting doesn't crash the
-    client (it should just show the "could not reach engine-server" status text
-    while it's down)
-  - [ ] Fix whatever the above turns up -- some tuning (camera angle/speed, tile
-    size, label legibility) should be expected on a scaffold that's never been
-    seen rendered
+  latest combat-log line. Hand-written `.tscn`/`.gd` files, opened cleanly in a
+  real Godot 4.7.2 editor with only the expected one-time "upgrade from 4.3"
+  project-settings prompt -- no script/parse errors.
+- [x] **Verified live in Godot 4.7.2, 2026-09-11 (user-confirmed).** Board
+  renders as a checkerboard grid at the right size; two blue hero capsules and
+  two red goblin capsules appear, each labeled; right-drag/middle-drag/wheel
+  orbit/pan/zoom the camera smoothly with no flipping or floor-clipping;
+  left-clicking a token then a floor tile moves it (a real `move_token` call
+  through the actual engine, not a local fake); the status HUD updates with the
+  combat-log line after a move. Camera feel and tile/label sizing were good
+  enough to not need immediate tuning. Not separately re-tested: killing/
+  restarting `node server.js` mid-session (the client's reconnect-status-text
+  path) -- low-risk, revisit only if it actually misbehaves at the table.
+
+Phase 0 complete. The core bet -- server-authoritative rules engine + a Godot 3D
+client + placeholder art, wired end to end -- is proven out.
 
 ## Phase 1 -- Make the prototype actually playable (small, after Phase 0 is verified)
 
