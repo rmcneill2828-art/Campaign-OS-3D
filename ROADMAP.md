@@ -175,21 +175,129 @@ remains explicitly open (not silently dropped):
      model's own quirk, confirmed by the symptom) rather than an arbitrary
      fudge factor.
 
-- [ ] **Walls** (Kenney's `wall.glb`/`wall-half.glb`) around the board
-  perimeter -- deliberately deferred out of this pass rather than attempted
-  alongside the floor/character changes above: wall segments are a 2x2x2.1
-  unit footprint (twice a floor tile's width), so getting the alignment right
-  needs its own focused verification pass, not stacked on top of several
-  other unverified geometry changes at once. Given how many placement
-  surprises the floor/character work above turned up, budget for the same
-  "measure the real thing" approach rather than assuming Kenney's own stated
-  dimensions will just work.
+- [x] **Walls -- superseded, not built as originally scoped.** The
+  2026-09-11 planning pass below decided future maps are hand-authored Godot
+  scenes, not a procedurally-generated board -- so a generic "wall.glb ring
+  around the perimeter" script is the wrong shape of solution. Walls become
+  part of building a map scene by hand (Phase 4) instead. Marked done-as-
+  superseded rather than left as a dangling TODO nobody intends to pick up in
+  its original form.
 
-## Phase 3+ -- Everything else (not scoped yet)
+Phase 2 fully complete (including this item's resolution).
 
-Deliberately not broken down further until Phases 0-2 are actually played with:
-line-of-sight/fog of war in 3D, spellcasting VFX, a real dungeon-building/import
-workflow, audio, a player-facing view, and -- much later, only once the pipeline
-and interaction loop are both proven -- an actual investment in bespoke/licensed
-"professional" art to replace the CC0 placeholders. Revisit this file once Phase 2
-lands rather than guessing at the shape of Phase 3 now.
+---
+
+# Roadmap: Phases 3+ (planned 2026-09-11, after Phase 2)
+
+A full-scope planning pass, now that Phases 0-2 have proven the core pipeline
+(server-authoritative rules, real models/floor, animation) actually works.
+Four decisions from that discussion shape everything below:
+
+1. **Future maps are hand-authored Godot scenes** (real level design, built by
+   hand from the Kenney kit pieces already in the project) -- not generated
+   from the 2D app's own map data, and not a new in-app 3D map-builder tool.
+   Most creative control; the cost is real per-map authoring effort and no
+   automatic carry-over from an existing 2D campaign map.
+2. **Mechanics before more visuals.** The engine already supports spells,
+   conditions, class resources, rests, death saves, exhaustion, legendary/lair
+   actions, and more -- none of it has 3D client UI yet (only move/attack/
+   next-turn do). Wiring that up takes priority over further graphics work,
+   since it's what actually makes this usable at a real table.
+3. **Claude DM bridge integration is a real goal, but a later one.**
+   `engine-server`'s HTTP action API already speaks the exact vocabulary the
+   2D app's bridge uses, so this should be a natural fit when its turn comes
+   -- just not before the manually-driven UI (Phases 3-6) exists.
+4. **Art investment gets its own later, explicit phase** rather than being
+   opportunistic or urgent -- revisit once the feature set from the phases
+   below feels worth dressing up, not before.
+
+## Phase 3 -- Core mechanics UI (next up)
+
+Ordered roughly by how often each comes up at a real table, so the most
+valuable gaps close first:
+
+- [ ] Ability checks / saving throws -- a "Roll Check"/"Roll Save" control on
+  the currently selected token (mirrors the 2D app's own token-sheet controls
+  and `ability_check`/`saving_throw` actions)
+- [ ] Conditions -- view + toggle on a token, with a real visual indicator on/
+  above the token (an icon or tag), not just something buried in status text
+- [ ] Spellcasting -- `cast_spell`/`cast_area_spell` UI: spell name, level,
+  target(s), damage dice, save DC, matching the 2D app's Cast control
+- [ ] Class resources -- use/restore a named resource (Rage, Ki, Superiority
+  Dice, etc.)
+- [ ] Rests -- long/short rest controls
+- [ ] Death saves -- a dedicated "Roll Death Save" control once a token is
+  dying (today this only surfaces via the status-log text), plus real death/
+  hit-reaction animation: `Death01` and `Hit_Chest`/`Hit_Head` are already
+  sitting unused in the animation pack Phase 2 downloaded -- playing `Death01`
+  once a token's `dead` flag is true, and a brief `Hit_Chest`/`Hit_Head` clip
+  on taking damage, is cheap now that the animation pipeline already works
+- [ ] Exhaustion, legendary actions, recharge abilities, lair actions -- the
+  rarer ones, saved for last since they come up less often at most tables
+- [ ] A real HP bar / status-effect icon strip above each token instead of
+  just the text label -- worth doing once several of the above actually have
+  something to show, not before
+
+## Phase 4 -- Hand-authored maps
+
+Directly resolves Phase 2's deferred "Walls" item (see above) -- once maps
+are hand-built scenes, walls are just part of building the scene, not
+something a generic script generates.
+
+- [ ] Define the map-scene contract: what a hand-built map scene must provide
+  (matching the server's real columns/rows/feetPerSquare) for
+  `GridManager`'s grid-line overlay and click-to-move collision to keep
+  working laid over real hand-placed geometry -- likely `GridManager` stops
+  generating its own visible floor once a hand-built scene is present,
+  contributing only the invisible collision plane + grid lines on top of it
+- [ ] Build one real example map (replacing "Prototype Chamber") from the
+  Kenney dungeon-kit pieces already in the project, to prove the contract
+  end to end before building a second one
+- [ ] Wire `Main.gd` to load/swap the correct scene when `state.mapName`
+  changes (`switch_map`), matching the 2D app's own map-switching behavior --
+  a simple name -> scene-path mapping is enough to start
+- [ ] Per-map lighting/mood (a hand-built room may want its own atmosphere --
+  torches, color grading -- rather than the single fixed sky+sun every map
+  currently shares)
+
+## Phase 5 -- Line of sight / fog of war in 3D
+
+Unlocked by Phase 4, not before -- the 2D app's LOS math works against 2D
+wall segments; real 3D wall geometry (from hand-authored maps) is what makes
+a 3D equivalent meaningful. Not designed in detail yet: the two live options
+(raycast against the hand-placed wall meshes directly, vs. maintaining an
+abstract wall-segment list per map closer to the 2D model) each have real
+tradeoffs worth a dedicated discussion once Phase 4 exists to build on.
+
+## Phase 6 -- Player-facing view
+
+A 3D equivalent of the 2D app's Player Window (same-machine, read-only,
+second monitor/TV) -- matters once the client is actually good enough to run
+at a table. Not scoped in detail yet.
+
+## Phase 7 -- Claude DM bridge integration (later, per decision #3 above)
+
+`engine-server`'s `POST /action` already accepts the exact same action
+vocabulary (`attack`, `cast_spell`, `move_token`, ...) the 2D app's
+`dm-bridge/watch.js` produces -- wiring narration/tool-calling into this
+client later should mean reusing that contract, not redesigning it. Not
+scoped further until Phases 3-6 exist for it to sit on top of.
+
+## Phase 8 -- Art investment (later, per decision #4 above)
+
+Free Quaternius/Kenney assets proved the pipeline in Phase 2. Once the
+feature set from Phases 3-6 feels worth dressing up, this is where to
+evaluate paid asset packs or bespoke/commissioned art to replace them.
+Deliberately not scoped further until that point.
+
+## Also tracked, not yet phased
+
+- **Audio/ambience** (matching the 2D app's Music Folder/Ambience feature) --
+  a nice parity feature, no urgency.
+- **Real multiplayer** (a server/sync service for players on their own
+  devices, not just a second monitor) -- explicitly out of scope for now,
+  the same "revisit only if actually needed" call the 2D app itself already
+  made for this exact question.
+- **Performance** (one hidden AnimationPlayer + Skeleton3D per token, full
+  board rebuild on any map-size change) -- fine at current token/map counts;
+  no need to optimize preemptively.
