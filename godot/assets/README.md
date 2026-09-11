@@ -16,6 +16,13 @@
 - **`creatures/hero/`** and **`creatures/monster/`** -- the small, flattened
   set of files `Token.gd` actually loads at runtime, copied out of the raw
   packs above (see "Why flattened copies" below). Also not committed.
+- **`Creatures/animation-library/`** -- the raw, as-downloaded Quaternius
+  "Universal Animation Library" packs (both v1 and v2 were downloaded; only
+  v1's non-root-motion export is actually used, see below). Same QAL license
+  and not-committed treatment as the hero/monster packs.
+- **`creatures/animations/mannequin_animations.glb`** -- the flattened file
+  `Token.gd` actually loads (`UAL1_Standard.glb`, the **non**-`_RM` variant --
+  see Licensing below for why). Also not committed.
 
 ## Licensing -- read before adding more assets from either site
 
@@ -48,14 +55,43 @@ Both packs used here are the free "Standard" tier, which only includes a
   monsters shown on the pack's own marketing image require buying the
   "SOURCE" tier).
 
-**Neither free-tier pack includes any baked animations** (confirmed by
-reading each file's own glTF/glb JSON directly, not assumed from the
+**Neither free-tier character pack includes any baked animations** (confirmed
+by reading each file's own glTF/glb JSON directly, not assumed from the
 "Rigged"/"Retargetable" marketing tags) -- both are a rigged mesh with no
-animation clips, so they render in their raw bind pose (a T-pose, arms spread,
-for the hero) until a separate animation-source pack is added. Quaternius
-publishes a free "Universal Animation Library" pack specifically designed to
-retarget onto any of their "Retargetable" rigs -- that's the natural next
-download when picking animation back up (see ROADMAP.md).
+animation clips of their own. Animation comes from a separate pack instead
+(see below).
+
+### Animation Library
+
+Two packs are on quaternius.com under "Universal Animation Library" -- v1 and
+v2, each covering a different, non-overlapping set of clips (v1: Idle/Walk/Jog/
+Sprint/basic combat/emotes; v2: more elaborate sword combos, climbing,
+zombie-specific moves, etc.). Both were downloaded; **only v1's `UAL1_Standard.glb`
+is currently used** (`Idle_Loop` + `Walk_Loop`, see `Token.gd`) -- v2 is sitting
+in `Creatures/animation-library/` unused for now, a natural place to look when
+adding more animation states (attack, death, etc.) later.
+
+Each pack's `Unreal-Godot` folder has two files: a plain one and one suffixed
+`_RM`. `_RM` = **root motion** -- the animation physically translates the
+skeleton's root bone forward during a walk/run cycle (meant for games where
+the animation itself drives movement). This project's tokens already have
+their position driven externally (`GridManager`/`Main.gd`'s own tween, from
+the server's real grid coordinates) -- using the root-motion variant would
+fight that, moving the visual model away from its assigned tile independently
+of the actual game state. **Always use the plain (non-`_RM`) file here.**
+
+**Skeleton compatibility was verified by direct comparison, not assumed from
+the "Retargetable" tag**: `UAL1_Standard.glb`'s skeleton bone *names* match
+`superhero_male.gltf`'s exactly, and `imp.glb`'s bones are a strict subset of
+the same set (missing only finger/toe-tip bones neither model's silhouette
+needs to move independently). `Token.gd`'s `_setup_animation()` uses this
+directly -- copying bone poses by name from a hidden instance of the animation
+file onto the visible model's own skeleton every frame -- rather than trying
+to graft the animation library's `AnimationPlayer` tracks onto a different
+scene's node structure, which would depend on Godot's glTF importer producing
+identical scene layouts across different files, an assumption this project
+got burned by more than once already this phase (see `ROADMAP.md`'s Phase 2
+entry on the floating-model/floor-height bugs).
 
 ## Why flattened copies instead of referencing the raw pack folders directly
 
@@ -94,6 +130,10 @@ sed -i \
 
 MONSTER_SRC="godot/assets/Creatures/monster-pack/Bestiary - Dungeon Monsters Kit[Standard]/Exports/GLB (Godot-Unreal)"
 cp "$MONSTER_SRC/Imp.glb" godot/assets/creatures/monster/imp.glb
+
+mkdir -p godot/assets/creatures/animations
+cp "godot/assets/Creatures/animation-library/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb" \
+   godot/assets/creatures/animations/mannequin_animations.glb
 ```
 
 ## Adding more monsters/heroes later

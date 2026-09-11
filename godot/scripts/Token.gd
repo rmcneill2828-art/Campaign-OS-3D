@@ -26,6 +26,17 @@ const FALLBACK_LABEL_HEIGHT := 1.9
 const FALLBACK_CAPSULE_RADIUS := 0.4
 const FALLBACK_CAPSULE_HEIGHT := 1.6
 
+## Quaternius's free "Universal Animation Library" (UAL1, non-root-motion
+## variant -- our own tween already drives grid position, so we want the
+## animation itself moving limbs in place, not also translating the root
+## bone). Confirmed by direct comparison (not assumed from the "Retargetable"
+## marketing tag) that its skeleton's bone NAMES match the hero model's
+## exactly, and the monster model's bones are a strict subset of the same set
+## -- so this one animation source can drive both. See _setup_animation().
+const ANIMATION_SOURCE_PATH := "res://assets/creatures/animations/mannequin_animations.glb"
+const IDLE_ANIMATION := "Idle_Loop"
+const WALK_ANIMATION := "Walk_Loop"
+
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
 @onready var _selection_ring: MeshInstance3D = $SelectionRing
@@ -45,6 +56,14 @@ var _move_tween: Tween
 # model is loaded) -- lets HP-driven color react every poll without rebuilding
 # the whole model tree each time (see _update_fallback_color below).
 var _fallback_mesh: MeshInstance3D
+
+# Animation state -- see _setup_animation(). All null/empty whenever the
+# fallback capsule is active (no skeleton to animate) or the animation source
+# asset isn't present.
+var _character_skeleton: Skeleton3D
+var _anim_source_skeleton: Skeleton3D
+var _anim_source_player: AnimationPlayer
+var _bone_map := {} # character bone index -> animation-source bone index
 
 func _ready() -> void:
 	_body.add_to_group("tokens")
@@ -88,6 +107,10 @@ func _rebuild_model() -> void:
 	for child in _model_root.get_children():
 		child.queue_free()
 	_fallback_mesh = null
+	_character_skeleton = null
+	_anim_source_skeleton = null
+	_anim_source_player = null
+	_bone_map.clear()
 
 	var config: Dictionary = MODEL_CONFIG.get(token_type, {})
 	var model_path: String = config.get("path", "")
@@ -97,10 +120,76 @@ func _rebuild_model() -> void:
 		var instance := scene.instantiate() as Node3D
 		_model_root.add_child(instance)
 		_ground_model(instance)
+		_setup_animation(instance)
 		_label.position.y = float(config.get("label_height", FALLBACK_LABEL_HEIGHT))
 	else:
 		_add_fallback_capsule()
 		_label.position.y = FALLBACK_LABEL_HEIGHT
+
+## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the shared
+## animation-source model (see ANIMATION_SOURCE_PATH), copying bone poses
+## across every frame by matching bone NAMES between the two skeletons --
+## deliberately not attempting to graft the source's Animation resources
+## directly onto this model's own (nonexistent) AnimationPlayer via NodePath
+## surgery, which would depend on Godot's glTF importer producing byte-for-byte
+## identical scene structure across every different file, an assumption this
+## project has already been burned by more than once this phase (see
+## _ground_model's and GridManager.gd's own comments on trusting file
+## structure over measuring the real thing). Copying bone-by-bone through each
+## Skeleton3D's own pose API works regardless of how either scene happens to
+## be structured around its skeleton.
+func _setup_animation(instance: Node3D) -> void:
+	var skeletons := instance.find_children("*", "Skeleton3D", true, false)
+	if skeletons.is_empty():
+		return
+	_character_skeleton = skeletons[0] as Skeleton3D
+
+	if not ResourceLoader.exists(ANIMATION_SOURCE_PATH):
+		return
+	var source_scene := load(ANIMATION_SOURCE_PATH) as PackedScene
+	var source_instance := source_scene.instantiate() as Node3D
+	source_instance.visible = false # only its skeleton/player matter -- never rendered itself
+	_model_root.add_child(source_instance)
+
+	var source_skeletons := source_instance.find_children("*", "Skeleton3D", true, false)
+	var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
+	if source_skeletons.is_empty() or source_players.is_empty():
+		return
+	_anim_source_skeleton = source_skeletons[0] as Skeleton3D
+	_anim_source_player = source_players[0] as AnimationPlayer
+
+	for char_idx in range(_character_skeleton.get_bone_count()):
+		var bone_name := _character_skeleton.get_bone_name(char_idx)
+		var source_idx := _anim_source_skeleton.find_bone(bone_name)
+		if source_idx != -1:
+			_bone_map[char_idx] = source_idx
+
+	# "_Loop"-suffixed clips in this pack aren't necessarily flagged to loop by
+	# default on import -- force it so Idle/Walk actually repeat instead of
+	# freezing on their last frame.
+	for anim_name in [IDLE_ANIMATION, WALK_ANIMATION]:
+		if _anim_source_player.has_animation(anim_name):
+			_anim_source_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+
+	print("Token %s: animation bone map covers %d/%d bones (%s)" % [
+		token_name, _bone_map.size(), _character_skeleton.get_bone_count(),
+		"looks complete" if _bone_map.size() == _character_skeleton.get_bone_count() else "some bones unmatched -- check names"
+	])
+
+	_play_source_animation(IDLE_ANIMATION)
+
+func _play_source_animation(anim_name: String) -> void:
+	if _anim_source_player and _anim_source_player.has_animation(anim_name) and _anim_source_player.current_animation != anim_name:
+		_anim_source_player.play(anim_name)
+
+func _process(_delta: float) -> void:
+	if not (_character_skeleton and _anim_source_skeleton):
+		return
+	for char_idx in _bone_map:
+		var source_idx: int = _bone_map[char_idx]
+		_character_skeleton.set_bone_pose_position(char_idx, _anim_source_skeleton.get_bone_pose_position(source_idx))
+		_character_skeleton.set_bone_pose_rotation(char_idx, _anim_source_skeleton.get_bone_pose_rotation(source_idx))
+		_character_skeleton.set_bone_pose_scale(char_idx, _anim_source_skeleton.get_bone_pose_scale(source_idx))
 
 ## Shifts `instance` up/down so the lowest point of its actual rendered
 ## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's
@@ -160,5 +249,7 @@ func set_selected(is_selected: bool) -> void:
 func _animate_to(target: Vector3) -> void:
 	if _move_tween:
 		_move_tween.kill()
+	_play_source_animation(WALK_ANIMATION)
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", target, 0.35).set_trans(Tween.TRANS_SINE)
+	_move_tween.finished.connect(_play_source_animation.bind(IDLE_ANIMATION))
