@@ -64,6 +64,8 @@ var _character_skeleton: Skeleton3D
 var _anim_source_skeleton: Skeleton3D
 var _anim_source_player: AnimationPlayer
 var _bone_map := {} # character bone index -> animation-source bone index
+var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
+var _walk_animation_key := ""
 
 func _ready() -> void:
 	_body.add_to_group("tokens")
@@ -111,6 +113,8 @@ func _rebuild_model() -> void:
 	_anim_source_skeleton = null
 	_anim_source_player = null
 	_bone_map.clear()
+	_idle_animation_key = ""
+	_walk_animation_key = ""
 
 	var config: Dictionary = MODEL_CONFIG.get(token_type, {})
 	var model_path: String = config.get("path", "")
@@ -164,23 +168,42 @@ func _setup_animation(instance: Node3D) -> void:
 		if source_idx != -1:
 			_bone_map[char_idx] = source_idx
 
+	# Resolved once here rather than assumed as bare "Idle_Loop"/"Walk_Loop" --
+	# a glTF import can namespace its animations under a named AnimationLibrary
+	# (yielding a key like "somelib/Idle_Loop") rather than the default
+	# unnamed one, and has_animation()/play() need the exact key either way.
+	_idle_animation_key = _resolve_animation_name(_anim_source_player, IDLE_ANIMATION)
+	_walk_animation_key = _resolve_animation_name(_anim_source_player, WALK_ANIMATION)
+
 	# "_Loop"-suffixed clips in this pack aren't necessarily flagged to loop by
 	# default on import -- force it so Idle/Walk actually repeat instead of
 	# freezing on their last frame.
-	for anim_name in [IDLE_ANIMATION, WALK_ANIMATION]:
-		if _anim_source_player.has_animation(anim_name):
-			_anim_source_player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+	for key in [_idle_animation_key, _walk_animation_key]:
+		if key != "":
+			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
 
-	print("Token %s: animation bone map covers %d/%d bones (%s)" % [
+	print("Token %s: animation bone map covers %d/%d bones (%s); idle=%s walk=%s%s" % [
 		token_name, _bone_map.size(), _character_skeleton.get_bone_count(),
-		"looks complete" if _bone_map.size() == _character_skeleton.get_bone_count() else "some bones unmatched -- check names"
+		"looks complete" if _bone_map.size() == _character_skeleton.get_bone_count() else "some bones unmatched -- check names",
+		_idle_animation_key if _idle_animation_key != "" else "NOT FOUND",
+		_walk_animation_key if _walk_animation_key != "" else "NOT FOUND",
+		"; available: %s" % [_anim_source_player.get_animation_list()] if _idle_animation_key == "" or _walk_animation_key == "" else ""
 	])
 
-	_play_source_animation(IDLE_ANIMATION)
+	_play_source_animation(_idle_animation_key)
 
-func _play_source_animation(anim_name: String) -> void:
-	if _anim_source_player and _anim_source_player.has_animation(anim_name) and _anim_source_player.current_animation != anim_name:
-		_anim_source_player.play(anim_name)
+## `anim_name` is the bare clip name (e.g. "Idle_Loop"); returns the exact key
+## `AnimationPlayer.play()`/`has_animation()` need, which may be namespaced
+## under a library ("somelib/Idle_Loop") -- or "" if no match exists at all.
+func _resolve_animation_name(player: AnimationPlayer, anim_name: String) -> String:
+	for candidate in player.get_animation_list():
+		if candidate == anim_name or candidate.ends_with("/" + anim_name):
+			return candidate
+	return ""
+
+func _play_source_animation(anim_key: String) -> void:
+	if anim_key != "" and _anim_source_player and _anim_source_player.current_animation != anim_key:
+		_anim_source_player.play(anim_key)
 
 func _process(_delta: float) -> void:
 	if not (_character_skeleton and _anim_source_skeleton):
@@ -249,7 +272,7 @@ func set_selected(is_selected: bool) -> void:
 func _animate_to(target: Vector3) -> void:
 	if _move_tween:
 		_move_tween.kill()
-	_play_source_animation(WALK_ANIMATION)
+	_play_source_animation(_walk_animation_key)
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", target, 0.35).set_trans(Tween.TRANS_SINE)
-	_move_tween.finished.connect(_play_source_animation.bind(IDLE_ANIMATION))
+	_move_tween.finished.connect(_play_source_animation.bind(_idle_animation_key))
