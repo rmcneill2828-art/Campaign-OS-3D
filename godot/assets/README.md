@@ -23,12 +23,40 @@
 - **`creatures/animations/mannequin_animations.glb`** -- the flattened file
   `Token.gd` actually loads (`UAL1_Standard.glb`, the **non**-`_RM` variant --
   see Licensing below for why). Also not committed.
+- **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
+  above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
+  folder name). Zero new content -- gitignored, safe to delete whenever.
+- **`Environment/quaternius-buildings/`**, **`Environment/quaternius-props/`**,
+  **`Environment/quaternius-nature/`** -- three more Quaternius packs
+  ("Medieval Village MegaKit" / 176 pieces: walls, doors, windows, roofs,
+  stairs, overhangs; "Fantasy Props MegaKit" / 94 pieces: furniture, barrels,
+  books, weapons, tableware, etc.; "Stylized Nature MegaKit" / 68 pieces:
+  trees, bushes, rocks, grass, flowers), downloaded for Phase 4's
+  hand-authored maps. **Genuinely CC0** this time (confirmed per-pack, see
+  Licensing below), but still gitignored for now as plain repo hygiene --
+  each raw download bundles ~70-180 models across FBX/OBJ/glTF/Textures all
+  at once, most of which won't end up in any given map. No flattened copies
+  exist yet since nothing has used them yet; see "Why flattened copies" below
+  for the pattern once a real map picks specific pieces.
 
 ## Licensing -- read before adding more assets from either site
 
 **Kenney** (`Environment/dungeon-kit/`) is genuinely CC0 -- copy, modify,
 redistribute, commit to git, no restriction at all. Confirmed by reading its
 own `License.txt`, not assumed from Kenney's general reputation.
+
+**Not every Quaternius pack uses the same license -- check each one
+individually, don't generalize from a previous pack.** The three environment
+MegaKits (`quaternius-buildings/`, `quaternius-props/`, `quaternius-nature/`)
+are genuinely **CC0 1.0 Universal** (confirmed by reading each pack's own
+`License_Standard.txt` -- literally the same filename convention the QAL
+packs below use, but different license text inside), while the
+character/monster/animation packs are the more restrictive QAL. They're
+currently gitignored anyway (see `.gitignore`), but that's for a completely
+different reason than the Creatures/ packs below -- repo hygiene (unused
+format variants), not a license requirement. Feel free to un-ignore and
+commit them wholesale if you'd rather not deal with the flatten-on-demand
+workflow -- nothing about their license argues against it.
 
 **Quaternius** (`Creatures/`) is a different, more specific license than the
 "just CC0" shorthand used earlier in this project's own history --

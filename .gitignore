@@ -35,3 +35,25 @@ godot/assets/creatures/
 godot/assets/Environment/dungeon-kit/Models/FBX format/
 godot/assets/Environment/dungeon-kit/Models/OBJ format/
 godot/assets/Environment/dungeon-kit/Previews/
+
+# --- Exact duplicate of dungeon-kit above (same "Mini Dungeon (2.0)" pack,
+# re-downloaded under a different folder name by mistake) -- zero new content,
+# not worth tracking at all. Safe to delete this folder from disk entirely
+# whenever convenient; kept out of git in the meantime.
+godot/assets/Environment/kenney-dungeon/
+
+# --- Quaternius environment MegaKits (Fantasy Props, Medieval Village,
+# Stylized Nature) -- Phase 4 map-building material. Unlike the Creatures/
+# packs above, these are genuinely CC0 (confirmed by reading each pack's own
+# License_Standard.txt directly -- not every Quaternius pack uses the same
+# license, so don't assume from the Creatures/ precedent above). Ignored here
+# purely as repo hygiene, same reasoning as the Kenney FBX/OBJ entries: each
+# raw download ships the same ~100-170 models in FBX/OBJ/glTF/Textures all at
+# once, most of which won't end up used in any given hand-built map. Once a
+# specific piece is actually used, flatten just that file into a clean path
+# under godot/assets/environment/ (lowercase, mirroring creatures/hero and
+# creatures/monster's own pattern) and commit that -- these three folders can
+# be un-ignored instead if you'd rather just keep everything.
+godot/assets/Environment/quaternius-buildings/
+godot/assets/Environment/quaternius-nature/
+godot/assets/Environment/quaternius-props/
