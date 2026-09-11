@@ -15,10 +15,9 @@ class_name Token
 ## `ResourceLoader.exists()` achieves that; `preload()` would not.
 
 ## token type -> {path: model scene to instance, label_height: where the
-## name/HP label should float above this model's own feet, in meters}. Real
-## models are authored with their feet at local y=0 already (confirmed by
-# reading their glTF accessor bounds directly), so they need no extra offset
-## when parented under Body/ModelRoot, unlike the fallback capsule below.
+## name/HP label should float above this model's own feet, in meters}.
+## Whatever vertical offset a real model needs to actually stand on the floor
+## is figured out at runtime, not assumed here -- see _ground_model() below.
 const MODEL_CONFIG := {
 	"hero": {"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0},
 	"monster": {"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9}
@@ -95,11 +94,39 @@ func _rebuild_model() -> void:
 
 	if model_path != "" and ResourceLoader.exists(model_path):
 		var scene := load(model_path) as PackedScene
-		_model_root.add_child(scene.instantiate())
+		var instance := scene.instantiate() as Node3D
+		_model_root.add_child(instance)
+		_ground_model(instance)
 		_label.position.y = float(config.get("label_height", FALLBACK_LABEL_HEIGHT))
 	else:
 		_add_fallback_capsule()
 		_label.position.y = FALLBACK_LABEL_HEIGHT
+
+## Shifts `instance` up/down so the lowest point of its actual rendered
+## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's
+## local space, which has no offset of its own -- see the class comment).
+##
+## Deliberately NOT relying on the model file's own raw mesh vertex bounds --
+## a first attempt at this trusted glTF accessor min/max values read directly
+## from the file (feet at ~y=0 in mesh-local space) and still rendered
+## floating in Godot. The actual cause: both character rigs used here have a
+## skeleton root bone with a baked-in -90 degree rotation (a Z-up/Y-up
+## conversion artifact from whatever tool exported them), which changes a
+## skinned mesh's final bind-pose position in a way raw accessor data alone
+## doesn't capture -- reproducing that math by hand for every differently
+## authored rig would be fragile. Measuring the actual instantiated node's
+## real AABB after Godot has already resolved the skin is robust regardless of
+## why a given model doesn't start at its own local origin.
+func _ground_model(instance: Node3D) -> void:
+	var lowest_y := INF
+	for visual in instance.find_children("*", "VisualInstance3D", true, false):
+		var mesh_instance := visual as VisualInstance3D
+		var aabb: AABB = mesh_instance.get_aabb()
+		for i in range(8):
+			var world_corner: Vector3 = mesh_instance.global_transform * aabb.get_endpoint(i)
+			lowest_y = min(lowest_y, world_corner.y)
+	if is_finite(lowest_y):
+		instance.position.y -= lowest_y
 
 ## Plain colored capsule -- Phase 0's original placeholder, now only used when
 ## the real model for this token type isn't available (see the class comment).

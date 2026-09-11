@@ -88,7 +88,40 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0) ->
 	else:
 		_build_fallback_checkerboard()
 
+	_build_grid_lines()
 	_build_floor_collision()
+
+## A real stone floor texture has no per-tile visual break the way the old
+## flat-colored checkerboard did -- without this, a DM has no way to actually
+## see where one grid cell ends and the next begins, which matters for reading
+## movement/range at a glance. A thin unshaded line mesh just above the floor
+## (GRID_LINE_HEIGHT keeps it from z-fighting with the floor surface) restores
+## that regardless of which floor visual is active.
+func _build_grid_lines() -> void:
+	const GRID_LINE_HEIGHT := 0.01
+	const GRID_LINE_COLOR := Color(1, 1, 1, 0.5)
+
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_LINES)
+	var width := columns * cell_size
+	var depth := rows * cell_size
+	for i in range(columns + 1):
+		var x := i * cell_size
+		surface.add_vertex(Vector3(x, GRID_LINE_HEIGHT, 0))
+		surface.add_vertex(Vector3(x, GRID_LINE_HEIGHT, depth))
+	for j in range(rows + 1):
+		var z := j * cell_size
+		surface.add_vertex(Vector3(0, GRID_LINE_HEIGHT, z))
+		surface.add_vertex(Vector3(width, GRID_LINE_HEIGHT, z))
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = surface.commit()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = GRID_LINE_COLOR
+	mesh_instance.material_override = material
+	add_child(mesh_instance)
 
 ## Real Kenney floor pieces -- floor.glb everywhere, with floor-detail.glb
 ## dropped in on a fixed, deterministic subset of cells purely for visual
