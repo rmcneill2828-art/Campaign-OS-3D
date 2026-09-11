@@ -137,15 +137,13 @@ Phase 1 complete.
   grey tint on a real model) -- left as a known, minor gap rather than a
   blocker, revisit if it actually causes confusion at the table.
 
-Phase 2 complete for the two items above. Two items from this phase remain
-explicitly open (not silently dropped):
+Phase 2 complete for models/floor/animation above. One item from this phase
+remains explicitly open (not silently dropped):
 
-- [x] **Animation.** Built 2026-09-11, **not yet verified live** (this is the
-  most structurally complex piece of Phase 2 -- budget for at least one
-  round of live debugging, same as the model/floor placement bugs above).
-  Downloaded Quaternius's free "Universal Animation Library" (v1 and v2;
-  only v1's non-root-motion `UAL1_Standard.glb` is used, see
-  `godot/assets/README.md`). Verified by direct comparison (not assumed)
+- [x] **Animation.** Done 2026-09-11, verified live (user-confirmed) after
+  two follow-up fixes. Downloaded Quaternius's free "Universal Animation
+  Library" (v1 and v2; only v1's non-root-motion `UAL1_Standard.glb` is used,
+  see `godot/assets/README.md`). Verified by direct comparison (not assumed)
   that its skeleton's bone names match the hero model's exactly and the
   monster's bones are a strict subset of the same set. `Token.gd`'s
   `_setup_animation()` instances a hidden copy of the animation file
@@ -156,24 +154,26 @@ explicitly open (not silently dropped):
   importer producing identical scene structure across different files,
   exactly the assumption that caused the three placement bugs above. Idle
   plays by default; a real `move_token`-driven move switches to Walk for the
-  tween's duration and back to Idle after. A one-time diagnostic
-  `print()` reports the bone-map coverage (e.g. "62/62 bones") to the Godot
-  console per token the first time its model builds -- check this first if
-  animation doesn't visibly work, since it will immediately show whether
-  bone-name matching actually succeeded.
-
-### Needs live verification (animation specifically -- see print() diagnostic above)
-
-- [ ] Godot console shows a "N/N bones" message per token with N close to the
-  full bone count (a low number, or an error before that line, points at
-  bone-name matching or file-loading failing)
-- [ ] Stationary heroes/monsters play a subtle idle animation (breathing/sway),
-  not a frozen T-pose
-- [ ] Moving a token (click-to-move) visibly switches it to a walk animation
-  for the duration of the move, then back to idle once it arrives
-- [ ] No visual glitching/jitter in the pose (would suggest a bone mismatch or
-  conflicting pose source)
-- [ ] Fix whatever the above turns up
+  tween's duration and back to Idle after, and the token now turns to face
+  its actual direction of travel (`_face_direction()`, via `look_at()`)
+  before the move tween starts.
+  **Two follow-up fixes from live testing, found via a one-time diagnostic
+  `print()` that reports bone-map coverage and resolved animation names per
+  token -- both real lessons, not guesses**:
+  1. First run showed a perfect bone map (65/65, 55/55) but a frozen T-pose
+     and `idle=NOT FOUND walk=NOT FOUND` -- the print()'s dump of the
+     player's actual available animation names showed why directly: Godot's
+     glTF importer strips a trailing `_Loop` from a clip's name and encodes
+     that as the clip's own `loop_mode` property instead, so the real names
+     are `"Idle"`/`"Walk"`, not `"Idle_Loop"`/`"Walk_Loop"`. One-line fix once
+     the diagnostic showed the actual names -- no further guessing needed.
+  2. Facing then worked (tokens turned toward their destination) but walked
+     **backward** the whole way there, confirmed in every direction tested --
+     the exact signature of `look_at()` pointing the node's -Z at the target
+     while this specific model's authored "forward" is actually +Z. Fixed
+     with `rotation.y += PI` after `look_at()`, documented as deliberate (this
+     model's own quirk, confirmed by the symptom) rather than an arbitrary
+     fudge factor.
 
 - [ ] **Walls** (Kenney's `wall.glb`/`wall-half.glb`) around the board
   perimeter -- deliberately deferred out of this pass rather than attempted
