@@ -58,16 +58,20 @@ godot --path godot
 ```
 
 **3. Play.** Right-drag to orbit the camera, middle-drag to pan, scroll to zoom.
-Left-click a miniature to select it, then left-click a floor tile to move it there
--- that move goes through the real `moveToken()` engine call (speed limits, RAW
-diagonal movement cost, etc., once turn order is actually running the same way the
-2D app's own README documents).
+Left-click a miniature to select it, then either left-click a floor tile to move
+it there, or right-click (a quick click, not a drag -- a right-drag still just
+orbits the camera) a *different* token to attack it with the selected one --
+both go through the real engine (`moveToken()`'s speed limits/RAW diagonal cost,
+`attack()`'s real hit/damage roll). **Next Turn** in the HUD advances the turn
+tracker, which is what actually turns on movement's speed limit (unconstrained
+before turn order starts, same as the 2D app).
 
 ## What this does NOT do yet
 
-This is a first, deliberately small slice proving the pipeline (camera, grid,
-token sync, one action round-trip) works end to end against the real rules engine
--- it is not yet a usable VTT. No attacks/spells/turn-tracker UI, no real 3D
-models (placeholder primitives only), no imported maps, no player window, no DM
-bridge/Claude narration. See [ROADMAP.md](ROADMAP.md) for the planned order of
-what comes next.
+This is still an early slice proving the pipeline works end to end against the
+real rules engine, not yet a usable VTT: no spellcasting/conditions/resources UI,
+no real 3D models (placeholder primitives only), no imported maps, no player
+window, no DM bridge/Claude narration. See [ROADMAP.md](ROADMAP.md) for the
+planned order of what comes next -- and note Phase 1's newest pieces (attack,
+turn tracker, feet-per-square scaling) haven't been visually verified yet either,
+see ROADMAP's own checklist.

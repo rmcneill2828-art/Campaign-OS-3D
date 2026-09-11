@@ -98,6 +98,27 @@ test("POST /action with no type is rejected without mutating state", async () =>
   }
 });
 
+test("POST /action next_turn starts turn order and reports round/active token", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const before = await (await fetch(`${baseUrl}/state`)).json();
+    assert.equal(before.state.turn.round, 0);
+
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "next_turn" })
+    });
+    assert.equal(res.status, 200);
+    const { state, messages } = await res.json();
+    assert.equal(state.turn.round, 1);
+    assert.ok(state.turn.tokenId);
+    assert.ok(messages[0].includes("Round 1"));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /reset restores the default seeded encounter", async () => {
   const { server, baseUrl } = await startTestServer();
   try {

@@ -57,7 +57,7 @@ autostart = true
 offset_left = 16.0
 offset_top = 16.0
 offset_right = 900.0
-offset_bottom = 140.0
+offset_bottom = 190.0
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
@@ -65,3 +65,11 @@ theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
 autowrap_mode = 2
 text = "Connecting to engine-server..."
+
+[node name="NextTurnButton" type="Button" parent="HUD"]
+offset_left = 16.0
+offset_top = 200.0
+offset_right = 176.0
+offset_bottom = 240.0
+theme_override_font_sizes/font_size = 18
+text = "Next Turn"

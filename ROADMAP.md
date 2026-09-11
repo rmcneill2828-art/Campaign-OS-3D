@@ -42,14 +42,45 @@ client + placeholder art, wired end to end -- is proven out.
 
 ## Phase 1 -- Make the prototype actually playable (small, after Phase 0 is verified)
 
-- [ ] **Attack action from the client.** Right-click (or a small on-screen button)
-  on a selected token's target to fire a real `attack` action, showing the
-  hit/miss/damage message and updating HP-driven capsule color/label live.
-- [ ] **Turn tracker UI.** A minimal HUD control for `next_turn`, showing whose
-  turn it is -- unlocks real speed-limited movement (`moveToken` only enforces
-  movement budget on the active turn's own token, same as the 2D app).
-- [ ] **Tie CELL_SIZE to the map's real feetPerSquare** instead of a fixed visual
-  constant (`GridManager.gd`'s documented follow-up) so distances read correctly
+- [x] **Attack action from the client.** Built 2026-09-11, needs live
+  verification (see checklist below). Left-click selects a token (as before);
+  a quick right-click (not a right-drag, which still orbits the camera --
+  `Main.gd` distinguishes the two by whether the mouse moved more than
+  `RIGHT_CLICK_DRAG_THRESHOLD_PX` between press and release) on a *different*
+  token fires a real `attack` action with the selected token as attacker.
+  Hit/miss/damage message shows in the status HUD (it's already the server's
+  own log line, no separate rendering needed) and HP-driven capsule
+  color/label updates live -- both existing `Token.gd` behavior from Phase 0,
+  unchanged, since the server response already carries the post-attack state.
+- [x] **Turn tracker UI.** Built 2026-09-11, needs live verification. A "Next
+  Turn" button in the HUD sends `next_turn`; the status label now shows
+  "Turn order not started" (round 0) or "Round N -- `<name>`'s turn."
+  (resolved from the server's own `turn.tokenId` against the current map's
+  tokens) -- this is what actually unlocks real speed-limited movement
+  (`moveToken` only enforces movement budget on the active turn's own token,
+  same as the 2D app).
+- [x] **Tie the grid's visual scale to the map's real feetPerSquare** instead
+  of the fixed `CELL_SIZE` constant Phase 0 shipped with. Built 2026-09-11,
+  needs live verification. `GridManager.gd` now derives `cell_size` from
+  `feet_per_square * METERS_PER_FOOT` (0.4 m/ft, chosen so the D&D-default 5
+  ft square still renders at exactly the same 2.0m tile Phase 0 had -- the
+  default case is visually unchanged) and rebuilds the board if a map's own
+  `feetPerSquare` differs, e.g. a 10 ft/square map renders visibly bigger
+  tiles.
+
+### Needs live verification (same reasoning as Phase 0 -- none of this has been
+seen rendered; no Godot install in the environment that built it)
+
+- [ ] Selecting a token, then right-clicking a different token, sends a real
+  attack (confirm via the status HUD message and/or `curl .../state` showing
+  HP changed) -- and a right-drag used purely to orbit the camera does NOT
+  also fire an attack
+- [ ] "Next Turn" advances the round/active token, shown correctly in the
+  status label, and a moved-but-not-yet-its-turn token still moves freely
+  (unconstrained) while the active token's movement is speed-limited
+- [ ] Default map (5 ft/square) still renders at the same tile size as before
+  this change -- a quick visual regression check, not a new feature to test
+- [ ] Fix whatever the above turns up
   once movement/range start mattering to the player, not just to the server.
 
 ## Phase 2 -- Real assets (medium, after Phase 1 proves the interaction loop)
