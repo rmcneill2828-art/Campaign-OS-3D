@@ -104,11 +104,24 @@ flattening makes a future per-monster-name art-matching system (mirroring
 Campaign-OS's own 2D Token Library) much easier to extend than reaching into
 the raw pack structure each time.
 
+**After extracting any raw Quaternius pack into `Creatures/<pack-name>/`, also
+drop an empty `.gdignore` file in it** (`touch "Creatures/<pack-name>/.gdignore"`)
+before opening/reloading the project in Godot. Without it, Godot scans and
+tries to import the whole raw download -- which is how a missing one on the
+animation-library pack surfaced as a "Blender executable required" import
+prompt (one of Universal Animation Library 2's bonus files ships a `.blend`
+source alongside the `.glb` exports this project actually uses) the first
+time this project hit it. Same reasoning as the FBX/OBJ-format `.gdignore`
+entries already covering the Kenney pack's unused format variants.
+
 If you re-download these packs after a fresh clone, recreate the flattened
 copies:
 
 ```text
 mkdir -p godot/assets/creatures/hero godot/assets/creatures/monster
+touch "godot/assets/Creatures/hero-pack/.gdignore" \
+      "godot/assets/Creatures/monster-pack/.gdignore" \
+      "godot/assets/Creatures/animation-library/.gdignore"
 
 HERO_SRC="godot/assets/Creatures/hero-pack/Universal Base Characters[Standard]/Base Characters/Godot - UE"
 cp "$HERO_SRC/Superhero_Male_FullBody.gltf" godot/assets/creatures/hero/superhero_male.gltf
