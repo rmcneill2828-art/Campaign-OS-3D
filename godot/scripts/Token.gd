@@ -277,6 +277,23 @@ func _animate_to(target: Vector3) -> void:
 	if _move_tween:
 		_move_tween.kill()
 	_play_source_animation(_walk_animation_key)
+	_face_direction(target - position)
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", target, 0.35).set_trans(Tween.TRANS_SINE)
 	_move_tween.finished.connect(_play_source_animation.bind(_idle_animation_key))
+
+## Turns the whole token (an instant snap-turn, then the position tween moves
+## it -- not a smooth turn-while-walking, a deliberately simpler first cut) to
+## face the direction it's about to move. Uses Node3D's own look_at() rather
+## than hand-derived trig specifically to remove one whole class of mistake
+## this project has already hit more than once this phase (getting an axis/
+## sign wrong by reasoning about it instead of using a well-tested built-in).
+## The one thing look_at() can't remove: whether this model's own AUTHORED
+## "forward" actually IS Godot's -Z convention look_at() assumes -- if
+## characters turn out visibly backward or sideways once seen, that's the
+## remaining possible mismatch, fixable with a single rotation.y += PI (or
+## PI/2) here rather than reworking this function's logic.
+func _face_direction(direction: Vector3) -> void:
+	if direction.length_squared() < 0.0001:
+		return
+	look_at(global_position + direction, Vector3.UP)
