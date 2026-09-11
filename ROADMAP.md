@@ -285,10 +285,62 @@ scoped further until Phases 3-6 exist for it to sit on top of.
 
 ## Phase 8 -- Art investment (later, per decision #4 above)
 
-Free Quaternius/Kenney assets proved the pipeline in Phase 2. Once the
-feature set from Phases 3-6 feels worth dressing up, this is where to
-evaluate paid asset packs or bespoke/commissioned art to replace them.
-Deliberately not scoped further until that point.
+Free Quaternius/Kenney/KayKit assets proved the pipeline in Phase 2 and
+filled real gaps (see the Creatures/ catalog in `godot/assets/README.md`).
+Once the feature set from Phases 3-6 feels worth dressing up, this is where
+to evaluate paid asset packs or bespoke/commissioned art to replace them.
+Deliberately not scoped further until that point -- but a research pass on
+2026-09-11 already surveyed the real options, recorded here so it doesn't
+need re-doing when this phase actually starts:
+
+**Mixamo (Adobe, free) -- worth investigating before anything else, possibly
+even before this phase formally starts.** Free rigged characters, a huge
+animation library, and critically an **auto-rigger that accepts an uploaded
+custom humanoid mesh** and fits it to Mixamo's own standard skeleton, after
+which any of its animations retarget onto it automatically. This is
+potentially bigger than "another asset source" -- it could **unify** the
+bone-mapping problem this project has been solving by hand per pack family
+(Quaternius's skeleton vs. KayKit's separate one): route any new humanoid
+model through Mixamo's rigger once, and it's on one standard skeleton with a
+massive animation library, instead of hand-verifying bone-name matches and
+maintaining a second per-family animation source each time a new pack shows
+up. License: free, no royalties, commercial and non-commercial use both
+fine, no attribution required -- same "don't resell/redistribute the raw
+files standalone" restriction every other pack here already follows. Worth a
+real evaluation pass on its own before assuming the current per-family
+bone-copy approach is the long-term answer.
+
+**Synty Studios "POLYGON" series -- the actual paid/professional path**, and
+the most direct answer to this whole project's original "professional game
+graphics" question. A large, consistent, widely-recognized stylized
+low-poly art ecosystem (many shipped indie games use it) with dedicated
+fantasy/dungeon packs (Dungeon Pack, Dungeon Realms, Fantasy Kingdom, Fantasy
+Rivals). Pricing: ~$20-250 per individual pack, or a $30/month subscription
+for their entire 150+ pack library. Godot support exists, but native glTF
+source files were still "coming soon" from Synty as of this research --
+confirm current format support directly before buying anything, the same
+"verify before relying on it" discipline every asset decision here has used.
+
+**AI generation, beyond Meshy specifically** (see the earlier Meshy
+discussion in this project's own conversation history for the base case):
+Meshy and **Tripo AI** are the two leading hosted options for game-ready
+generation with built-in auto-rigging; Tripo is faster (~8s/model) and
+explicitly recommended for game-dev use in third-party comparisons, with a
+free tier (~200-300 credits/month) -- but that free tier is **non-commercial
+only**, a real difference from Meshy's free tier (CC BY 4.0, commercial use
+allowed with attribution) worth checking before testing anything meant to
+ship. Rodin AI produces the highest raw mesh detail of the three but has no
+built-in auto-rigging (would still need Mixamo or manual rigging
+afterward). No hands-on testing of any of these has happened yet -- this is
+a survey of what's out there, not a recommendation to commit to one.
+
+**More free monster variety exists beyond KayKit's Skeletons**, scattered
+across itch.io and similar sites (individual creator packs, not one curated
+source the way Kenney/Quaternius/KayKit are) -- lower confidence, would need
+per-pack verification (license, rig, quality) the same way every pack
+catalogued in `godot/assets/README.md` already was. Worth a targeted search
+only once a specific missing monster (not covered by KayKit or a future
+Mixamo/AI-generated model) actually blocks something real.
 
 ## Also tracked, not yet phased
 
