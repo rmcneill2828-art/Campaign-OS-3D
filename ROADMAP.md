@@ -84,63 +84,78 @@ Phase 1 complete.
 
 ## Phase 2 -- Real assets (medium, after Phase 1 proves the interaction loop)
 
-- [x] **Real glTF models for tokens and floor tiles.** Built 2026-09-11, needs
-  live verification (see checklist below). `Token.gd` loads a real model per
-  token type (`res://assets/creatures/hero/superhero_male.gltf` for heroes,
-  `.../monster/imp.glb` for every monster, regardless of which SRD stat block
-  it actually is -- a real per-name mapping is future work, see
+- [x] **Real glTF models for tokens and floor tiles.** Done 2026-09-11,
+  verified live in Godot (user-confirmed) after three follow-up fixes. `Token.gd`
+  loads a real model per token type (`res://assets/creatures/hero/superhero_male.gltf`
+  for heroes, `.../monster/imp.glb` for every monster, regardless of which SRD
+  stat block it actually is -- a real per-name mapping is future work, see
   `godot/assets/README.md`) via `load()` + `ResourceLoader.exists()`, falling
   back to Phase 0's plain colored capsule if the asset isn't present (see
   Licensing below for why that fallback matters here specifically, not just as
-  generic defensiveness). `GridManager.gd` now instances Kenney's real
-  `floor.glb` (with `floor-detail.glb` mixed in on a fixed, deterministic
-  subset of cells for visual variety) instead of a procedural checkerboard,
-  uniformly scaled to `cell_size` -- confirmed by reading each model's own
-  glTF accessor bounds directly (not assumed) that floor pieces are an exact
-  1x1x1 unit cube and the character models already have their feet at local
-  y=0, which is what made both scale/placement formulas exact rather than
-  guessed. **Found and fixed a real Phase 0/1 bug along the way**: tokens were
-  positioned 0.8m above the actual ground plane (`Token.gd`'s target position
-  added a +0.8 offset on top of an *already* +0.8-offset child mesh) --
-  harmless-looking with an abstract capsule, would have been obviously wrong
-  once real ground-touching feet were added, so fixed at the root cause.
-- [ ] **Animation is NOT done** -- both free-tier Quaternius packs used here
-  ship with zero baked animation clips (confirmed by reading each file's own
-  glTF/glb JSON directly, not assumed from their "Rigged"/"Retargetable"
-  marketing tags), so models currently render in their raw bind pose (a
-  T-pose, arms spread, for the hero) rather than idling/walking. Needs a
-  separate download -- Quaternius's free "Universal Animation Library" is
-  built specifically to retarget onto these "Retargetable" rigs -- before this
-  item can actually be finished; tracked here rather than in Phase 3 since
-  it's the direct continuation of this same asset-pipeline work.
-- [ ] Walls (Kenney's `wall.glb`/`wall-half.glb`) around the board perimeter --
-  deliberately deferred out of this pass rather than attempted alongside the
-  floor/character changes above: wall segments are a 2x2x2.1 unit footprint
-  (twice a floor tile's width), so getting the alignment right needs its own
-  focused verification pass, not stacked on top of several other unverified
-  geometry changes at once.
+  generic defensiveness). `GridManager.gd` instances Kenney's real `floor.glb`
+  (with `floor-detail.glb` mixed in on a fixed, deterministic subset of cells
+  for visual variety) instead of a procedural checkerboard, uniformly scaled
+  to `cell_size`, plus a thin white grid-line overlay so the DM can still read
+  cell boundaries on a real (non-checkerboard) stone texture.
+  **Three real placement bugs found and fixed from actual screenshots, not
+  file inspection alone** -- worth recording since they share one root lesson:
+  a model file's own authored/raw bounds do NOT reliably predict where Godot
+  actually renders it (a rig's skeleton root rotation, a modular kit piece's
+  decorative props sitting above its base plate, etc. -- each is a different
+  concrete cause, no single rule would have caught all three in advance):
+  1. A genuine Phase 0/1 bug, unrelated to the new assets but only obviously
+     wrong once real feet existed: `Token.gd` added a +0.8 vertical offset on
+     top of an *already* +0.8-offset child mesh, floating every token 0.8m
+     above the ground.
+  2. Fixing #1 alone still left characters floating -- their raw glTF vertex
+     bounds suggested feet at local y=0, but both rigs have a skeleton root
+     bone with a baked-in -90 degree rotation (a Z-up/Y-up export artifact)
+     that changes a skinned mesh's real bind-pose position in a way those raw
+     bounds don't capture. Fixed by measuring the actual instantiated model's
+     AABB at runtime (`_ground_model()`) instead of trusting the file.
+  3. The floor tiles then rendered visibly below the grid lines -- same
+     lesson again: `floor.glb`'s raw bounds suggested a plain 1x1x1 box, but
+     the real rendered result didn't match. Fixed the same way
+     (`_measure_top_offset()`), which then revealed a FOURTH, more specific
+     issue: `floor-detail.glb` (measured independently) came out sitting
+     visibly sunken relative to plain floor tiles, because that scene's own
+     highest point is the top of a decorative rubble prop, not the shared
+     base-plate surface `floor.glb` and `floor-detail.glb` are actually meant
+     to share. Fixed by measuring the offset once from the plain tile only
+     and reusing it for both variants, rather than measuring each
+     independently.
+- [x] **Verified live in Godot, 2026-09-11 (user-confirmed), after the three
+  follow-up fixes above.** Heroes render as the real (T-posed) humanoid
+  model, monsters as the real Imp model, no missing/pink/broken textures;
+  models stand correctly on the floor with feet at the tile surface (no
+  floating, no sinking); the floor renders as real dungeon stone tiles
+  (plain + detail variants) all sitting flush at the same level, tiling
+  edge-to-edge with the grid-line overlay reading clearly on top; console
+  clean of errors after the `.gdignore` additions (the earlier "3 errors and
+  311 warnings" did not recur). Not separately flagged as a problem: a token
+  at 0 HP currently shows only via its HP label text (no fallback-capsule-style
+  grey tint on a real model) -- left as a known, minor gap rather than a
+  blocker, revisit if it actually causes confusion at the table.
 
-### Needs live verification (same reasoning as Phases 0-1)
+Phase 2 complete for the two items above. Two items from this phase remain
+explicitly open (not silently dropped):
 
-- [ ] Heroes render as the real (T-posed) humanoid model, monsters as the real
-  Imp model -- not capsules -- and neither model is missing/pink/broken-texture
-  (the two-file "_png" URI mismatch in Quaternius's own hero export was fixed
-  in this project's copy, see `godot/assets/README.md`)
-- [ ] Models stand ON the floor (feet at the tile surface), not floating or
-  sunk into it -- the specific thing the double-offset bug fix above should
-  have corrected
-- [ ] The floor renders as real dungeon tiles (stone texture, some tiles
-  showing the "detail" variant) instead of the flat gray/tan checkerboard,
-  tiling edge-to-edge with no visible gaps or overlaps between cells
-- [ ] A token dropping to 0 HP still shows *some* visible state change even
-  without the old grey-capsule tint (currently just the HP label text --
-  confirm this reads clearly enough, or flag it as a gap to fix)
-- [ ] Godot's console is clean of new errors/warnings after reloading the
-  project (the `.gdignore` files added this session should have silenced the
-  large warning count from Godot trying to import the raw, unused pack dumps
-  -- confirm the specific 3 errors reported are gone too, or report back what
-  they actually said if they're still there)
-- [ ] Fix whatever the above turns up
+- [ ] **Animation** -- both free-tier Quaternius packs used here ship with
+  zero baked animation clips (confirmed by reading each file's own glTF/glb
+  JSON directly, not assumed from their "Rigged"/"Retargetable" marketing
+  tags), so models render in their raw bind pose (a T-pose, arms spread, for
+  the hero) rather than idling/walking. Needs a separate download --
+  Quaternius's free "Universal Animation Library" is built specifically to
+  retarget onto these "Retargetable" rigs.
+- [ ] **Walls** (Kenney's `wall.glb`/`wall-half.glb`) around the board
+  perimeter -- deliberately deferred out of this pass rather than attempted
+  alongside the floor/character changes above: wall segments are a 2x2x2.1
+  unit footprint (twice a floor tile's width), so getting the alignment right
+  needs its own focused verification pass, not stacked on top of several
+  other unverified geometry changes at once. Given how many placement
+  surprises the floor/character work above turned up, budget for the same
+  "measure the real thing" approach rather than assuming Kenney's own stated
+  dimensions will just work.
 
 ## Phase 3+ -- Everything else (not scoped yet)
 
