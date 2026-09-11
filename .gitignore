@@ -16,3 +16,22 @@ engine-server/state/*.json
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# --- Quaternius character assets (Phase 2) ---
+# Licensed under the Quaternius Asset License v1.0 (https://quaternius.com/license.html):
+# free to USE in this project, but section 3(a) prohibits redistributing the
+# raw asset files themselves -- committing them to a git repo (which anyone
+# who clones it could then pull back out as standalone files) risks exactly
+# that, so they're kept local-only instead. Kenney's dungeon-kit is separate
+# and NOT covered by this -- it's CC0 and safe to commit (see godot/assets/README.md).
+godot/assets/Creatures/
+godot/assets/creatures/
+
+# --- Unused format variants from the Kenney dungeon-kit download ---
+# CC0 like the rest of that pack (no license reason to exclude these) -- only
+# ignored as plain repo hygiene, since this project only ever loads the GLB
+# format (see GridManager.gd) and the FBX/OBJ copies + preview images are dead
+# weight nobody will load. Remove this entry if you'd rather just keep everything.
+godot/assets/Environment/dungeon-kit/Models/FBX format/
+godot/assets/Environment/dungeon-kit/Models/OBJ format/
+godot/assets/Environment/dungeon-kit/Previews/
