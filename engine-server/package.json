@@ -1,0 +1,9 @@
+{
+  "name": "campaign-os-3d-engine-server",
+  "private": true,
+  "description": "Local HTTP wrapper around Campaign-OS's copied engine/*.js (5e rules logic) for the Godot 3D client to talk to. No external dependencies -- Node's built-in http/fetch/test runner only, matching the 2D project's own zero-dependency convention.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  }
+}
