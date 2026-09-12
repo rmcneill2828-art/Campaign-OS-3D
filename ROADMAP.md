@@ -632,15 +632,16 @@ three-state fog overlay (never explored / explored-but-not-currently-visible
   session but not from a bare `--headless --script` run. Worked around with
   one headless editor pass (`--headless --editor --path godot --quit`) to
   force the rescan before re-verifying.
-  **Verified so far**: both `Main.tscn` and `PlayerView.tscn` instantiate
-  headlessly with no script/parse errors (`godot/tools/smoke_test_main.gd`,
-  `smoke_test_player_view.gd`). **NOT yet verified live** -- whether the
-  second window actually opens/drags correctly as real screen real estate,
-  whether the fog quads/redacted labels/initiative panel actually look right
-  together, and whether hiding a token from the DM window is visible in
-  real time on the player window, all genuinely need a human looking at two
-  real windows, which this session can't do itself. Flagged explicitly
-  rather than assumed to work from the headless checks alone.
+  **Verified live in Godot, 2026-09-12 (user-confirmed, "everything looks
+  good")**: on top of both scenes instantiating headlessly with no
+  script/parse errors (`godot/tools/smoke_test_main.gd`,
+  `smoke_test_player_view.gd`), the DM confirmed the real, human-only checks
+  a headless run can't cover -- the second window opens as genuine, separate,
+  draggable screen real estate; the board/tokens/fog/redacted labels/
+  initiative panel all render correctly together; and the player window
+  updates independently of the DM's own window as the encounter changes.
+
+Phase 6 complete.
 
 ## Phase 7 -- Claude DM bridge integration (later, per decision #3 above)
 
