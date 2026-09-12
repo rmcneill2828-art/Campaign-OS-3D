@@ -40,6 +40,14 @@ var _tile_mesh: BoxMesh
 var _floor_scene: PackedScene
 var _floor_detail_scene: PackedScene
 
+# Which hand-built map scene (if any, see build()'s own doc comment) is
+# currently instantiated -- tracked separately from columns/rows/cell_size so
+# build()'s own no-op-if-unchanged check also catches "same size map, but the
+# DM switched to a different named map that happens to share that size,"
+# which columns/rows/cell_size alone can't distinguish.
+var _current_map_scene_path := ""
+var _map_scene_instance: Node3D
+
 func _ready() -> void:
 	_light_material = StandardMaterial3D.new()
 	_light_material.albedo_color = Color(0.78, 0.74, 0.66)
@@ -69,22 +77,41 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 func board_center() -> Vector3:
 	return Vector3(columns * cell_size / 2.0, 0.0, rows * cell_size / 2.0)
 
-## No-ops if nothing about the board's shape/scale has changed, so polling the
-## same map every second doesn't rebuild (and visually flicker) the whole board
-## on every tick.
-func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0) -> void:
+## No-ops if nothing about the board's shape/scale/map has changed, so polling
+## the same map every second doesn't rebuild (and visually flicker) the whole
+## board on every tick.
+##
+## `map_scene_path` is the Phase 4 map-scene contract: when Main.gd resolves
+## the server's current mapName to a real hand-built scene (see its own
+## MAP_SCENES), that scene is instantiated here as the board's actual visual
+## floor/walls/props, and this stops generating its own procedural floor
+## tiles entirely -- but it still ALWAYS builds the invisible collision plane
+## and the grid-line overlay itself, on top of whatever the map scene
+## provides, exactly as planned: a hand-built map only needs to be geometry,
+## not also reimplement click-to-move collision or grid readability. An
+## empty path (any map name with no hand-built scene registered yet) falls
+## back to the original fully-procedural floor, so a new/unmapped map still
+## renders something instead of staying blank.
+func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "") -> void:
 	var new_cell_size := new_feet_per_square * METERS_PER_FOOT
-	if new_columns == columns and new_rows == rows and is_equal_approx(new_cell_size, cell_size) and get_child_count() > 0:
+	if new_columns == columns and new_rows == rows and is_equal_approx(new_cell_size, cell_size) \
+			and map_scene_path == _current_map_scene_path and get_child_count() > 0:
 		return
 	columns = new_columns
 	rows = new_rows
 	feet_per_square = new_feet_per_square
 	cell_size = new_cell_size
+	_current_map_scene_path = map_scene_path
 
 	for child in get_children():
 		child.queue_free()
+	_map_scene_instance = null
 
-	if _floor_scene:
+	if map_scene_path != "" and ResourceLoader.exists(map_scene_path):
+		var map_scene := load(map_scene_path) as PackedScene
+		_map_scene_instance = map_scene.instantiate() as Node3D
+		add_child(_map_scene_instance)
+	elif _floor_scene:
 		_build_real_floor_tiles()
 	else:
 		_build_fallback_checkerboard()

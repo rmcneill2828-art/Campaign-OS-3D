@@ -52,6 +52,16 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
+## Phase 4's map-scene contract: a server mapName this client actually has a
+## hand-built room for. Not every map needs an entry -- GridManager falls
+## back to its original procedural floor for any name not listed here, so a
+## brand new map (or a map created before its own scene exists) still
+## renders something instead of coming up blank. Extend this dict as more
+## real maps get built; nothing else about switching maps needs to change.
+const MAP_SCENES := {
+	"Prototype Chamber": "res://scenes/maps/prototype_chamber.tscn"
+}
+
 ## applyHealing (see engine-server/engine/encounter.js) clamps to the target's
 ## real maxHp server-side -- this client doesn't need to know that value
 ## itself to offer a "Full Heal" button, just send an amount large enough
@@ -238,7 +248,7 @@ func _apply_state(state: Dictionary) -> void:
 	var columns: int = int(map_data.get("columns", 12))
 	var rows: int = int(map_data.get("rows", 8))
 	var feet_per_square: float = float(map_data.get("feetPerSquare", 5))
-	_board.build(columns, rows, feet_per_square)
+	_board.build(columns, rows, feet_per_square, MAP_SCENES.get(map_name, ""))
 
 	if not _camera_centered:
 		_camera_rig.center_on(_board.board_center())
