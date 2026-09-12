@@ -216,20 +216,31 @@ Four decisions from that discussion shape everything below:
 Ordered roughly by how often each comes up at a real table, so the most
 valuable gaps close first:
 
-- [x] **Ability checks / saving throws.** Built 2026-09-12, needs live
-  verification. A new "Token Actions" panel (top-right of the HUD) with two
+- [x] **Ability checks / saving throws.** Done 2026-09-12, verified live
+  (user-confirmed). A "Token Actions" panel (top-right of the HUD) with two
   rows: a 6-item ability dropdown + "Roll Save" (sends `saving_throw`), and a
   24-item dropdown (6 abilities + the 18 named skills, matching
   `rollAbilityCheck`'s own "either works" contract) + "Roll Check" (sends
   `ability_check`), plus a shared DC spin box (default 10). Both act on
   whichever token is currently left-click-selected -- same selection model
-  move/attack already use -- and show a status-bar hint rather than silently
-  doing nothing if no token is selected (`_require_selected_token()`,
-  mirroring the existing no-attacker-selected message for right-click
-  attacks). `ABILITY_KEYS`/`SKILL_LIST` are duplicated into `Main.gd` from
-  `engine/encounter.js`'s own copies -- same no-shared-module convention
-  already covering this exact list across `encounter.js`/`campaign.js`/
-  `dm-bridge/watch.js`.
+  move/attack already use. `ABILITY_KEYS`/`SKILL_LIST` are duplicated into
+  `Main.gd` from `engine/encounter.js`'s own copies -- same no-shared-module
+  convention already covering this exact list across `encounter.js`/
+  `campaign.js`/`dm-bridge/watch.js`.
+  **Two real, unrelated gaps found live-testing this, both fixed the same
+  session**:
+  1. There was no way to deselect a token once picked at all -- found while
+     the user tried to test the "nothing selected" hint. Added three ways to
+     deselect (click past the board, click the already-selected token again,
+     Escape), plus mentioning Esc in the selection status line.
+  2. The hint message itself then turned out to disappear almost instantly --
+     it shared `_status_label` with the ongoing map/round/log text, which the
+     1-second poll cycle overwrites unconditionally, giving a hint well under
+     a second of real visibility. Split it into a separate `HintLabel` +
+     3-second one-shot `HintTimer` (`_show_hint()`), used by every other
+     one-off "you just tried something" message too (failed attack-target
+     selection, action-send failure, action-failed response) -- not just the
+     one that surfaced it.
 - [ ] Conditions -- view + toggle on a token, with a real visual indicator on/
   above the token (an icon or tag), not just something buried in status text
 - [ ] Spellcasting -- `cast_spell`/`cast_area_spell` UI: spell name, level,
