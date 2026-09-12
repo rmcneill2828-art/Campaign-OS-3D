@@ -153,7 +153,7 @@ func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Ar
 
 	var selection_note := ""
 	if _selected_token_id != "" and _tokens.has(_selected_token_id):
-		selection_note = "\nSelected: %s -- left-click a tile to move, right-click another token to attack." % _tokens[_selected_token_id].token_name
+		selection_note = "\nSelected: %s -- left-click a tile to move, right-click another token to attack, Esc to deselect." % _tokens[_selected_token_id].token_name
 
 	var last_log := ""
 	var log: Array = state.get("log", [])
@@ -206,7 +206,9 @@ func _require_selected_token() -> bool:
 	return true
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_deselect_token()
+	elif event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_handle_left_click(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
@@ -229,11 +231,20 @@ func _raycast_from_screen(screen_pos: Vector2) -> Dictionary:
 func _handle_left_click(screen_pos: Vector2) -> void:
 	var hit := _raycast_from_screen(screen_pos)
 	if hit.is_empty():
+		# Clicked past the board entirely (e.g. the sky above the horizon) --
+		# there was previously no way to deselect a token at all once picked,
+		# a real gap (found by the user trying to test the "nothing selected"
+		# hint message and discovering they couldn't get back to that state).
+		_deselect_token()
 		return
 
 	var collider: Node = hit["collider"]
 	if collider.is_in_group("tokens"):
-		_select_token(collider.get_meta("token"))
+		var token: Token = collider.get_meta("token")
+		if token.token_id == _selected_token_id:
+			_deselect_token() # clicking the already-selected token again toggles it off
+		else:
+			_select_token(token)
 	elif collider.is_in_group("floor") and _selected_token_id != "":
 		var cell: Vector2i = _board.world_to_cell(hit["position"])
 		_send_move(_selected_token_id, cell.x, cell.y)
@@ -262,6 +273,16 @@ func _select_token(token: Token) -> void:
 		_tokens[_selected_token_id].set_selected(false)
 	_selected_token_id = token.token_id
 	token.set_selected(true)
+
+## Three ways to reach this: clicking past the board entirely, clicking the
+## already-selected token again, or pressing Escape (see _unhandled_input).
+## The status label's "Selected: ..." line catches up on the next poll (up to
+## poll_interval_seconds later) rather than being force-refreshed here --
+## acceptable since that's already how every other state change reaches it.
+func _deselect_token() -> void:
+	if _tokens.has(_selected_token_id):
+		_tokens[_selected_token_id].set_selected(false)
+	_selected_token_id = ""
 
 func _send_move(token_id: String, x: int, y: int) -> void:
 	if not _tokens.has(token_id):
