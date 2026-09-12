@@ -52,15 +52,6 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
-## Phase 4's map-scene contract: a server mapName this client actually has a
-## hand-built room for. Not every map needs an entry -- GridManager falls
-## back to its original procedural floor for any name not listed here, so a
-## brand new map (or a map created before its own scene exists) still
-## renders something instead of coming up blank. Extend this dict as more
-## real maps get built; nothing else about switching maps needs to change.
-const MAP_SCENES := {
-	"Prototype Chamber": "res://scenes/maps/prototype_chamber.tscn"
-}
 
 ## applyHealing (see engine-server/engine/encounter.js) clamps to the target's
 ## real maxHp server-side -- this client doesn't need to know that value
@@ -82,6 +73,7 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _hint_label: Label = $HUD/HintLabel
 @onready var _hint_timer: Timer = $HUD/HintTimer
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
+@onready var _open_player_window_button: Button = $HUD/OpenPlayerWindowButton
 
 @onready var _checks_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksHeaderButton
 @onready var _checks_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody
@@ -143,12 +135,22 @@ var _action_in_flight := false
 var _right_press_pos := Vector2.ZERO
 var _right_press_active := false
 
+## Phase 6 -- the "second monitor/TV" window. A real separate OS window (not
+## embedded in this one), same technique the 2D app's own "Open Player
+## Window" button uses in spirit (a second, independent view onto the same
+## live game) -- Godot's default project setting already has subwindows NOT
+## embedded, so a plain Window node showing a scene inside it IS a real,
+## separately-draggable OS window. Tracked so a second click brings the
+## existing window to front instead of spawning a duplicate.
+var _player_window: Window
+
 func _ready() -> void:
 	_poll_timer.wait_time = poll_interval_seconds
 	_poll_timer.timeout.connect(_poll_state)
 	_state_request.request_completed.connect(_on_state_response)
 	_action_request.request_completed.connect(_on_action_response)
 	_next_turn_button.pressed.connect(_on_next_turn_pressed)
+	_open_player_window_button.pressed.connect(_on_open_player_window_pressed)
 
 	for ability in ABILITY_KEYS:
 		_save_ability_option.add_item(ability)
@@ -248,7 +250,7 @@ func _apply_state(state: Dictionary) -> void:
 	var columns: int = int(map_data.get("columns", 12))
 	var rows: int = int(map_data.get("rows", 8))
 	var feet_per_square: float = float(map_data.get("feetPerSquare", 5))
-	_board.build(columns, rows, feet_per_square, MAP_SCENES.get(map_name, ""))
+	_board.build(columns, rows, feet_per_square, MapScenes.resolve(map_name))
 
 	if not _camera_centered:
 		_camera_rig.center_on(_board.board_center())
@@ -372,6 +374,34 @@ func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Ar
 
 func _on_next_turn_pressed() -> void:
 	_send_action({"type": "next_turn"})
+
+## Opens (or re-focuses) the read-only Phase 6 player-facing view as a real
+## second OS window, draggable to a second monitor/TV -- mirrors the 2D app's
+## own "Open Player Window" button. Deliberately just a window spawn: this
+## script never talks to that window directly after opening it (no shared
+## state push) -- PlayerView.gd polls engine-server on its own, completely
+## independently, same reasoning `dm-bridge/watch.js`'s own poll loop already
+## established for this project: a second independent poller is simpler and
+## more robust than this window pushing updates into it.
+func _on_open_player_window_pressed() -> void:
+	if _player_window and is_instance_valid(_player_window):
+		_player_window.grab_focus()
+		return
+	if not ResourceLoader.exists("res://scenes/PlayerView.tscn"):
+		_show_hint("Player view scene not found (res://scenes/PlayerView.tscn missing).")
+		return
+	var player_view_scene := load("res://scenes/PlayerView.tscn") as PackedScene
+	_player_window = Window.new()
+	_player_window.title = "Campaign OS 3D -- Player View"
+	_player_window.size = Vector2i(1280, 800)
+	_player_window.close_requested.connect(func():
+		_player_window.queue_free()
+		_player_window = null
+	)
+	_player_window.add_child(player_view_scene.instantiate())
+	get_tree().root.add_child(_player_window)
+	_player_window.show()
+	_player_window.grab_focus()
 
 ## rollSavingThrow (see engine-server/engine/encounter.js) uses the target's
 ## real ability modifier or a stated save-bonus override, rolls once, and

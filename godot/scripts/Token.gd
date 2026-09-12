@@ -63,6 +63,17 @@ const DYING_ANIMATION := "Crouch_Idle"
 @onready var _hp_bar_fill_wrapper: Node3D = $HPBarRoot/HPBarFillWrapper
 @onready var _hp_bar_fill: MeshInstance3D = $HPBarRoot/HPBarFillWrapper/HPBarFill
 
+## Phase 6: set true only by PlayerView.gd, immediately after instantiating a
+## Token for its own read-only board, never by Main.gd -- redacts the
+## floating text label to match ui/playerView.js's own exact precedent (no
+## name, no exact HP numbers, no conditions text visible on the map itself;
+## a name only ever surfaces there via a hover tooltip, and conditions don't
+## surface on the 2D player board at all). The HP BAR mesh (_update_hp_bar)
+## is left untouched either way -- it was already numberless, just a
+## color-banded quad, exactly the "rough health bar, no exact numbers"
+## middle ground ui/playerView.js's own token-hp-bar already settled on.
+var player_facing := false
+
 var token_id := ""
 var token_name := ""
 var token_type := ""
@@ -122,11 +133,14 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	# (healed) -- not distinguished here, both just mean "not dying".
 	var is_dying: bool = data.get("dying") != null
 
-	var conditions: Array = data.get("conditions", [])
-	# String.join() wants a PackedStringArray, not a generic Array -- explicit
-	# conversion rather than relying on implicit coercion to avoid guessing.
-	var conditions_line := ("\n" + ", ".join(PackedStringArray(conditions))) if conditions.size() > 0 else ""
-	_label.text = "%s\n%d/%d HP%s" % [token_name, hp, max_hp, conditions_line]
+	if player_facing:
+		_label.text = ""
+	else:
+		var conditions: Array = data.get("conditions", [])
+		# String.join() wants a PackedStringArray, not a generic Array -- explicit
+		# conversion rather than relying on implicit coercion to avoid guessing.
+		var conditions_line := ("\n" + ", ".join(PackedStringArray(conditions))) if conditions.size() > 0 else ""
+		_label.text = "%s\n%d/%d HP%s" % [token_name, hp, max_hp, conditions_line]
 	_update_hp_bar()
 
 	if not _initialized or new_type != token_type:

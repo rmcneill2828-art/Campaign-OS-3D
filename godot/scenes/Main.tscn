@@ -75,6 +75,14 @@ offset_bottom = 240.0
 theme_override_font_sizes/font_size = 18
 text = "Next Turn"
 
+[node name="OpenPlayerWindowButton" type="Button" parent="HUD"]
+offset_left = 186.0
+offset_top = 200.0
+offset_right = 386.0
+offset_bottom = 240.0
+theme_override_font_sizes/font_size = 18
+text = "Open Player Window"
+
 [node name="HintLabel" type="Label" parent="HUD"]
 anchor_right = 1.0
 offset_left = 16.0

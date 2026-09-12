@@ -23,11 +23,27 @@ checking without a live `node server.js` or opening the editor GUI.
   mouse-and-gizmo workflow (not drivable interactively in this session). A
   second hand-built map is a copy of this pattern: a new script with its own
   explicit layout, run once to produce a new committed `.tscn`.
-- **`smoke_test_main.gd`** -- instantiates `Main.tscn` headlessly and
-  confirms it loads/`_ready()`s with no script error (no live
-  `engine-server` needed -- HTTPRequest calls just fail to connect, which is
-  fine). A cheap regression check after editing `Main.gd`/`GridManager.gd`/
-  `Token.gd`, before ever opening the real editor.
+- **`smoke_test_main.gd`** / **`smoke_test_player_view.gd`** -- instantiate
+  `Main.tscn`/`PlayerView.tscn` headlessly and confirm they load/`_ready()`
+  with no script error (no live `engine-server` needed -- HTTPRequest calls
+  just fail to connect, which is fine). A cheap regression check after
+  editing any of the scripts either scene uses, before ever opening the
+  real editor.
+
+**Gotcha: a brand new `class_name` isn't visible to these scripts until the
+project's global class cache knows about it.** Adding a new `class_name`
+(e.g. `MapScenes`, Phase 6) and immediately running a `--headless --script`
+tool against code that references it fails with `Identifier "X" not
+declared in the current scope"`, even though the exact same code opens fine
+in a real editor session -- the editor scans and registers `class_name`
+declarations into `.godot/global_script_class_cache.cfg` on project open,
+and a bare `--script` run never triggers that scan on its own. Fix: run the
+project through one headless editor pass first, which does the same scan
+and quits without opening a GUI window:
+```
+<path-to-Godot>.exe --headless --editor --path godot --quit
+```
+Then the normal `--headless --script ...` tools can see the new class.
 
 None of these are shipped or referenced by the actual game -- delete any of
 them freely if they get in the way; regenerate `measure_pieces.gd`'s or

@@ -563,8 +563,84 @@ Phase 6's job, once a real player-facing view exists to put it in.
 ## Phase 6 -- Player-facing view
 
 A 3D equivalent of the 2D app's Player Window (same-machine, read-only,
-second monitor/TV) -- matters once the client is actually good enough to run
-at a table. Not scoped in detail yet.
+second monitor/TV) -- this is what Phase 5's visibility data was actually
+for. Checked `ui/playerView.js` directly before building anything, rather
+than guessing what "player-facing" should mean: read-only (no editing, no DM
+panels, no Claude bridge), two independent filters before anything renders
+(`hiddenFromPlayers` always wins; `isVisibleToParty` line-of-sight otherwise),
+a rough color-banded HP bar instead of exact numbers, no on-map name text
+(only a hover tooltip there -- full names only ever show in the initiative
+list), full unredacted combat log (a documented, accepted 2D-app gap, not
+something to silently "fix" here and risk getting subtly wrong), and a
+three-state fog overlay (never explored / explored-but-not-currently-visible
+/ currently visible) gated on the map actually having walls drawn at all.
+
+- [x] **Server: `visibleTokenIds` -- 2026-09-12, built and tested.**
+  `engine-server/server.js`'s `computeVisibility()` (Phase 5) now also
+  returns `visibleTokenIds`: every token on the current map passing the
+  EXACT same two-filter rule `ui/playerView.js`'s own `renderMapGrid()`
+  applies (`!hiddenFromPlayers` then `isVisibleToParty`) -- read directly off
+  the real engine functions, not reimplemented, so this can't drift from
+  what the 2D app actually does. 3 new tests: everyone visible by default in
+  the open room; `hiddenFromPlayers` hides and un-hides live; a token behind
+  a real interior wall (added via the exact `add_wall` dmBridge action a
+  DM's Walls tool uses) drops out and reappears once the wall is removed via
+  `remove_wall_near`. 13/13 tests passing total.
+- [x] **A real second, read-only 3D client -- 2026-09-12, built.**
+  `godot/scenes/PlayerView.tscn` + `godot/scripts/PlayerView.gd`: its own
+  independent poller against `GET /state` (never pushed to by the DM
+  window -- same "a second independent poller beats one window pushing into
+  another" reasoning `dm-bridge/watch.js`'s own poll loop already
+  established for this project), reusing the same `GridManager`/map-scene
+  contract (factored the small `MAP_SCENES` dict out of `Main.gd` into its
+  own `res://scripts/MapScenes.gd` so both clients resolve a map name to the
+  same hand-built scene, rather than accepting drift risk between two copies
+  in the same language/project -- unlike the ABILITY_KEYS-style duplication
+  this codebase accepts BETWEEN `encounter.js` and GDScript, where no shared
+  import mechanism exists at all) and the same `Token.tscn`/`Token.gd`
+  (a new `player_facing` flag, set only by `PlayerView.gd`, blanks the
+  floating name/HP-number/conditions label -- the HP BAR mesh itself needed
+  no change at all, it was already just a numberless colored quad, exactly
+  the "rough bar, no exact numbers" middle ground `ui/playerView.js` already
+  settled on). Only tokens in the server's `visibleTokenIds` are even
+  instantiated -- not hidden-but-present, genuinely never created. A new
+  `FogRoot` builds the three-state fog overlay fresh each poll as flat
+  semi-transparent quads (never-explored solid-black, explored-dimmed,
+  currently-visible clear), the same "cheap enough to fully rebuild every
+  poll" precedent `GridManager`'s own grid-line overlay already established
+  -- entirely separate from `GridManager` itself, which stays exactly as
+  Phase 5 left it (shared, unfogged, still what the DM's own window uses).
+  A read-only side panel shows initiative (sorted the same
+  `b.initiative - a.initiative || a.name.localeCompare(b.name)` way
+  `sortByInitiative` does, with DEAD/DYING/STABLE badges) and the full
+  combat log. No `POST /action` call exists anywhere in `PlayerView.gd` --
+  not gated off, structurally absent -- so nothing clickable in this window
+  can mutate the encounter no matter what.
+- [x] **Launch mechanism -- 2026-09-12, built.** `Main.tscn` gained an "Open
+  Player Window" button (top-level HUD, not inside the Token Actions panel)
+  that instantiates `PlayerView.tscn` inside a real Godot `Window` node --
+  the project's subwindows are already not embedded (Godot's own default),
+  so this opens as a genuine, separately-draggable second OS window, the
+  same "second monitor/TV" the 2D app's own button opens a second browser
+  tab for. A second click re-focuses the existing window instead of
+  spawning a duplicate; closing it clears the tracked reference.
+  **Real, non-obvious gotcha hit and documented** (see
+  `godot/tools/README.md`): a brand new `class_name` (`MapScenes`, added
+  this same phase) isn't visible to anything -- including this project's own
+  headless smoke-test tools -- until the project's global class cache has
+  been rebuilt, which normally happens automatically on a real editor
+  session but not from a bare `--headless --script` run. Worked around with
+  one headless editor pass (`--headless --editor --path godot --quit`) to
+  force the rescan before re-verifying.
+  **Verified so far**: both `Main.tscn` and `PlayerView.tscn` instantiate
+  headlessly with no script/parse errors (`godot/tools/smoke_test_main.gd`,
+  `smoke_test_player_view.gd`). **NOT yet verified live** -- whether the
+  second window actually opens/drags correctly as real screen real estate,
+  whether the fog quads/redacted labels/initiative panel actually look right
+  together, and whether hiding a token from the DM window is visible in
+  real time on the player window, all genuinely need a human looking at two
+  real windows, which this session can't do itself. Flagged explicitly
+  rather than assumed to work from the headless checks alone.
 
 ## Phase 7 -- Claude DM bridge integration (later, per decision #3 above)
 

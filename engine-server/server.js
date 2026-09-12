@@ -111,13 +111,24 @@ function saveState(stateFile, state) {
 // per-map memory revealVisibleTiles (called after every mutating action below)
 // keeps up to date, the same explored-tile bookkeeping the 2D app's own
 // saveEncounter() hook performs on every save.
+//
+// Phase 6 added `visibleTokenIds` -- the exact same two-filter rule
+// ui/playerView.js's own renderMapGrid() applies before ever rendering a token
+// (`!hiddenFromPlayers` AND `isVisibleToParty`), just read directly off the real
+// dmBridge.js-adjacent engine functions here instead of re-deriving the rule
+// client-side in GDScript, where a subtly different reimplementation could drift
+// from what the 2D app actually does.
 function computeVisibility(state) {
   const mapName = state.mapName;
-  if (!mapName) return { mapName: null, currentlyVisible: [], revealed: [] };
+  if (!mapName) return { mapName: null, currentlyVisible: [], revealed: [], visibleTokenIds: [] };
   const currentlyVisible = CampaignOS.visibleCellsForParty(state, mapName);
   const revealedTiles = state.maps?.[mapName]?.revealedTiles || {};
   const revealed = Object.keys(revealedTiles).map((key) => key.split(",").map(Number));
-  return { mapName, currentlyVisible, revealed };
+  const visibleTokenIds = (state.tokens || [])
+    .filter((token) => token.mapName === mapName && !token.hiddenFromPlayers)
+    .filter((token) => CampaignOS.isVisibleToParty(state, token))
+    .map((token) => token.id);
+  return { mapName, currentlyVisible, revealed, visibleTokenIds };
 }
 
 function sendJson(res, status, body) {
