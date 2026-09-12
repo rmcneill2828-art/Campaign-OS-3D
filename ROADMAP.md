@@ -340,6 +340,47 @@ valuable gaps close first:
     shared sub-resource -- the same shared-resource gotcha this project
     already hit once with animations would otherwise recolor every token's
     bar together.
+- [x] **Panel redesign, HP bar visibility, and dying/kneeling pose --
+  2026-09-12, live-tested and verified (user-confirmed) with one follow-up
+  feature request from that same test pass.**
+  - **Collapsible sections.** The single flat Token Actions list (getting
+    "really large" per live feedback, with its left edge cut off on the
+    user's actual window size) was split into 5 collapsible sections --
+    Checks, Conditions, Spells, Resources, Other (death save/exhaustion/
+    legendary/recharge/lair) -- each a header `Button` (`toggle_mode = true`,
+    `▸`/`▾` prefix) over a body container whose `visible` mirrors the
+    header's pressed state, wired through one `_wire_collapsible_section()`
+    helper rather than five near-duplicate blocks. `StatusLabel`/`HintLabel`
+    switched from a fixed `offset_right = 900` (silently assuming a
+    1600px-wide window) to a responsive `anchor_right = 1.0, offset_right =
+    -380`, fixing the reported cut-off left edge.
+  - **HP bar visibility.** Reported "hard to see" -- repositioned clearly
+    above the name label (was overlapping it) and enlarged (background
+    0.8x0.1 -> 1.1x0.22, fill 0.8x0.08 -> 1.0x0.16) with a darker background
+    for contrast.
+  - **Death animation "not working" turned out not to be a bug.** The
+    reported case was a token dropping to 0 HP and starting death saves --
+    "dying," not "dead" under real 5e rules, which this engine already
+    applies correctly (`Token.gd` already gated `Death01` on the real `dead`
+    flag, not a bare `hp<=0` check, since the batch item above). Verified by
+    asking the user to actually carry a token to a real death before
+    concluding anything was broken; confirmed working once they did.
+  - **New feature from that same test pass**: "make the model kneel down
+    when it is making death saving throws." Added a persistent
+    `Crouch_Idle` pose (not `Fixing_Kneeling`, also in the same Quaternius
+    pack -- `Crouch_Idle`'s own `_Loop`-suffixed source name is what marks it
+    as authored to be held indefinitely, the same signal already relied on
+    for Idle/Walk) driven by the engine's own `dying` field (present -- a
+    `{successes, failures, stable}` dict -- whenever a token is actively
+    rolling death saves or already stabilized-but-still-down; both look the
+    same kneeling, matching RAW: stabilized just means no longer rolling, not
+    back up). `Token.gd`'s animation-priority logic now reads dead > dying >
+    hit-reaction > idle/walk, edge-triggered off `_was_dying` so the pose
+    isn't re-triggered every poll while nothing changed, and a token healed
+    back up out of dying stands back into Idle. Also covers the edge case of
+    a dying token being moved (a DM dragging an unconscious creature) via a
+    new `_resume_idle_or_dying()` helper, so the move-tween's finish doesn't
+    pop it back onto its feet mid-death-saves.
 
 ## Phase 4 -- Hand-authored maps
 

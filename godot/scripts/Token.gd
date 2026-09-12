@@ -45,6 +45,15 @@ const WALK_ANIMATION := "Walk"
 ## dump (see _setup_animation's diagnostic print()), not assumed.
 const DEATH_ANIMATION := "Death01"
 const HIT_ANIMATIONS: Array[String] = ["Hit_Chest", "Hit_Head"]
+## For a token actively making (or stabilized on) death saves -- a persistent
+## held pose, not a one-shot reaction, so it needs to keep looping for however
+## long the token stays down. "Crouch_Idle" (not "Fixing_Kneeling", also in
+## this pack) specifically because its own "_Loop" suffix in the source file
+## says it was actually authored to be held, the same signal this project
+## already leaned on to know Idle/Walk would loop convincingly -- confirmed by
+## reading the pack's real clip list again for this, not reused blind from
+## the earlier idle/walk read.
+const DYING_ANIMATION := "Crouch_Idle"
 
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
@@ -63,6 +72,7 @@ var hp := 0
 var max_hp := 1
 var _last_hp := -1 # -1 means "no previous value yet" -- distinguishes first-ever apply_data from a real HP change
 var _was_dead := false
+var _was_dying := false
 
 var _initialized := false
 var _move_tween: Tween
@@ -81,6 +91,7 @@ var _bone_map := {} # character bone index -> animation-source bone index
 var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
 var _walk_animation_key := ""
 var _death_animation_key := ""
+var _dying_animation_key := ""
 var _hit_animation_keys: Array[String] = []
 
 func _ready() -> void:
@@ -104,6 +115,12 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	hp = int(data.get("hp", hp))
 	max_hp = int(max(data.get("maxHp", max(hp, 1)), 1))
 	var is_dead := bool(data.get("dead", false))
+	# Present (a {successes, failures, stable} dict) means actively making
+	# death saves OR stabilized-but-still-down -- both look the same
+	# (kneeling), matching RAW: a stable creature is still unconscious, just
+	# no longer rolling. Absent means either never went down, or came back up
+	# (healed) -- not distinguished here, both just mean "not dying".
+	var is_dying: bool = data.get("dying") != null
 
 	var conditions: Array = data.get("conditions", [])
 	# String.join() wants a PackedStringArray, not a generic Array -- explicit
@@ -117,18 +134,30 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 		_rebuild_model()
 	_update_fallback_color() # a real model's own texture is left alone; only the fallback capsule reacts to HP
 
-	# Death/hit-reaction animation -- only after the first real data (so a
-	# freshly-spawned token at full HP doesn't play a "hit" reaction against
-	# the -1 sentinel), and only via the real `dead` flag for death (NOT a
-	# bare hp<=0 check -- a token can sit at 0 HP mid-death-saves without
-	# being `dead` yet).
+	# Death/dying/hit-reaction animation -- only after the first real data (so
+	# a freshly-spawned token at full HP doesn't play a "hit" reaction against
+	# the -1 sentinel), and only via the real `dead`/`dying` flags (NOT a bare
+	# hp<=0 check -- a token can sit at 0 HP mid-death-saves without being
+	# `dead` yet, and RAW says nothing about kneeling just for losing HP while
+	# still conscious). Priority order matters: dead beats everything (frozen,
+	# permanent for this encounter), dying beats hit-reaction (a creature
+	# already down doesn't play a standing hit-flinch), and the transitions
+	# into/out of dying are edge-triggered off _was_dying so the loop isn't
+	# re-started every single poll while nothing has changed.
 	if _initialized and _anim_source_player:
 		if is_dead and not _was_dead:
 			_play_source_animation(_death_animation_key)
-		elif not is_dead and _last_hp >= 0 and hp < _last_hp and not _hit_animation_keys.is_empty():
+		elif is_dead:
+			pass # stay frozen on Death01's last frame
+		elif is_dying and not _was_dying:
+			_play_source_animation(_dying_animation_key)
+		elif not is_dying and _was_dying:
+			_play_source_animation(_idle_animation_key) # healed/stood back up
+		elif not is_dying and _last_hp >= 0 and hp < _last_hp and not _hit_animation_keys.is_empty():
 			_play_source_animation(_hit_animation_keys.pick_random())
 	_last_hp = hp
 	_was_dead = is_dead
+	_was_dying = is_dying
 
 	# Grid cell -> world space directly, no extra vertical offset -- Body's own
 	# children (the collision capsule, the fallback mesh) each carry whatever
@@ -159,6 +188,7 @@ func _rebuild_model() -> void:
 	_idle_animation_key = ""
 	_walk_animation_key = ""
 	_death_animation_key = ""
+	_dying_animation_key = ""
 	_hit_animation_keys = []
 
 	var config: Dictionary = MODEL_CONFIG.get(token_type, {})
@@ -228,6 +258,7 @@ func _setup_animation(instance: Node3D) -> void:
 	_idle_animation_key = _resolve_animation_name(_anim_source_player, IDLE_ANIMATION)
 	_walk_animation_key = _resolve_animation_name(_anim_source_player, WALK_ANIMATION)
 	_death_animation_key = _resolve_animation_name(_anim_source_player, DEATH_ANIMATION)
+	_dying_animation_key = _resolve_animation_name(_anim_source_player, DYING_ANIMATION)
 	_hit_animation_keys = []
 	for hit_name in HIT_ANIMATIONS:
 		var resolved := _resolve_animation_name(_anim_source_player, hit_name)
@@ -235,38 +266,41 @@ func _setup_animation(instance: Node3D) -> void:
 			_hit_animation_keys.append(resolved)
 
 	# "_Loop"-suffixed clips in this pack aren't necessarily flagged to loop by
-	# default on import -- force it so Idle/Walk actually repeat instead of
-	# freezing on their last frame. Death/hit clips are deliberately NOT
+	# default on import -- force it so Idle/Walk/Dying actually repeat instead
+	# of freezing on their last frame. Death/hit clips are deliberately NOT
 	# forced to loop -- a death pose should freeze on its last frame, and a
 	# hit reaction should play once and hand back to idle (see
 	# _on_source_animation_finished).
-	for key in [_idle_animation_key, _walk_animation_key]:
+	for key in [_idle_animation_key, _walk_animation_key, _dying_animation_key]:
 		if key != "":
 			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
 
 	if not _anim_source_player.animation_finished.is_connected(_on_source_animation_finished):
 		_anim_source_player.animation_finished.connect(_on_source_animation_finished)
 
-	print("Token %s: animation bone map covers %d/%d bones (%s); idle=%s walk=%s%s" % [
+	print("Token %s: animation bone map covers %d/%d bones (%s); idle=%s walk=%s dying=%s%s" % [
 		token_name, _bone_map.size(), _character_skeleton.get_bone_count(),
 		"looks complete" if _bone_map.size() == _character_skeleton.get_bone_count() else "some bones unmatched -- check names",
 		_idle_animation_key if _idle_animation_key != "" else "NOT FOUND",
 		_walk_animation_key if _walk_animation_key != "" else "NOT FOUND",
-		"; available: %s" % [_anim_source_player.get_animation_list()] if _idle_animation_key == "" or _walk_animation_key == "" else ""
+		_dying_animation_key if _dying_animation_key != "" else "NOT FOUND",
+		"; available: %s" % [_anim_source_player.get_animation_list()] if _idle_animation_key == "" or _walk_animation_key == "" or _dying_animation_key == "" else ""
 	])
 
 	_play_source_animation(_idle_animation_key)
 
 ## A one-shot reaction clip (hit or death) finishing playback hands control
 ## back to idle -- EXCEPT death, which should stay frozen on its final pose,
-## not snap back to standing. Idle/Walk finishing is a no-op here since
-## they're looping and this signal only fires on genuine completion, which a
-## looping clip triggers once per lap -- re-playing the same key it's already
-## on is already a no-op in _play_source_animation().
+## not snap back to standing, and EXCEPT dying, which is forced to loop (see
+## _setup_animation) so this only fires for it once per lap the same way it
+## does for idle/walk -- re-playing the same key it's already on is already a
+## no-op in _play_source_animation(), so excluding it here isn't strictly
+## required for correctness, but keeps this function's intent (idle is the
+## only "resting" state it hands control to) honest.
 func _on_source_animation_finished(anim_name: String) -> void:
 	if anim_name == _death_animation_key:
 		return
-	if anim_name != _idle_animation_key and anim_name != _walk_animation_key:
+	if anim_name != _idle_animation_key and anim_name != _walk_animation_key and anim_name != _dying_animation_key:
 		_play_source_animation(_idle_animation_key)
 
 ## `anim_name` is the bare clip name (e.g. "Idle_Loop"); returns the exact key
@@ -371,7 +405,20 @@ func _animate_to(target: Vector3) -> void:
 	_face_direction(target - position)
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", target, 0.35).set_trans(Tween.TRANS_SINE)
-	_move_tween.finished.connect(_play_source_animation.bind(_idle_animation_key))
+	_move_tween.finished.connect(_resume_idle_or_dying)
+
+## A moved token's walk cycle (started in _animate_to) hands back to idle when
+## the move finishes -- except a token that's down making death saves (or
+## stabilized) should settle back into its kneeling pose instead of popping
+## back onto its feet. An edge case in practice (a dying creature isn't
+## usually the one being repositioned), but a DM could still drag one, and
+## standing it up mid-tween-finish would look wrong for however long it stays
+## dying.
+func _resume_idle_or_dying() -> void:
+	if _was_dying:
+		_play_source_animation(_dying_animation_key)
+	else:
+		_play_source_animation(_idle_animation_key)
 
 ## Turns the whole token (an instant snap-turn, then the position tween moves
 ## it -- not a smooth turn-while-walking, a deliberately simpler first cut) to
