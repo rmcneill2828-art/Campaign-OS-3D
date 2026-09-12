@@ -381,6 +381,26 @@ valuable gaps close first:
     a dying token being moved (a DM dragging an unconscious creature) via a
     new `_resume_idle_or_dying()` helper, so the move-tween's finish doesn't
     pop it back onto its feet mid-death-saves.
+- [x] **Healing -- 2026-09-12, a real gap found only after everything above
+  ("i just realised there is no way to heal anyone").** Phase 3's original
+  batch built every other HP-affecting control (damage arrives for free via
+  attack/spells, death saves, exhaustion, rests) but never actually wired up
+  `apply_healing`, even though the engine/bridge already fully support it
+  (checked directly in `dmBridge.js`, not assumed -- confirmed present
+  alongside `apply_damage`, both already copied into `engine-server` since
+  Phase 0). Added a Heal row to the Resources & Rests section: an amount
+  spin box + Heal button (`apply_healing` with that amount), and a Full Heal
+  button that sends a deliberately oversized amount (`9999`) rather than the
+  client needing to know the target's real max HP -- `applyHealing` already
+  clamps to `maxHp` server-side. Healing back above 0 HP also clears
+  `dying`/`dead` server-side (a deliberate revival, per the engine's own
+  comment -- Revivify, Raise Dead, a DM ruling, no different from a manual
+  HP edit), so this doubles as the un-kneel/revive control for the pose
+  added just above, not just a top-up for an already-conscious target.
+  Verified directly against a live server instance before wiring the UI
+  (lethal damage -> `dying` set -> partial heal clears `dying` and restores
+  HP -> full heal clamps exactly to `maxHp`), same discipline as the
+  ability-scores fix earlier in this phase.
 
 ## Phase 4 -- Hand-authored maps
 

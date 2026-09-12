@@ -276,6 +276,27 @@ text = "▸ Resources & Rests"
 visible = false
 theme_override_constants/separation = 8
 
+[node name="HealLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody"]
+theme_override_font_sizes/font_size = 16
+text = "Heal"
+
+[node name="HealRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody"]
+theme_override_constants/separation = 8
+
+[node name="HealAmountInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow"]
+custom_minimum_size = Vector2(70, 0)
+min_value = 1.0
+max_value = 999.0
+value = 10.0
+
+[node name="HealButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow"]
+size_flags_horizontal = 3
+text = "Heal"
+
+[node name="FullHealButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow"]
+size_flags_horizontal = 3
+text = "Full Heal"
+
 [node name="ResourceLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody"]
 theme_override_font_sizes/font_size = 16
 text = "Class Resource"

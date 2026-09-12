@@ -52,6 +52,13 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
+## applyHealing (see engine-server/engine/encounter.js) clamps to the target's
+## real maxHp server-side -- this client doesn't need to know that value
+## itself to offer a "Full Heal" button, just send an amount large enough
+## that the clamp is always what actually limits it, whatever the target's
+## real max HP turns out to be.
+const FULL_HEAL_AMOUNT := 9999
+
 @export var server_base_url := "http://127.0.0.1:8787"
 @export var poll_interval_seconds := 1.0
 
@@ -95,6 +102,9 @@ const SPELL_TARGET_NONE := "(no target)"
 
 @onready var _resource_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceHeaderButton
 @onready var _resource_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody
+@onready var _heal_amount_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow/HealAmountInput
+@onready var _heal_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow/HealButton
+@onready var _full_heal_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/HealRow/FullHealButton
 @onready var _resource_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/ResourceRow/ResourceNameInput
 @onready var _use_resource_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/ResourceRow/UseResourceButton
 @onready var _long_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/RestRow/LongRestButton
@@ -156,6 +166,8 @@ func _ready() -> void:
 	_cast_spell_button.pressed.connect(_on_cast_spell_pressed)
 	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
 
+	_heal_button.pressed.connect(_on_heal_pressed)
+	_full_heal_button.pressed.connect(_on_full_heal_pressed)
 	_use_resource_button.pressed.connect(_on_use_resource_pressed)
 	_long_rest_button.pressed.connect(_on_long_rest_pressed)
 	_short_rest_button.pressed.connect(_on_short_rest_pressed)
@@ -455,6 +467,33 @@ func _on_cast_area_spell_pressed() -> void:
 	if damage_type != DAMAGE_TYPE_NONE:
 		action["damageType"] = damage_type
 	_send_action(action)
+
+## apply_healing (see engine-server/engine/dmBridge.js) adds a flat amount,
+## clamped to the target's own maxHp server-side, and clears dying/dead if it
+## brings the target back above 0 HP -- so this doubles as the "revive/
+## stabilize" control too, not just topping up HP on an already-conscious
+## target.
+func _on_heal_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({
+		"type": "apply_healing",
+		"target": _tokens[_selected_token_id].token_name,
+		"amount": int(_heal_amount_input.value)
+	})
+
+## Same action as above with a deliberately oversized amount -- the server's
+## own clamp to maxHp is what actually limits it, so this client never needs
+## to know the target's real max HP to offer a one-click "top them off"
+## button.
+func _on_full_heal_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({
+		"type": "apply_healing",
+		"target": _tokens[_selected_token_id].token_name,
+		"amount": FULL_HEAL_AMOUNT
+	})
 
 ## use_resource spends one charge of a named resource (Rage, Ki Points, etc.)
 ## shown on the target's own sheet -- fails outright server-side if it
