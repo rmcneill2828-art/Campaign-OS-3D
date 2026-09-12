@@ -85,6 +85,19 @@ const SPELL_TARGET_NONE := "(no target)"
 @onready var _area_half_on_save_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaHalfOnSaveCheck
 @onready var _cast_area_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CastAreaSpellButton
 
+@onready var _resource_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow/ResourceNameInput
+@onready var _use_resource_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow/UseResourceButton
+@onready var _long_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow/LongRestButton
+@onready var _short_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow/ShortRestButton
+@onready var _death_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DeathSaveButton
+@onready var _exhaustion_minus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow/ExhaustionMinusButton
+@onready var _exhaustion_plus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow/ExhaustionPlusButton
+@onready var _legendary_action_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LegendaryActionButton
+@onready var _recharge_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow/RechargeNameInput
+@onready var _use_recharge_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow/UseRechargeButton
+@onready var _lair_description_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow/LairDescriptionInput
+@onready var _trigger_lair_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow/TriggerLairButton
+
 var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 var _area_target_checkboxes := {} # token name (String) -> CheckBox
 var _last_target_names: Array[String] = [] # last set the spell-target UI was built from -- see _sync_spell_targets()
@@ -129,6 +142,16 @@ func _ready() -> void:
 		_area_save_ability_option.add_item(ability)
 	_cast_spell_button.pressed.connect(_on_cast_spell_pressed)
 	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
+
+	_use_resource_button.pressed.connect(_on_use_resource_pressed)
+	_long_rest_button.pressed.connect(_on_long_rest_pressed)
+	_short_rest_button.pressed.connect(_on_short_rest_pressed)
+	_death_save_button.pressed.connect(_on_death_save_pressed)
+	_exhaustion_plus_button.pressed.connect(_on_exhaustion_pressed.bind(1))
+	_exhaustion_minus_button.pressed.connect(_on_exhaustion_pressed.bind(-1))
+	_legendary_action_button.pressed.connect(_on_legendary_action_pressed)
+	_use_recharge_button.pressed.connect(_on_use_recharge_pressed)
+	_trigger_lair_button.pressed.connect(_on_trigger_lair_pressed)
 
 	_poll_state()
 
@@ -396,6 +419,93 @@ func _on_cast_area_spell_pressed() -> void:
 	if damage_type != DAMAGE_TYPE_NONE:
 		action["damageType"] = damage_type
 	_send_action(action)
+
+## use_resource spends one charge of a named resource (Rage, Ki Points, etc.)
+## shown on the target's own sheet -- fails outright server-side if it
+## doesn't have one by that name or none are left. There is deliberately no
+## "Restore" control here: unlike every other action on this panel,
+## restoreResource() has no use_resource-style counterpart in the DM bridge's
+## action vocabulary at all (checked directly in dmBridge.js, not assumed) --
+## the 2D app's own Restore button calls the engine function straight from
+## its UI code, bypassing the bridge entirely, since restoring mid-scene is a
+## DM correction rather than something narration would ever ask for. Same
+## amount-omitted-means-1 convention as the 2D app's own Use button.
+func _on_use_resource_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var resource_name := _resource_name_input.text.strip_edges()
+	if resource_name == "":
+		_show_hint("Enter a resource name (e.g. Rage) before using it.")
+		return
+	_send_action({
+		"type": "use_resource",
+		"target": _tokens[_selected_token_id].token_name,
+		"resource": resource_name
+	})
+
+func _on_long_rest_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "long_rest", "target": _tokens[_selected_token_id].token_name})
+
+func _on_short_rest_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "short_rest", "target": _tokens[_selected_token_id].token_name})
+
+## rollDeathSave is a no-op server-side (not an error) if the target isn't
+## currently making death saves -- safe to always show this button rather
+## than gate it on the token's own dying status.
+func _on_death_save_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "roll_death_save", "target": _tokens[_selected_token_id].token_name})
+
+## addExhaustion's `amount` is signed -- positive adds levels, negative
+## removes them (both go through the same action, matching the 2D app's own
+## +1/-1 buttons over the same field).
+func _on_exhaustion_pressed(amount: int) -> void:
+	if not _require_selected_token():
+		return
+	_send_action({
+		"type": "add_exhaustion",
+		"target": _tokens[_selected_token_id].token_name,
+		"amount": amount
+	})
+
+## `cost` is omitted -- useLegendaryAction() defaults it to 1 server-side,
+## same as the 2D app's own Use button never asks for a cost either.
+func _on_legendary_action_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "use_legendary_action", "target": _tokens[_selected_token_id].token_name})
+
+## Recharge abilities are named per-monster (a hell hound's "Fire Breath",
+## etc.) with no fixed list to offer as a dropdown -- free text, same as the
+## spell name field above.
+func _on_use_recharge_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var ability_name := _recharge_name_input.text.strip_edges()
+	if ability_name == "":
+		_show_hint("Enter a recharge ability name (e.g. Fire Breath) before using it.")
+		return
+	_send_action({
+		"type": "use_recharge_ability",
+		"target": _tokens[_selected_token_id].token_name,
+		"ability": ability_name
+	})
+
+## trigger_lair_action is the one action on this whole panel that ISN'T
+## per-token -- it fires against the whole encounter (RAW: initiative count
+## 20, not any one creature's turn), so it deliberately does NOT go through
+## _require_selected_token().
+func _on_trigger_lair_pressed() -> void:
+	var description := _lair_description_input.text.strip_edges()
+	if description == "":
+		_show_hint("Describe what the lair action does before triggering it.")
+		return
+	_send_action({"type": "trigger_lair_action", "description": description})
 
 ## Shared guard for every "acts on the selected token" HUD control (rolls,
 ## condition toggles) -- same "show a status hint, don't just silently no-op"

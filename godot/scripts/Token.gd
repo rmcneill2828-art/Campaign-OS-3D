@@ -40,11 +40,19 @@ const ANIMATION_SOURCE_PATH := "res://assets/creatures/animations/mannequin_anim
 # instead, so the actually-imported names are just "Idle"/"Walk".
 const IDLE_ANIMATION := "Idle"
 const WALK_ANIMATION := "Walk"
+## One-shot reaction clips, already sitting unused in the same animation pack
+## since Phase 2 -- confirmed present in that pack's own available-animations
+## dump (see _setup_animation's diagnostic print()), not assumed.
+const DEATH_ANIMATION := "Death01"
+const HIT_ANIMATIONS: Array[String] = ["Hit_Chest", "Hit_Head"]
 
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
 @onready var _selection_ring: MeshInstance3D = $SelectionRing
 @onready var _body: StaticBody3D = $Body
+@onready var _hp_bar_root: Node3D = $HPBarRoot
+@onready var _hp_bar_fill_wrapper: Node3D = $HPBarRoot/HPBarFillWrapper
+@onready var _hp_bar_fill: MeshInstance3D = $HPBarRoot/HPBarFillWrapper/HPBarFill
 
 var token_id := ""
 var token_name := ""
@@ -53,6 +61,8 @@ var grid_x := 1
 var grid_y := 1
 var hp := 0
 var max_hp := 1
+var _last_hp := -1 # -1 means "no previous value yet" -- distinguishes first-ever apply_data from a real HP change
+var _was_dead := false
 
 var _initialized := false
 var _move_tween: Tween
@@ -70,10 +80,20 @@ var _anim_source_player: AnimationPlayer
 var _bone_map := {} # character bone index -> animation-source bone index
 var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
 var _walk_animation_key := ""
+var _death_animation_key := ""
+var _hit_animation_keys: Array[String] = []
 
 func _ready() -> void:
 	_body.add_to_group("tokens")
 	_body.set_meta("token", self)
+	# Fresh material per instance, not the .tscn's own shared sub-resource --
+	# mutating a shared resource's color from one token's script would
+	# visibly recolor every other token's HP bar too (the same class of
+	# shared-resource gotcha this project already hit with animations).
+	var fill_material := StandardMaterial3D.new()
+	fill_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	_hp_bar_fill.material_override = fill_material
 
 ## `data` is one token object straight out of the engine's own state.tokens array
 ## (see engine-server/engine/encounter.js) -- same field names, no translation layer.
@@ -83,17 +103,32 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	var new_type: String = str(data.get("type", token_type))
 	hp = int(data.get("hp", hp))
 	max_hp = int(max(data.get("maxHp", max(hp, 1)), 1))
+	var is_dead := bool(data.get("dead", false))
 
 	var conditions: Array = data.get("conditions", [])
 	# String.join() wants a PackedStringArray, not a generic Array -- explicit
 	# conversion rather than relying on implicit coercion to avoid guessing.
 	var conditions_line := ("\n" + ", ".join(PackedStringArray(conditions))) if conditions.size() > 0 else ""
 	_label.text = "%s\n%d/%d HP%s" % [token_name, hp, max_hp, conditions_line]
+	_update_hp_bar()
 
 	if not _initialized or new_type != token_type:
 		token_type = new_type
 		_rebuild_model()
 	_update_fallback_color() # a real model's own texture is left alone; only the fallback capsule reacts to HP
+
+	# Death/hit-reaction animation -- only after the first real data (so a
+	# freshly-spawned token at full HP doesn't play a "hit" reaction against
+	# the -1 sentinel), and only via the real `dead` flag for death (NOT a
+	# bare hp<=0 check -- a token can sit at 0 HP mid-death-saves without
+	# being `dead` yet).
+	if _initialized and _anim_source_player:
+		if is_dead and not _was_dead:
+			_play_source_animation(_death_animation_key)
+		elif not is_dead and _last_hp >= 0 and hp < _last_hp and not _hit_animation_keys.is_empty():
+			_play_source_animation(_hit_animation_keys.pick_random())
+	_last_hp = hp
+	_was_dead = is_dead
 
 	# Grid cell -> world space directly, no extra vertical offset -- Body's own
 	# children (the collision capsule, the fallback mesh) each carry whatever
@@ -123,9 +158,12 @@ func _rebuild_model() -> void:
 	_bone_map.clear()
 	_idle_animation_key = ""
 	_walk_animation_key = ""
+	_death_animation_key = ""
+	_hit_animation_keys = []
 
 	var config: Dictionary = MODEL_CONFIG.get(token_type, {})
 	var model_path: String = config.get("path", "")
+	var label_height: float = float(config.get("label_height", FALLBACK_LABEL_HEIGHT))
 
 	if model_path != "" and ResourceLoader.exists(model_path):
 		var scene := load(model_path) as PackedScene
@@ -133,10 +171,12 @@ func _rebuild_model() -> void:
 		_model_root.add_child(instance)
 		_ground_model(instance)
 		_setup_animation(instance)
-		_label.position.y = float(config.get("label_height", FALLBACK_LABEL_HEIGHT))
+		_label.position.y = label_height
 	else:
 		_add_fallback_capsule()
 		_label.position.y = FALLBACK_LABEL_HEIGHT
+		label_height = FALLBACK_LABEL_HEIGHT
+	_hp_bar_root.position.y = label_height - 0.2
 
 ## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the shared
 ## animation-source model (see ANIMATION_SOURCE_PATH), copying bone poses
@@ -182,13 +222,25 @@ func _setup_animation(instance: Node3D) -> void:
 	# unnamed one, and has_animation()/play() need the exact key either way.
 	_idle_animation_key = _resolve_animation_name(_anim_source_player, IDLE_ANIMATION)
 	_walk_animation_key = _resolve_animation_name(_anim_source_player, WALK_ANIMATION)
+	_death_animation_key = _resolve_animation_name(_anim_source_player, DEATH_ANIMATION)
+	_hit_animation_keys = []
+	for hit_name in HIT_ANIMATIONS:
+		var resolved := _resolve_animation_name(_anim_source_player, hit_name)
+		if resolved != "":
+			_hit_animation_keys.append(resolved)
 
 	# "_Loop"-suffixed clips in this pack aren't necessarily flagged to loop by
 	# default on import -- force it so Idle/Walk actually repeat instead of
-	# freezing on their last frame.
+	# freezing on their last frame. Death/hit clips are deliberately NOT
+	# forced to loop -- a death pose should freeze on its last frame, and a
+	# hit reaction should play once and hand back to idle (see
+	# _on_source_animation_finished).
 	for key in [_idle_animation_key, _walk_animation_key]:
 		if key != "":
 			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
+
+	if not _anim_source_player.animation_finished.is_connected(_on_source_animation_finished):
+		_anim_source_player.animation_finished.connect(_on_source_animation_finished)
 
 	print("Token %s: animation bone map covers %d/%d bones (%s); idle=%s walk=%s%s" % [
 		token_name, _bone_map.size(), _character_skeleton.get_bone_count(),
@@ -199,6 +251,18 @@ func _setup_animation(instance: Node3D) -> void:
 	])
 
 	_play_source_animation(_idle_animation_key)
+
+## A one-shot reaction clip (hit or death) finishing playback hands control
+## back to idle -- EXCEPT death, which should stay frozen on its final pose,
+## not snap back to standing. Idle/Walk finishing is a no-op here since
+## they're looping and this signal only fires on genuine completion, which a
+## looping clip triggers once per lap -- re-playing the same key it's already
+## on is already a no-op in _play_source_animation().
+func _on_source_animation_finished(anim_name: String) -> void:
+	if anim_name == _death_animation_key:
+		return
+	if anim_name != _idle_animation_key and anim_name != _walk_animation_key:
+		_play_source_animation(_idle_animation_key)
 
 ## `anim_name` is the bare clip name (e.g. "Idle_Loop"); returns the exact key
 ## `AnimationPlayer.play()`/`has_animation()` need, which may be namespaced
@@ -273,6 +337,24 @@ func _update_fallback_color() -> void:
 	if hp <= 0:
 		color = Color(0.28, 0.28, 0.28)
 	(_fallback_mesh.material_override as StandardMaterial3D).albedo_color = color
+
+## Scales HPBarFillWrapper (not the mesh directly) so the bar drains from the
+## right while its LEFT edge stays fixed -- the wrapper sits at the bar's own
+## left edge with the fill mesh offset by half its width inside it, so
+## scaling the wrapper's X moves the mesh's rendered right edge only. Color
+## bands (green/yellow/red) are the same rough thresholds a lot of games use;
+## nothing SRD-specific about the exact cutoffs.
+func _update_hp_bar() -> void:
+	var ratio: float = clamp(float(hp) / float(max(max_hp, 1)), 0.0, 1.0)
+	_hp_bar_fill_wrapper.scale.x = ratio
+	var color: Color
+	if ratio > 0.5:
+		color = Color(0.2, 0.8, 0.2)
+	elif ratio > 0.25:
+		color = Color(0.9, 0.75, 0.15)
+	else:
+		color = Color(0.85, 0.2, 0.2)
+	(_hp_bar_fill.material_override as StandardMaterial3D).albedo_color = color
 
 func set_selected(is_selected: bool) -> void:
 	_selection_ring.visible = is_selected

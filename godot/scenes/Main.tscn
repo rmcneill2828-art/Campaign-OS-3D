@@ -245,3 +245,75 @@ text = "Half on save"
 
 [node name="CastAreaSpellButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 text = "Cast (Area, checked targets)"
+
+[node name="MiscSeparator" type="HSeparator" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+
+[node name="ResourceLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_font_sizes/font_size = 16
+text = "Class Resource"
+
+[node name="ResourceRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="ResourceNameInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow"]
+custom_minimum_size = Vector2(140, 0)
+size_flags_horizontal = 3
+placeholder_text = "e.g. Rage, Ki Points"
+
+[node name="UseResourceButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow"]
+text = "Use"
+
+[node name="RestRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="LongRestButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow"]
+size_flags_horizontal = 3
+text = "Long Rest"
+
+[node name="ShortRestButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow"]
+size_flags_horizontal = 3
+text = "Short Rest"
+
+[node name="DeathSaveButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+text = "Roll Death Save"
+
+[node name="ExhaustionRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="ExhaustionLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow"]
+text = "Exhaustion"
+
+[node name="ExhaustionMinusButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow"]
+text = "-1"
+
+[node name="ExhaustionPlusButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow"]
+text = "+1"
+
+[node name="LegendaryActionButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+text = "Use Legendary Action"
+
+[node name="RechargeRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="RechargeNameInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow"]
+custom_minimum_size = Vector2(140, 0)
+size_flags_horizontal = 3
+placeholder_text = "e.g. Fire Breath"
+
+[node name="UseRechargeButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow"]
+text = "Use"
+
+[node name="LairLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_font_sizes/font_size = 16
+text = "Lair Action (whole encounter, no token needed)"
+
+[node name="LairRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="LairDescriptionInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow"]
+custom_minimum_size = Vector2(140, 0)
+size_flags_horizontal = 3
+placeholder_text = "What happens"
+
+[node name="TriggerLairButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow"]
+text = "Trigger"

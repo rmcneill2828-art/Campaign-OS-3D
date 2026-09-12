@@ -297,20 +297,49 @@ valuable gaps close first:
   bonus, skipped." Verified directly against a clean server instance
   (`Wren rolls a INT save: 15 +4 = 19`, `Wren's magic missile attacks Goblin 1:
   5 + 7 = 12`) before telling the user to trust it.
-- [ ] Class resources -- use/restore a named resource (Rage, Ki, Superiority
-  Dice, etc.)
-- [ ] Rests -- long/short rest controls
-- [ ] Death saves -- a dedicated "Roll Death Save" control once a token is
-  dying (today this only surfaces via the status-log text), plus real death/
-  hit-reaction animation: `Death01` and `Hit_Chest`/`Hit_Head` are already
-  sitting unused in the animation pack Phase 2 downloaded -- playing `Death01`
-  once a token's `dead` flag is true, and a brief `Hit_Chest`/`Hit_Head` clip
-  on taking damage, is cheap now that the animation pipeline already works
-- [ ] Exhaustion, legendary actions, recharge abilities, lair actions -- the
-  rarer ones, saved for last since they come up less often at most tables
-- [ ] A real HP bar / status-effect icon strip above each token instead of
-  just the text label -- worth doing once several of the above actually have
-  something to show, not before
+- [x] **Class resources, rests, death saves, exhaustion/legendary/recharge/
+  lair, and the HP bar -- all built 2026-09-12 in one batch** (the user
+  explicitly asked to get the rest of Phase 3's foundation in before another
+  verification round, rather than one-item-at-a-time like the earlier Phase 3
+  items) **-- needs live verification, budget for a real fixing pass**: this
+  went in with no incremental checkpoint, unlike every earlier Phase 3 item.
+  - **Class resources**: name field + "Use" only (sends `use_resource`) --
+    deliberately no "Restore" control. Checked directly in `dmBridge.js`
+    rather than assumed: `restoreResource()` has no bridge action at all,
+    matching the 2D app's own asymmetry (its Restore button calls the engine
+    function straight from UI code, bypassing the bridge entirely, since
+    restoring mid-scene is a DM correction rather than something narration
+    would ever request).
+  - **Rests**: Long Rest / Short Rest buttons, sending `long_rest`/`short_rest`.
+  - **Death saves**: a "Roll Death Save" button, sending `roll_death_save` --
+    left ungated on the token's own dying status since the engine already
+    treats calling it on a non-dying token as a safe no-op, not an error.
+  - **Exhaustion**: +1/-1 buttons sharing one handler (`add_exhaustion` with a
+    signed `amount`).
+  - **Legendary actions**: a "Use Legendary Action" button (cost omitted,
+    server defaults it to 1).
+  - **Recharge abilities**: free-text name field + "Use" (`use_recharge_ability`)
+    -- no fixed list exists (these are named per-monster), same free-text
+    pattern as the spell name field.
+  - **Lair action**: free-text description + "Trigger" (`trigger_lair_action`)
+    -- the one control on this whole panel that is deliberately NOT gated on
+    a token selection, since a lair action fires against the whole encounter
+    (RAW initiative count 20), not any one creature's turn.
+  - **Death/hit-reaction animation**: `Token.gd` now plays `Death01` once when
+    a token's real `dead` flag (not a bare hp<=0 check -- a token can sit at
+    0 HP mid-death-saves without being `dead` yet) flips true, and a random
+    `Hit_Chest`/`Hit_Head` clip whenever HP decreases while still alive --
+    both clips were already sitting unused in the Phase 2 animation pack.
+    Death freezes on its final pose; a hit reaction hands back to Idle once
+    it finishes playing (`AnimationPlayer.animation_finished`).
+  - **HP bar**: a real 2-quad billboarded bar above each token (green/yellow/
+    red by ratio), added alongside the existing text label rather than
+    replacing it. Uses a wrapper-node scaling trick so it drains from the
+    right with a fixed left edge, not shrinking from both sides. Each
+    instance gets its own fresh material at `_ready()`, not the `.tscn`'s
+    shared sub-resource -- the same shared-resource gotcha this project
+    already hit once with animations would otherwise recolor every token's
+    bar together.
 
 ## Phase 4 -- Hand-authored maps
 
