@@ -499,12 +499,66 @@ something a generic script generates.
 
 ## Phase 5 -- Line of sight / fog of war in 3D
 
-Unlocked by Phase 4, not before -- the 2D app's LOS math works against 2D
-wall segments; real 3D wall geometry (from hand-authored maps) is what makes
-a 3D equivalent meaningful. Not designed in detail yet: the two live options
-(raycast against the hand-placed wall meshes directly, vs. maintaining an
-abstract wall-segment list per map closer to the 2D model) each have real
-tradeoffs worth a dedicated discussion once Phase 4 exists to build on.
+The "raycast against 3D wall meshes vs. an abstract wall-segment list"
+question this phase used to be waiting on turned out to already be settled:
+`engine/encounter.js` (copied verbatim into `engine-server` since Phase 0)
+already has a complete, tested line-of-sight/fog-of-war system --
+`addWall`/`removeWall`/`clearWalls`, `hasLineOfSight`, `cellVisibleToHero`,
+`isVisibleToParty`, `visibleCellsForParty`, `revealVisibleTiles`, `resetFog`
+-- all working against abstract 2D wall segments in grid VERTEX space, the
+exact same model the 2D app's own DM canvas and Player Window already use.
+No new LOS math needed writing at all; this phase is entirely about wiring
+real data through it.
+
+**Scope decision (2026-09-12):** checked the 2D app's own precedent before
+building anything -- its DM canvas (`ui/app.js`) never dims/hides anything
+for itself; fog rendering only exists in the separate Player Window
+(`ui/playerView.js`), which is this project's own Phase 6, not this one.
+Given that, this phase deliberately stops at making the DATA real and
+correct -- it does NOT change what the current (DM) 3D client renders,
+matching the 2D app's actual DM/Player split rather than guessing a fog
+rendering scope the precedent doesn't support. Fog/LOS-driven rendering is
+Phase 6's job, once a real player-facing view exists to put it in.
+
+- [x] **Real wall segments for "Prototype Chamber" -- 2026-09-12, built and
+  tested.** `engine-server/server.js`'s `seedState()` now calls `addWall()`
+  five times, tracing the exact same room shape
+  `godot/tools/build_prototype_chamber.gd` built in 3D: a solid perimeter
+  around the full 12x8 playable area with a gap in the south wall at the
+  same vertex range the 3D scene's own door opening sits (vertex x 6..7,
+  matching `DOOR_COLUMN=7`). No shared source between the two definitions --
+  same duplicated-by-hand convention this codebase already accepts for
+  `ABILITY_KEYS`/`SKILL_LIST`/etc. across `encounter.js`/`Main.gd`; a
+  comment on each cross-references the other file directly. Without this,
+  `hasLineOfSight` would have nothing to test against and stay vacuously
+  true everywhere (`encounter.js`'s own documented "no walls drawn" fast
+  path) -- the door/room shape existing in 3D didn't mean the ENGINE knew
+  about it at all until this.
+- [x] **Visibility wired into the API -- 2026-09-12, built and tested.**
+  Every `GET /state`/`POST /action`/`POST /reset` response now carries a
+  `visibility: { mapName, currentlyVisible, revealed }` field alongside
+  `state` -- `currentlyVisible` freshly computed each call from
+  `visibleCellsForParty` (the party's real-time line of sight), `revealed`
+  read back from `state.maps[mapName].revealedTiles` (the persisted
+  "explored" memory). `POST /action`/`POST /reset` also now call
+  `revealVisibleTiles()` before saving, the same choke-point pattern the 2D
+  app's own `saveEncounter()` uses -- every mutation folds newly-visible
+  cells into permanent memory, so nothing about switching to hand-built maps
+  changed how exploration bookkeeping works.
+  **Verified with 4 new tests (`engine-server/tests/visibility.test.js`),
+  all behavioral, not just "returned 200"**: the seeded wall list matches
+  the 3D room's shape segment-for-segment (not just a count); a straight
+  line through the solid north/south wall sections is correctly blocked
+  (`hasLineOfSight` called directly, the same way `cellVisibleToHero` does)
+  while the exact same test through the door's vertex gap is correctly open;
+  `revealed` starts empty and accumulates real cells after a `move_token`
+  action, then survives a fresh `GET /state` reload. 10/10 tests passing
+  (6 pre-existing + 4 new).
+- [ ] Not built this phase, deliberately (see the scope decision above): any
+  change to what the current 3D client actually renders. The DM's board
+  still shows every token/tile unconditionally, matching the 2D app's own
+  DM-canvas precedent. Revisit once Phase 6 gives a player-facing view
+  something to actually consume this data for.
 
 ## Phase 6 -- Player-facing view
 

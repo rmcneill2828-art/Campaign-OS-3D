@@ -35,6 +35,24 @@ function seedState() {
   state = CampaignOS.setMapGrid(state, mapName, 12, 8);
   state = CampaignOS.setActiveMap(state, mapName);
 
+  // Phase 5: real wall segments for hasLineOfSight/cellVisibleToHero/etc. (see
+  // engine/encounter.js) to actually mean something on this map, instead of the
+  // "no walls drawn" fast path that leaves every cell unconditionally visible.
+  // These 5 segments trace the SAME room shape godot/tools/build_prototype_chamber.gd
+  // built in 3D -- a solid perimeter around the full 12x8 playable area (vertex
+  // coordinates 0..12 / 0..8, the corners between cells, matching addWall's own
+  // documented convention -- NOT the 1..columns cell-index space tokens use) with a
+  // gap in the south wall (vertex x 6..7, y 8) exactly where that scene's own
+  // DOOR_COLUMN=7 opening sits. If that map scene's layout ever changes, these must
+  // change with it -- there's no single shared source for a hand-built room's shape
+  // between the two projects, same duplicated-by-hand convention this codebase
+  // already uses for ABILITY_KEYS/SKILL_LIST/etc. across engine.js/Main.gd.
+  state = CampaignOS.addWall(state, mapName, 0, 0, 12, 0); // north
+  state = CampaignOS.addWall(state, mapName, 0, 0, 0, 8); // west
+  state = CampaignOS.addWall(state, mapName, 12, 0, 12, 8); // east
+  state = CampaignOS.addWall(state, mapName, 0, 8, 6, 8); // south, west of the door
+  state = CampaignOS.addWall(state, mapName, 7, 8, 12, 8); // south, east of the door
+
   // addToken() returns {state, token}, not a bare state -- unlike setMapImage/setMapGrid/
   // setActiveMap above, which do return bare states.
   //
@@ -83,6 +101,25 @@ function saveState(stateFile, state) {
   fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
 }
 
+// Phase 5: computed (not persisted, except revealedTiles -- see below) line-of-sight
+// data alongside every response, so a client can start consuming it without this
+// project's DM client needing to render anything different itself yet (the current
+// 3D client deliberately still shows everything unfiltered, matching the 2D app's
+// own DM canvas, which never fogs itself either -- only its separate Player Window
+// does. See ROADMAP.md's Phase 5 entry). `currentlyVisible` is fresh every call
+// (party position can move between polls); `revealed` reads back the persisted
+// per-map memory revealVisibleTiles (called after every mutating action below)
+// keeps up to date, the same explored-tile bookkeeping the 2D app's own
+// saveEncounter() hook performs on every save.
+function computeVisibility(state) {
+  const mapName = state.mapName;
+  if (!mapName) return { mapName: null, currentlyVisible: [], revealed: [] };
+  const currentlyVisible = CampaignOS.visibleCellsForParty(state, mapName);
+  const revealedTiles = state.maps?.[mapName]?.revealedTiles || {};
+  const revealed = Object.keys(revealedTiles).map((key) => key.split(",").map(Number));
+  return { mapName, currentlyVisible, revealed };
+}
+
 function sendJson(res, status, body) {
   const json = JSON.stringify(body);
   res.writeHead(status, {
@@ -128,7 +165,7 @@ function createServer({ stateFile = DEFAULT_STATE_FILE } = {}) {
     }
 
     if (req.method === "GET" && req.url === "/state") {
-      return sendJson(res, 200, { state });
+      return sendJson(res, 200, { state, visibility: computeVisibility(state) });
     }
 
     // One action per call, same shape the 2D app's live-actions.json entries use
@@ -148,14 +185,20 @@ function createServer({ stateFile = DEFAULT_STATE_FILE } = {}) {
       }
       const result = DMBridge.applyActions(state, [action]);
       state = result.state;
+      // Fold newly-visible cells into the active map's explored memory, same choke
+      // point the 2D app's own saveEncounter() uses (every mutation flows through
+      // here) -- a true no-op (same state reference back) for the common case of a
+      // map with no walls at all, per revealVisibleTiles's own fast path.
+      if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
       saveState(stateFile, state);
-      return sendJson(res, 200, { state, messages: result.messages });
+      return sendJson(res, 200, { state, messages: result.messages, visibility: computeVisibility(state) });
     }
 
     if (req.method === "POST" && req.url === "/reset") {
       state = seedState();
+      if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
       saveState(stateFile, state);
-      return sendJson(res, 200, { state });
+      return sendJson(res, 200, { state, visibility: computeVisibility(state) });
     }
 
     sendJson(res, 404, { error: "Not found." });
