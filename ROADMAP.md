@@ -437,7 +437,8 @@ something a generic script generates.
   naturally resolves to a different path or "" on the very next poll with no
   separate `switch_map`-specific code needed.
 - [x] **One real example map, replacing "Prototype Chamber" -- 2026-09-12,
-  built, not yet live-verified in the editor.** `godot/scenes/maps/prototype_chamber.tscn`:
+  built and verified live in Godot (user-confirmed, "looks good").**
+  `godot/scenes/maps/prototype_chamber.tscn`:
   a real 12x8 room (matching the server's seeded size exactly) built from
   Kenney dungeon-kit pieces -- full Kenney floor/floor-detail tiling inside,
   a solid `wall.glb` ring one cell outside the playable area (so it can
@@ -478,12 +479,19 @@ something a generic script generates.
   z=[-2,18]`, matching the 12x8 interior plus its wall ring). This doesn't
   affect the actual generated scene file (already independently confirmed
   correct by direct text inspection), only a throwaway diagnostic script,
-  which was deleted rather than debugged further. **Still needs a real look
-  in the Godot editor** -- whether the door opening's gap actually faces the
-  right way, whether the wall/column proportions read well at the actual
-  table scale, is exactly the kind of thing this project's whole "build,
-  then verify live, fix from screenshots" pattern exists for, and hasn't
-  happened yet for this map.
+  which was deleted rather than debugged further.
+  **Confirmed live in Godot from a real screenshot**: the full wall ring
+  renders solid and correctly proportioned relative to the tokens standing
+  inside it (roughly 2-3x token height, reads as a real room, not an
+  oversized or cramped one); the door opening (`wall-opening.glb`) renders
+  as a visually distinct arch, clearly different from the plain wall blocks
+  around it, in the correct position; all 4 corner columns and all 4 corner
+  props (2 chests, 2 barrels) are visible in their intended spots with no
+  floating/sinking; floor tiling (plain + detail variant) fills the room
+  edge-to-edge with the grid-line overlay still reading clearly on top; and
+  the existing tokens (Darkhawk, Wren, 2 goblins) render correctly inside
+  the new room with their HP bars/labels intact, unaffected by the switch
+  from a procedural to a hand-built floor. No follow-up fixes needed.
 - [ ] Per-map lighting/mood (a hand-built room may want its own atmosphere --
   torches, color grading -- rather than the single fixed sky+sun every map
   currently shares) -- not started; the single existing map still uses the
