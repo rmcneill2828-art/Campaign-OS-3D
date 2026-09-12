@@ -19,6 +19,19 @@ const TokenScene := preload("res://scenes/Token.tscn")
 ## (CameraRig.gd handles that independently) would also fire an attack.
 const RIGHT_CLICK_DRAG_THRESHOLD_PX := 6.0
 
+## Duplicated from engine-server/engine/encounter.js's own ABILITY_KEYS/
+## SKILL_LIST rather than fetched at runtime -- same "no shared-module
+## mechanism between these plain scripts" convention that project already
+## uses to duplicate this exact list across encounter.js/campaign.js/
+## dm-bridge/watch.js. Keep in sync by hand if the engine's list ever changes.
+const ABILITY_KEYS: Array[String] = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
+const SKILL_LIST: Array[String] = [
+	"Acrobatics", "Animal Handling", "Arcana", "Athletics", "Deception",
+	"History", "Insight", "Intimidation", "Investigation", "Medicine",
+	"Nature", "Perception", "Performance", "Persuasion", "Religion",
+	"Sleight of Hand", "Stealth", "Survival"
+]
+
 @export var server_base_url := "http://127.0.0.1:8787"
 @export var poll_interval_seconds := 1.0
 
@@ -30,6 +43,11 @@ const RIGHT_CLICK_DRAG_THRESHOLD_PX := 6.0
 @onready var _poll_timer: Timer = $PollTimer
 @onready var _status_label: Label = $HUD/StatusLabel
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
+@onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/SaveAbilityOption
+@onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/RollSaveButton
+@onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/CheckSkillOption
+@onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/RollCheckButton
+@onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsList/DCRow/DCInput
 
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
@@ -45,6 +63,16 @@ func _ready() -> void:
 	_state_request.request_completed.connect(_on_state_response)
 	_action_request.request_completed.connect(_on_action_response)
 	_next_turn_button.pressed.connect(_on_next_turn_pressed)
+
+	for ability in ABILITY_KEYS:
+		_save_ability_option.add_item(ability)
+	for ability in ABILITY_KEYS:
+		_check_skill_option.add_item(ability)
+	for skill in SKILL_LIST:
+		_check_skill_option.add_item(skill)
+	_roll_save_button.pressed.connect(_on_roll_save_pressed)
+	_roll_check_button.pressed.connect(_on_roll_check_pressed)
+
 	_poll_state()
 
 func _poll_state() -> void:
@@ -136,6 +164,46 @@ func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Ar
 
 func _on_next_turn_pressed() -> void:
 	_send_action({"type": "next_turn"})
+
+## rollSavingThrow (see engine-server/engine/encounter.js) uses the target's
+## real ability modifier or a stated save-bonus override, rolls once, and
+## only reports pass/fail -- no follow-up effect (e.g. half damage on a
+## success) happens automatically; that's still a separate later action once
+## the result is visible in the log, same as the 2D app's own documented
+## behavior for this.
+func _on_roll_save_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var ability: String = _save_ability_option.get_item_text(_save_ability_option.selected)
+	_send_action({
+		"type": "saving_throw",
+		"target": _tokens[_selected_token_id].token_name,
+		"ability": ability,
+		"dc": int(_dc_input.value)
+	})
+
+## ability_check's `skill` accepts either a bare ability key or a named skill
+## interchangeably (rollAbilityCheck resolves either) -- the same one
+## dropdown lists both rather than needing two separate controls.
+func _on_roll_check_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var skill: String = _check_skill_option.get_item_text(_check_skill_option.selected)
+	_send_action({
+		"type": "ability_check",
+		"target": _tokens[_selected_token_id].token_name,
+		"skill": skill,
+		"dc": int(_dc_input.value)
+	})
+
+## Shared guard for every "acts on the selected token" HUD control -- same
+## "show a status hint, don't just silently no-op" convention
+## _handle_right_click already uses for the no-attacker-selected case.
+func _require_selected_token() -> bool:
+	if _selected_token_id == "" or not _tokens.has(_selected_token_id):
+		_status_label.text = "Left-click a token first to select it, then roll a save/check for it."
+		return false
+	return true
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
