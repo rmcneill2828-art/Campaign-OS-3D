@@ -176,7 +176,12 @@ func _rebuild_model() -> void:
 		_add_fallback_capsule()
 		_label.position.y = FALLBACK_LABEL_HEIGHT
 		label_height = FALLBACK_LABEL_HEIGHT
-	_hp_bar_root.position.y = label_height - 0.2
+	# Above the label, not below/overlapping it -- reported as "HP is there
+	# but hard to see" when it sat at label_height - 0.2, likely lost against
+	# the label's own multi-line text block right next to it. Clearly
+	# separated (and bigger -- see the .tscn's QuadMesh sizes) should read
+	# better; a further tuning pass may still be needed once actually seen.
+	_hp_bar_root.position.y = label_height + 0.35
 
 ## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the shared
 ## animation-source model (see ANIMATION_SOURCE_PATH), copying bone poses

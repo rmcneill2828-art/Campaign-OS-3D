@@ -65,38 +65,51 @@ const SPELL_TARGET_NONE := "(no target)"
 @onready var _hint_label: Label = $HUD/HintLabel
 @onready var _hint_timer: Timer = $HUD/HintTimer
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
-@onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow/SaveAbilityOption
-@onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow/RollSaveButton
-@onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow/CheckSkillOption
-@onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow/RollCheckButton
-@onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DCRow/DCInput
-@onready var _conditions_grid: GridContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ConditionsGrid
 
-@onready var _spell_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellNameRow/SpellNameInput
-@onready var _spell_level_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellLevelRow/SpellLevelInput
-@onready var _spell_target_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellTargetRow/SpellTargetOption
-@onready var _spell_damage_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow/SpellDamageInput
-@onready var _spell_damage_type_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow/SpellDamageTypeOption
-@onready var _spell_concentration_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellConcentrationCheck
-@onready var _cast_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CastSpellButton
-@onready var _area_targets_list: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSpellTargetsList
-@onready var _area_save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaSaveAbilityOption
-@onready var _area_save_dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaSaveDCInput
-@onready var _area_half_on_save_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaHalfOnSaveCheck
-@onready var _cast_area_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CastAreaSpellButton
+@onready var _checks_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksHeaderButton
+@onready var _checks_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody
+@onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/SaveRow/SaveAbilityOption
+@onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/SaveRow/RollSaveButton
+@onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/CheckRow/CheckSkillOption
+@onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/CheckRow/RollCheckButton
+@onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/DCRow/DCInput
 
-@onready var _resource_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow/ResourceNameInput
-@onready var _use_resource_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceRow/UseResourceButton
-@onready var _long_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow/LongRestButton
-@onready var _short_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RestRow/ShortRestButton
-@onready var _death_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DeathSaveButton
-@onready var _exhaustion_minus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow/ExhaustionMinusButton
-@onready var _exhaustion_plus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ExhaustionRow/ExhaustionPlusButton
-@onready var _legendary_action_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LegendaryActionButton
-@onready var _recharge_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow/RechargeNameInput
-@onready var _use_recharge_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RechargeRow/UseRechargeButton
-@onready var _lair_description_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow/LairDescriptionInput
-@onready var _trigger_lair_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/LairRow/TriggerLairButton
+@onready var _conditions_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ConditionsHeaderButton
+@onready var _conditions_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ConditionsBody
+@onready var _conditions_grid: GridContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ConditionsBody/ConditionsGrid
+
+@onready var _spell_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellHeaderButton
+@onready var _spell_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody
+@onready var _spell_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellNameRow/SpellNameInput
+@onready var _spell_level_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellLevelRow/SpellLevelInput
+@onready var _spell_target_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellTargetRow/SpellTargetOption
+@onready var _spell_damage_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellDamageRow/SpellDamageInput
+@onready var _spell_damage_type_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellDamageRow/SpellDamageTypeOption
+@onready var _spell_concentration_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/SpellConcentrationCheck
+@onready var _cast_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/CastSpellButton
+@onready var _area_targets_list: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/AreaSpellTargetsList
+@onready var _area_save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/AreaSaveRow/AreaSaveAbilityOption
+@onready var _area_save_dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/AreaSaveRow/AreaSaveDCInput
+@onready var _area_half_on_save_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/AreaSaveRow/AreaHalfOnSaveCheck
+@onready var _cast_area_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellBody/CastAreaSpellButton
+
+@onready var _resource_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceHeaderButton
+@onready var _resource_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody
+@onready var _resource_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/ResourceRow/ResourceNameInput
+@onready var _use_resource_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/ResourceRow/UseResourceButton
+@onready var _long_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/RestRow/LongRestButton
+@onready var _short_rest_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ResourceBody/RestRow/ShortRestButton
+
+@onready var _other_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherHeaderButton
+@onready var _other_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody
+@onready var _death_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DeathSaveButton
+@onready var _exhaustion_minus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/ExhaustionRow/ExhaustionMinusButton
+@onready var _exhaustion_plus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/ExhaustionRow/ExhaustionPlusButton
+@onready var _legendary_action_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LegendaryActionButton
+@onready var _recharge_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/RechargeRow/RechargeNameInput
+@onready var _use_recharge_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/RechargeRow/UseRechargeButton
+@onready var _lair_description_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LairRow/LairDescriptionInput
+@onready var _trigger_lair_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LairRow/TriggerLairButton
 
 var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 var _area_target_checkboxes := {} # token name (String) -> CheckBox
@@ -153,7 +166,30 @@ func _ready() -> void:
 	_use_recharge_button.pressed.connect(_on_use_recharge_pressed)
 	_trigger_lair_button.pressed.connect(_on_trigger_lair_pressed)
 
+	# Collapsible sections -- the panel grew large enough across Phase 3 that
+	# showing everything open at once ran the whole thing off-screen (reported
+	# directly, not guessed at). Each header toggle just shows/hides its own
+	# body; all start collapsed so the panel opens compact.
+	_wire_collapsible_section(_checks_header, _checks_body, "Saving Throws / Checks")
+	_wire_collapsible_section(_conditions_header, _conditions_body, "Conditions")
+	_wire_collapsible_section(_spell_header, _spell_body, "Spellcasting")
+	_wire_collapsible_section(_resource_header, _resource_body, "Resources & Rests")
+	_wire_collapsible_section(_other_header, _other_body, "Other Actions")
+
 	_poll_state()
+
+## `label` is the plain section name (no arrow) -- the header's displayed
+## text is rebuilt with a ▸/▾ prefix reflecting the body's current
+## visibility, so the arrow can never drift out of sync with what's actually
+## shown the way a hand-maintained separate label could.
+func _wire_collapsible_section(header: Button, body: Control, label: String) -> void:
+	var set_text := func(expanded: bool):
+		header.text = ("▾ " if expanded else "▸ ") + label
+	header.toggled.connect(func(pressed: bool):
+		body.visible = pressed
+		set_text.call(pressed)
+	)
+	set_text.call(header.button_pressed)
 
 ## For one-off feedback about something the user just tried (a missing
 ## selection, a failed action) -- NOT for ongoing status (map/round/log),

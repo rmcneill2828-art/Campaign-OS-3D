@@ -17,15 +17,15 @@ emission = Color(1, 0.85, 0.2, 1)
 emission_energy_multiplier = 1.5
 
 [sub_resource type="QuadMesh" id="QuadMesh_hpbg"]
-size = Vector2(0.8, 0.1)
+size = Vector2(1.1, 0.22)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hpbg"]
 shading_mode = 0
 billboard_mode = 1
-albedo_color = Color(0.12, 0.12, 0.12, 1)
+albedo_color = Color(0.05, 0.05, 0.05, 1)
 
 [sub_resource type="QuadMesh" id="QuadMesh_hpfill"]
-size = Vector2(0.8, 0.08)
+size = Vector2(1.0, 0.16)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_hpfill"]
 shading_mode = 0
@@ -64,9 +64,9 @@ mesh = SubResource("QuadMesh_hpbg")
 material_override = SubResource("StandardMaterial3D_hpbg")
 
 [node name="HPBarFillWrapper" type="Node3D" parent="HPBarRoot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.4, 0, 0.002)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0, 0.002)
 
 [node name="HPBarFill" type="MeshInstance3D" parent="HPBarRoot/HPBarFillWrapper"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.4, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 0)
 mesh = SubResource("QuadMesh_hpfill")
 material_override = SubResource("StandardMaterial3D_hpfill")
