@@ -94,65 +94,154 @@ one_shot = true
 anchor_left = 1.0
 anchor_top = 0.0
 anchor_right = 1.0
-anchor_bottom = 0.0
+anchor_bottom = 1.0
 offset_left = -360.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = 560.0
+offset_bottom = -16.0
 
-[node name="TokenActionsList" type="VBoxContainer" parent="HUD/TokenActionsPanel"]
+[node name="TokenActionsScroll" type="ScrollContainer" parent="HUD/TokenActionsPanel"]
+horizontal_scroll_mode = 0
+
+[node name="TokenActionsList" type="VBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll"]
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="SectionLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="SectionLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_font_sizes/font_size = 20
 text = "Selected token"
 
-[node name="SaveLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="SaveLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_font_sizes/font_size = 16
 text = "Saving Throw"
 
-[node name="SaveRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="SaveRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_constants/separation = 8
 
-[node name="SaveAbilityOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsList/SaveRow"]
+[node name="SaveAbilityOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow"]
 custom_minimum_size = Vector2(140, 0)
 size_flags_horizontal = 3
 
-[node name="RollSaveButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsList/SaveRow"]
+[node name="RollSaveButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow"]
 text = "Roll Save"
 
-[node name="CheckLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="CheckLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_font_sizes/font_size = 16
 text = "Ability / Skill Check"
 
-[node name="CheckRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="CheckRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_constants/separation = 8
 
-[node name="CheckSkillOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsList/CheckRow"]
+[node name="CheckSkillOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow"]
 custom_minimum_size = Vector2(140, 0)
 size_flags_horizontal = 3
 
-[node name="RollCheckButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsList/CheckRow"]
+[node name="RollCheckButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow"]
 text = "Roll Check"
 
-[node name="DCRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="DCRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_constants/separation = 8
 
-[node name="DCLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsList/DCRow"]
+[node name="DCLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DCRow"]
 theme_override_font_sizes/font_size = 16
 text = "DC"
 
-[node name="DCInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsList/DCRow"]
+[node name="DCInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DCRow"]
 custom_minimum_size = Vector2(80, 0)
 min_value = 1.0
 max_value = 30.0
 value = 10.0
 
-[node name="ConditionsLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="ConditionsLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 theme_override_font_sizes/font_size = 16
 text = "Conditions"
 
-[node name="ConditionsGrid" type="GridContainer" parent="HUD/TokenActionsPanel/TokenActionsList"]
+[node name="ConditionsGrid" type="GridContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 columns = 3
 theme_override_constants/h_separation = 6
 theme_override_constants/v_separation = 6
+
+[node name="SpellLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_font_sizes/font_size = 16
+text = "Cast Spell"
+
+[node name="SpellNameRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="SpellNameLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellNameRow"]
+text = "Name"
+
+[node name="SpellNameInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellNameRow"]
+custom_minimum_size = Vector2(160, 0)
+size_flags_horizontal = 3
+placeholder_text = "e.g. Fireball"
+
+[node name="SpellLevelRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="SpellLevelLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellLevelRow"]
+text = "Level (0 = cantrip)"
+
+[node name="SpellLevelInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellLevelRow"]
+custom_minimum_size = Vector2(70, 0)
+min_value = 0.0
+max_value = 9.0
+value = 0.0
+
+[node name="SpellTargetRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="SpellTargetLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellTargetRow"]
+text = "Target"
+
+[node name="SpellTargetOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellTargetRow"]
+custom_minimum_size = Vector2(140, 0)
+size_flags_horizontal = 3
+
+[node name="SpellDamageRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="SpellDamageLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow"]
+text = "Damage"
+
+[node name="SpellDamageInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow"]
+custom_minimum_size = Vector2(100, 0)
+size_flags_horizontal = 3
+placeholder_text = "e.g. 3d6 (blank = none)"
+
+[node name="SpellDamageTypeOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow"]
+custom_minimum_size = Vector2(90, 0)
+
+[node name="SpellConcentrationCheck" type="CheckBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+text = "Concentration"
+
+[node name="CastSpellButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+text = "Cast (Single Target)"
+
+[node name="AreaSpellSeparator" type="HSeparator" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+
+[node name="AreaSpellLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_font_sizes/font_size = 16
+text = "Cast Area Spell (save for half)"
+
+[node name="AreaSpellTargetsList" type="VBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 2
+
+[node name="AreaSaveRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+theme_override_constants/separation = 8
+
+[node name="AreaSaveAbilityOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow"]
+custom_minimum_size = Vector2(90, 0)
+
+[node name="AreaSaveDCInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow"]
+custom_minimum_size = Vector2(70, 0)
+min_value = 1.0
+max_value = 30.0
+value = 15.0
+
+[node name="AreaHalfOnSaveCheck" type="CheckBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow"]
+button_pressed = true
+text = "Half on save"
+
+[node name="CastAreaSpellButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+text = "Cast (Area, checked targets)"

@@ -255,8 +255,32 @@ valuable gaps close first:
   Poisoned") -- a text tag rather than icons, the simpler of the two options
   the roadmap named, revisit for icons later if a text tag doesn't read well
   at the table.
-- [ ] Spellcasting -- `cast_spell`/`cast_area_spell` UI: spell name, level,
-  target(s), damage dice, save DC, matching the 2D app's Cast control
+- [x] **Spellcasting.** Built 2026-09-12, needs live verification -- the
+  largest single UI addition so far, budget for more rounds of live
+  debugging than the simpler items above needed. Also prompted a scroll-view
+  refactor of the whole Token Actions panel (`TokenActionsScroll`, a
+  `ScrollContainer`) since Phase 3's remaining items (resources, rests,
+  death saves, exhaustion/legendary/lair) would keep growing it past the
+  screen otherwise -- every existing child node path in `Main.gd` shifted
+  down one level accordingly.
+  - **Cast (single target)**: spell name (text), level (0 = cantrip, spin
+    box), an optional target dropdown (rebuilt from the real token roster,
+    but only when that roster's names actually change -- rebuilding every
+    poll would reset whatever the user was mid-way through picking, since
+    OptionButton selection doesn't survive `clear()`), optional damage dice
+    + damage type, and concentration -- sends `cast_spell`. A target left on
+    "(no target)" is omitted entirely, matching a save-based spell like Hold
+    Person that spends a slot without an attack roll.
+  - **Cast (area, checked targets)**: shares the name/level/damage/damage-
+    type/concentration fields above, adds a checkbox per token (same
+    rebuilt-only-on-roster-change treatment), a save ability dropdown, save
+    DC, and a "Half on save" checkbox (defaults on, matching `castAreaSpell`'s
+    own `halfOnSave` default) -- sends `cast_area_spell`. Refuses to send
+    with no damage dice or no checked targets (hinted, not silent), since
+    both are meaningless for this action.
+  - `DAMAGE_TYPE_LIST` duplicated from `encounter.js` (13 SRD types) with one
+    client-side-only addition, `"(none)"`, since damage type is optional on
+    both cast actions and the dropdown needs a way to mean "don't set one."
 - [ ] Class resources -- use/restore a named resource (Rage, Ki, Superiority
   Dice, etc.)
 - [ ] Rests -- long/short rest controls

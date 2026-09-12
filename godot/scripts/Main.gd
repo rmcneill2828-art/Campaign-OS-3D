@@ -39,6 +39,19 @@ const CONDITION_LIST: Array[String] = [
 	"Poisoned", "Prone", "Restrained", "Stunned", "Unconscious"
 ]
 
+## Duplicated from engine-server/engine/encounter.js's own DAMAGE_TYPE_LIST --
+## same convention as the lists above. "(none)" is this client's own addition
+## (index 0), not the engine's -- damageType is optional on both cast actions
+## (an untyped/flat amount is a valid, common case), so the dropdown needs a
+## way to mean "don't set one" distinct from any of the 13 real types.
+const DAMAGE_TYPE_NONE := "(none)"
+const DAMAGE_TYPE_LIST: Array[String] = [
+	DAMAGE_TYPE_NONE, "acid", "bludgeoning", "cold", "fire", "force",
+	"lightning", "necrotic", "piercing", "poison", "psychic", "radiant",
+	"slashing", "thunder"
+]
+const SPELL_TARGET_NONE := "(no target)"
+
 @export var server_base_url := "http://127.0.0.1:8787"
 @export var poll_interval_seconds := 1.0
 
@@ -52,14 +65,29 @@ const CONDITION_LIST: Array[String] = [
 @onready var _hint_label: Label = $HUD/HintLabel
 @onready var _hint_timer: Timer = $HUD/HintTimer
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
-@onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/SaveAbilityOption
-@onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/RollSaveButton
-@onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/CheckSkillOption
-@onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/RollCheckButton
-@onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsList/DCRow/DCInput
-@onready var _conditions_grid: GridContainer = $HUD/TokenActionsPanel/TokenActionsList/ConditionsGrid
+@onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow/SaveAbilityOption
+@onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SaveRow/RollSaveButton
+@onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow/CheckSkillOption
+@onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CheckRow/RollCheckButton
+@onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DCRow/DCInput
+@onready var _conditions_grid: GridContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ConditionsGrid
+
+@onready var _spell_name_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellNameRow/SpellNameInput
+@onready var _spell_level_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellLevelRow/SpellLevelInput
+@onready var _spell_target_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellTargetRow/SpellTargetOption
+@onready var _spell_damage_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow/SpellDamageInput
+@onready var _spell_damage_type_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellDamageRow/SpellDamageTypeOption
+@onready var _spell_concentration_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/SpellConcentrationCheck
+@onready var _cast_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CastSpellButton
+@onready var _area_targets_list: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSpellTargetsList
+@onready var _area_save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaSaveAbilityOption
+@onready var _area_save_dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaSaveDCInput
+@onready var _area_half_on_save_check: CheckBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/AreaSaveRow/AreaHalfOnSaveCheck
+@onready var _cast_area_spell_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/CastAreaSpellButton
 
 var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
+var _area_target_checkboxes := {} # token name (String) -> CheckBox
+var _last_target_names: Array[String] = [] # last set the spell-target UI was built from -- see _sync_spell_targets()
 
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
@@ -93,6 +121,14 @@ func _ready() -> void:
 		button.toggled.connect(_on_condition_toggled.bind(condition))
 		_conditions_grid.add_child(button)
 		_condition_buttons[condition] = button
+
+	for damage_type in DAMAGE_TYPE_LIST:
+		_spell_damage_type_option.add_item(damage_type)
+	_spell_target_option.add_item(SPELL_TARGET_NONE)
+	for ability in ABILITY_KEYS:
+		_area_save_ability_option.add_item(ability)
+	_cast_spell_button.pressed.connect(_on_cast_spell_pressed)
+	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
 
 	_poll_state()
 
@@ -165,6 +201,7 @@ func _apply_state(state: Dictionary) -> void:
 				_selected_token_id = ""
 
 	_sync_condition_buttons(tokens_on_map)
+	_sync_spell_targets(tokens_on_map)
 	_update_status_label(state, map_name, tokens_on_map)
 
 ## Reflects the selected token's real conditions array onto the toggle
@@ -182,6 +219,47 @@ func _sync_condition_buttons(tokens_on_map: Array) -> void:
 	for condition in _condition_buttons:
 		var button: Button = _condition_buttons[condition]
 		button.set_pressed_no_signal(active_conditions.has(condition))
+
+## Rebuilds the single-target dropdown and the area-target checkbox list only
+## when the actual set of token names on the map has changed -- rebuilding on
+## every poll (every ~1s) would reset whatever the user was mid-way through
+## picking, since OptionButton/CheckBox selection state doesn't survive
+## clear()+re-add(). Self-targeting is left possible on purpose (e.g. a caster
+## healing themselves) -- the list isn't filtered to exclude the caster.
+func _sync_spell_targets(tokens_on_map: Array) -> void:
+	var names: Array[String] = []
+	for token_data in tokens_on_map:
+		var name := str(token_data.get("name", ""))
+		if name != "":
+			names.append(name)
+	names.sort()
+	if names == _last_target_names:
+		return
+	_last_target_names = names
+
+	var previous_single: String = ""
+	if _spell_target_option.selected > 0:
+		previous_single = _spell_target_option.get_item_text(_spell_target_option.selected)
+	_spell_target_option.clear()
+	_spell_target_option.add_item(SPELL_TARGET_NONE)
+	for name in names:
+		_spell_target_option.add_item(name)
+		if name == previous_single:
+			_spell_target_option.selected = _spell_target_option.item_count - 1
+
+	var previously_checked := {}
+	for name in _area_target_checkboxes:
+		if _area_target_checkboxes[name].button_pressed:
+			previously_checked[name] = true
+	for child in _area_targets_list.get_children():
+		child.queue_free()
+	_area_target_checkboxes.clear()
+	for name in names:
+		var checkbox := CheckBox.new()
+		checkbox.text = name
+		checkbox.button_pressed = previously_checked.has(name)
+		_area_targets_list.add_child(checkbox)
+		_area_target_checkboxes[name] = checkbox
 
 func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Array) -> void:
 	var turn_data: Dictionary = state.get("turn", {})
@@ -244,6 +322,80 @@ func _on_roll_check_pressed() -> void:
 		"skill": skill,
 		"dc": int(_dc_input.value)
 	})
+
+## cast_spell handles everything server-side: spends the caster's slot at
+## `level` (0 = cantrip, never consumes one), and -- only when a target is
+## given -- rolls a spell attack against it using the caster's own stated
+## spell attack bonus. A save-based spell with no damage of its own (Hold
+## Person) has no target/damage here; that's a separate saving_throw per
+## target once this response is visible, same one-shot-batch limitation the
+## Claude DM bridge itself documents for this action.
+func _on_cast_spell_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var spell_name := _spell_name_input.text.strip_edges()
+	if spell_name == "":
+		_show_hint("Enter a spell name before casting.")
+		return
+
+	var action := {
+		"type": "cast_spell",
+		"caster": _tokens[_selected_token_id].token_name,
+		"spell": spell_name,
+		"level": int(_spell_level_input.value),
+		"concentration": _spell_concentration_check.button_pressed
+	}
+	if _spell_target_option.selected > 0:
+		action["target"] = _spell_target_option.get_item_text(_spell_target_option.selected)
+	var damage := _spell_damage_input.text.strip_edges()
+	if damage != "":
+		action["damageDice"] = damage
+		var damage_type := _spell_damage_type_option.get_item_text(_spell_damage_type_option.selected)
+		if damage_type != DAMAGE_TYPE_NONE:
+			action["damageType"] = damage_type
+	_send_action(action)
+
+## cast_area_spell resolves a save-for-half effect (Fireball, Burning Hands)
+## against every checked target in one call: one damage roll for the whole
+## area, one save per target, full damage on a failure or half (or none, if
+## "Half on save" is unchecked) on a success -- computed entirely
+## server-side. Shares the spell name/level/damage/damage-type/concentration
+## fields with the single-target form above rather than duplicating them.
+func _on_cast_area_spell_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var spell_name := _spell_name_input.text.strip_edges()
+	if spell_name == "":
+		_show_hint("Enter a spell name before casting.")
+		return
+	var damage := _spell_damage_input.text.strip_edges()
+	if damage == "":
+		_show_hint("An area spell needs a damage dice value (e.g. 3d6).")
+		return
+	var targets: Array[String] = []
+	for name in _area_target_checkboxes:
+		if _area_target_checkboxes[name].button_pressed:
+			targets.append(name)
+	if targets.is_empty():
+		_show_hint("Check at least one target for an area spell.")
+		return
+
+	var action := {
+		"type": "cast_area_spell",
+		"caster": _tokens[_selected_token_id].token_name,
+		"spell": spell_name,
+		"level": int(_spell_level_input.value),
+		"targets": targets,
+		"damageDice": damage,
+		"saveAbility": _area_save_ability_option.get_item_text(_area_save_ability_option.selected),
+		"saveDC": int(_area_save_dc_input.value),
+		"halfOnSave": _area_half_on_save_check.button_pressed,
+		"concentration": _spell_concentration_check.button_pressed
+	}
+	var damage_type := _spell_damage_type_option.get_item_text(_spell_damage_type_option.selected)
+	if damage_type != DAMAGE_TYPE_NONE:
+		action["damageType"] = damage_type
+	_send_action(action)
 
 ## Shared guard for every "acts on the selected token" HUD control (rolls,
 ## condition toggles) -- same "show a status hint, don't just silently no-op"
