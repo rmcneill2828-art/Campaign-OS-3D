@@ -37,8 +37,28 @@ function seedState() {
 
   // addToken() returns {state, token}, not a bare state -- unlike setMapImage/setMapGrid/
   // setActiveMap above, which do return bare states.
-  state = CampaignOS.addToken(state, { name: "Darkhawk", type: "hero", hp: 91, maxHp: 91, ac: 18 }).state;
-  state = CampaignOS.addToken(state, { name: "Wren", type: "hero", hp: 54, maxHp: 54, ac: 15 }).state;
+  //
+  // Both heroes originally shipped with no abilityScores at all (Phase 0's seed only
+  // set name/hp/ac) -- harmless for move/attack, but every saving throw/ability check/
+  // spell attack bonus silently fell back to +0 (savingThrowBonus()/abilityCheckBonus()'s
+  // own documented sparse-data fallback), which read as "bonuses aren't working" once
+  // Phase 3's Roll Save/Check/Cast Spell UI actually put that in front of a real user --
+  // confirmed live: goblins (spawned from a real SRD stat block) showed their true -1 STR,
+  // Darkhawk/Wren showed a flat +0 no matter what. Not a UI bug -- fixed at the source by
+  // giving these two prototype heroes real (if invented -- this is throwaway seed data,
+  // not the actual campaign's real character sheets) ability scores, and giving Wren
+  // basic spellcasting stats + slots so cast_spell's attack-roll path has something real
+  // to exercise too instead of always hitting "no stated spell attack bonus, skipped."
+  state = CampaignOS.addToken(state, {
+    name: "Darkhawk", type: "hero", hp: 91, maxHp: 91, ac: 18,
+    abilityScores: { STR: 20, DEX: 14, CON: 18, INT: 10, WIS: 12, CHA: 10 }
+  }).state;
+  state = CampaignOS.addToken(state, {
+    name: "Wren", type: "hero", hp: 54, maxHp: 54, ac: 15,
+    abilityScores: { STR: 8, DEX: 14, CON: 14, INT: 18, WIS: 12, CHA: 10 },
+    spellcasting: { saveDC: 15, attackBonus: 7 },
+    spellSlots: { 1: { max: 4, current: 4 }, 2: { max: 3, current: 3 }, 3: { max: 3, current: 3 } }
+  }).state;
 
   // parseCommand is the supported entry point for spawning a real SRD stat block --
   // spawnMonster() itself isn't part of CampaignOS's public API (see dmBridge.js's own

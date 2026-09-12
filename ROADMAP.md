@@ -255,9 +255,10 @@ valuable gaps close first:
   Poisoned") -- a text tag rather than icons, the simpler of the two options
   the roadmap named, revisit for icons later if a text tag doesn't read well
   at the table.
-- [x] **Spellcasting.** Built 2026-09-12, needs live verification -- the
-  largest single UI addition so far, budget for more rounds of live
-  debugging than the simpler items above needed. Also prompted a scroll-view
+- [x] **Spellcasting.** Done 2026-09-12, verified live (user-confirmed). The
+  largest single UI addition so far -- surprisingly needed only one real
+  follow-up fix, and it wasn't in this feature's own UI code (see below).
+  Also prompted a scroll-view refactor of the whole Token Actions panel
   refactor of the whole Token Actions panel (`TokenActionsScroll`, a
   `ScrollContainer`) since Phase 3's remaining items (resources, rests,
   death saves, exhaustion/legendary/lair) would keep growing it past the
@@ -281,6 +282,21 @@ valuable gaps close first:
   - `DAMAGE_TYPE_LIST` duplicated from `encounter.js` (13 SRD types) with one
     client-side-only addition, `"(none)"`, since damage type is optional on
     both cast actions and the dropdown needs a way to mean "don't set one."
+  **The one real gap found live-testing this wasn't in Main.gd at all**: saves,
+  checks, and spell attacks for the prototype's seeded heroes (Darkhawk, Wren)
+  all silently computed a flat +0, while a spawned goblin correctly showed its
+  real -1 STR -- because `engine-server/server.js`'s `seedState()` had carried
+  zero ability scores for either hero since Phase 0 (fine when all that
+  existed was move/attack, invisible once Phase 3 put real rolls in front of
+  a user). Not a bug in the engine (`savingThrowBonus()`/`abilityCheckBonus()`
+  correctly fall back to +0 on sparse data, exactly as documented) or in
+  today's UI -- fixed at the actual source: gave both prototype heroes real
+  (invented, not the real campaign's actual sheets) ability scores, and gave
+  Wren spellcasting stats + slots so `cast_spell`'s attack-roll path had a
+  real bonus to exercise instead of always hitting "no stated spell attack
+  bonus, skipped." Verified directly against a clean server instance
+  (`Wren rolls a INT save: 15 +4 = 19`, `Wren's magic missile attacks Goblin 1:
+  5 + 7 = 12`) before telling the user to trust it.
 - [ ] Class resources -- use/restore a named resource (Rage, Ki, Superiority
   Dice, etc.)
 - [ ] Rests -- long/short rest controls
