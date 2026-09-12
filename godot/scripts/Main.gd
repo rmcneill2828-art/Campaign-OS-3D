@@ -42,6 +42,8 @@ const SKILL_LIST: Array[String] = [
 @onready var _action_request: HTTPRequest = $ActionRequest
 @onready var _poll_timer: Timer = $PollTimer
 @onready var _status_label: Label = $HUD/StatusLabel
+@onready var _hint_label: Label = $HUD/HintLabel
+@onready var _hint_timer: Timer = $HUD/HintTimer
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
 @onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/SaveAbilityOption
 @onready var _roll_save_button: Button = $HUD/TokenActionsPanel/TokenActionsList/SaveRow/RollSaveButton
@@ -72,8 +74,20 @@ func _ready() -> void:
 		_check_skill_option.add_item(skill)
 	_roll_save_button.pressed.connect(_on_roll_save_pressed)
 	_roll_check_button.pressed.connect(_on_roll_check_pressed)
+	_hint_timer.timeout.connect(func(): _hint_label.text = "")
 
 	_poll_state()
+
+## For one-off feedback about something the user just tried (a missing
+## selection, a failed action) -- NOT for ongoing status (map/round/log),
+## which stays on _status_label. These used to share one label, and the
+## 1-second poll cycle overwrote a hint almost as soon as it appeared --
+## found by the user trying to read the "select a token first" message and
+## watching it vanish. A separate label with its own timer means a poll
+## landing mid-hint can no longer erase it early.
+func _show_hint(message: String) -> void:
+	_hint_label.text = message
+	_hint_timer.start()
 
 func _poll_state() -> void:
 	var error := _state_request.request(server_base_url + "/state")
@@ -201,7 +215,7 @@ func _on_roll_check_pressed() -> void:
 ## _handle_right_click already uses for the no-attacker-selected case.
 func _require_selected_token() -> bool:
 	if _selected_token_id == "" or not _tokens.has(_selected_token_id):
-		_status_label.text = "Left-click a token first to select it, then roll a save/check for it."
+		_show_hint("Left-click a token first to select it, then roll a save/check for it.")
 		return false
 	return true
 
@@ -251,7 +265,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 
 func _handle_right_click(screen_pos: Vector2) -> void:
 	if _selected_token_id == "" or not _tokens.has(_selected_token_id):
-		_status_label.text = "Left-click a token to select an attacker first, then right-click a target."
+		_show_hint("Left-click a token to select an attacker first, then right-click a target.")
 		return
 
 	var hit := _raycast_from_screen(screen_pos)
@@ -308,7 +322,7 @@ func _send_action(action: Dictionary) -> void:
 	)
 	if error != OK:
 		_action_in_flight = false
-		_status_label.text = "Could not send action to engine-server (error %d)." % error
+		_show_hint("Could not send action to engine-server (error %d)." % error)
 
 func _on_action_response(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_action_in_flight = false
@@ -317,7 +331,7 @@ func _on_action_response(_result: int, response_code: int, _headers: PackedStrin
 		var error_text: String = "unknown error"
 		if typeof(parsed) == TYPE_DICTIONARY and parsed.has("error"):
 			error_text = str(parsed["error"])
-		_status_label.text = "Action failed (HTTP %d): %s" % [response_code, error_text]
+		_show_hint("Action failed (HTTP %d): %s" % [response_code, error_text])
 		return
 	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("state"):
 		_apply_state(parsed["state"])
