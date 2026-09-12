@@ -241,7 +241,7 @@ valuable gaps close first:
      one-off "you just tried something" message too (failed attack-target
      selection, action-send failure, action-failed response) -- not just the
      one that surfaced it.
-- [x] **Conditions.** Built 2026-09-12, needs live verification. The Token
+- [x] **Conditions.** Done 2026-09-12, verified live (user-confirmed). The Token
   Actions panel gained a 3-column grid of 11 toggle buttons (one per
   `conditionList` entry), reflecting and toggling the currently selected
   token's real `conditions` array via `toggle_condition` -- built dynamically
