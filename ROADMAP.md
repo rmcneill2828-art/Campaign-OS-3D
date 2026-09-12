@@ -241,8 +241,20 @@ valuable gaps close first:
      one-off "you just tried something" message too (failed attack-target
      selection, action-send failure, action-failed response) -- not just the
      one that surfaced it.
-- [ ] Conditions -- view + toggle on a token, with a real visual indicator on/
-  above the token (an icon or tag), not just something buried in status text
+- [x] **Conditions.** Built 2026-09-12, needs live verification. The Token
+  Actions panel gained a 3-column grid of 11 toggle buttons (one per
+  `conditionList` entry), reflecting and toggling the currently selected
+  token's real `conditions` array via `toggle_condition` -- built dynamically
+  in `Main.gd`'s `_ready()` (not hand-authored per-button in the .tscn, given
+  there are 11 of them) and kept in sync from server state every poll via
+  `set_pressed_no_signal()` (the plain `button_pressed` property would
+  re-emit `toggled` and loop back into sending a spurious action on every
+  tick). The visual indicator lives on the token itself, not a separate
+  overlay: `Token.gd`'s existing name/HP label now appends a comma-joined
+  conditions line when any are active (e.g. "Darkhawk\n91/91 HP\nProne,
+  Poisoned") -- a text tag rather than icons, the simpler of the two options
+  the roadmap named, revisit for icons later if a text tag doesn't read well
+  at the table.
 - [ ] Spellcasting -- `cast_spell`/`cast_area_spell` UI: spell name, level,
   target(s), damage dice, save DC, matching the 2D app's Cast control
 - [ ] Class resources -- use/restore a named resource (Rage, Ki, Superiority

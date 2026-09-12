@@ -32,6 +32,13 @@ const SKILL_LIST: Array[String] = [
 	"Sleight of Hand", "Stealth", "Survival"
 ]
 
+## Duplicated from engine-server/engine/encounter.js's own conditionList --
+## same convention as ABILITY_KEYS/SKILL_LIST above.
+const CONDITION_LIST: Array[String] = [
+	"Blinded", "Charmed", "Frightened", "Grappled", "Invisible", "Paralyzed",
+	"Poisoned", "Prone", "Restrained", "Stunned", "Unconscious"
+]
+
 @export var server_base_url := "http://127.0.0.1:8787"
 @export var poll_interval_seconds := 1.0
 
@@ -50,6 +57,9 @@ const SKILL_LIST: Array[String] = [
 @onready var _check_skill_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/CheckSkillOption
 @onready var _roll_check_button: Button = $HUD/TokenActionsPanel/TokenActionsList/CheckRow/RollCheckButton
 @onready var _dc_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsList/DCRow/DCInput
+@onready var _conditions_grid: GridContainer = $HUD/TokenActionsPanel/TokenActionsList/ConditionsGrid
+
+var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
@@ -75,6 +85,14 @@ func _ready() -> void:
 	_roll_save_button.pressed.connect(_on_roll_save_pressed)
 	_roll_check_button.pressed.connect(_on_roll_check_pressed)
 	_hint_timer.timeout.connect(func(): _hint_label.text = "")
+
+	for condition in CONDITION_LIST:
+		var button := Button.new()
+		button.text = condition
+		button.toggle_mode = true
+		button.toggled.connect(_on_condition_toggled.bind(condition))
+		_conditions_grid.add_child(button)
+		_condition_buttons[condition] = button
 
 	_poll_state()
 
@@ -146,7 +164,24 @@ func _apply_state(state: Dictionary) -> void:
 			if id == _selected_token_id:
 				_selected_token_id = ""
 
+	_sync_condition_buttons(tokens_on_map)
 	_update_status_label(state, map_name, tokens_on_map)
+
+## Reflects the selected token's real conditions array onto the toggle
+## buttons -- set_pressed_no_signal(), not the plain button_pressed property,
+## since assigning that would itself re-emit `toggled` and loop back into
+## _on_condition_toggled(), sending a spurious toggle_condition action for
+## every poll tick.
+func _sync_condition_buttons(tokens_on_map: Array) -> void:
+	var active_conditions: Array = []
+	if _selected_token_id != "":
+		for token_data in tokens_on_map:
+			if str(token_data.get("id", "")) == _selected_token_id:
+				active_conditions = token_data.get("conditions", [])
+				break
+	for condition in _condition_buttons:
+		var button: Button = _condition_buttons[condition]
+		button.set_pressed_no_signal(active_conditions.has(condition))
 
 func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Array) -> void:
 	var turn_data: Dictionary = state.get("turn", {})
@@ -210,14 +245,31 @@ func _on_roll_check_pressed() -> void:
 		"dc": int(_dc_input.value)
 	})
 
-## Shared guard for every "acts on the selected token" HUD control -- same
-## "show a status hint, don't just silently no-op" convention
-## _handle_right_click already uses for the no-attacker-selected case.
+## Shared guard for every "acts on the selected token" HUD control (rolls,
+## condition toggles) -- same "show a status hint, don't just silently no-op"
+## convention _handle_right_click already uses for the no-attacker-selected
+## case.
 func _require_selected_token() -> bool:
 	if _selected_token_id == "" or not _tokens.has(_selected_token_id):
-		_show_hint("Left-click a token first to select it, then roll a save/check for it.")
+		_show_hint("Left-click a token first to select it, then use its controls.")
 		return false
 	return true
+
+## toggleCondition (see engine-server/engine/encounter.js) is a true flip --
+## add if absent, remove if present -- matching a toggle button exactly.
+## Godot flips the button's own pressed state immediately on click (before
+## this handler runs), so if there's no selection to act on, explicitly
+## revert it via set_pressed_no_signal() rather than leaving a visual toggle
+## that didn't actually do anything until the next poll silently corrects it.
+func _on_condition_toggled(pressed: bool, condition: String) -> void:
+	if not _require_selected_token():
+		_condition_buttons[condition].set_pressed_no_signal(not pressed)
+		return
+	_send_action({
+		"type": "toggle_condition",
+		"target": _tokens[_selected_token_id].token_name,
+		"condition": condition
+	})
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:

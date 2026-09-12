@@ -84,7 +84,11 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	hp = int(data.get("hp", hp))
 	max_hp = int(max(data.get("maxHp", max(hp, 1)), 1))
 
-	_label.text = "%s\n%d/%d HP" % [token_name, hp, max_hp]
+	var conditions: Array = data.get("conditions", [])
+	# String.join() wants a PackedStringArray, not a generic Array -- explicit
+	# conversion rather than relying on implicit coercion to avoid guessing.
+	var conditions_line := ("\n" + ", ".join(PackedStringArray(conditions))) if conditions.size() > 0 else ""
+	_label.text = "%s\n%d/%d HP%s" % [token_name, hp, max_hp, conditions_line]
 
 	if not _initialized or new_type != token_type:
 		token_type = new_type
