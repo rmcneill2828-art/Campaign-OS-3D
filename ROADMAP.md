@@ -401,6 +401,19 @@ valuable gaps close first:
   (lethal damage -> `dying` set -> partial heal clears `dying` and restores
   HP -> full heal clamps exactly to `maxHp`), same discipline as the
   ability-scores fix earlier in this phase.
+  **One follow-up bug found live-testing this, reported as "a kneel token
+  stands up [when healed], a downed one doesn't":** confirmed by testing
+  directly against a live server instance that this was a client-side
+  animation bug, not correct behavior -- `applyHealing` already revives a
+  fully dead token server-side (clears `dead`, restores HP) when healed
+  above 0, by design (there's no separate "revive" action; the same generic
+  Heal button represents Revivify/Raise Dead/a DM ruling too). `Token.gd`'s
+  animation logic only handled the dying->idle stand-up transition, not a
+  dead->idle one, so a token revived directly from `dead` (without passing
+  back through `dying` first) stayed visually frozen on `Death01`'s last
+  frame even though the server had already correctly brought it back. Fixed
+  by also standing a token up out of a frozen death pose whenever `is_dead`
+  goes false while `_was_dead` was true.
 
 ## Phase 4 -- Hand-authored maps
 

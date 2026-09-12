@@ -140,10 +140,21 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	# hp<=0 check -- a token can sit at 0 HP mid-death-saves without being
 	# `dead` yet, and RAW says nothing about kneeling just for losing HP while
 	# still conscious). Priority order matters: dead beats everything (frozen,
-	# permanent for this encounter), dying beats hit-reaction (a creature
-	# already down doesn't play a standing hit-flinch), and the transitions
-	# into/out of dying are edge-triggered off _was_dying so the loop isn't
-	# re-started every single poll while nothing has changed.
+	# permanent for this encounter -- UNLESS healed, see below), dying beats
+	# hit-reaction (a creature already down doesn't play a standing
+	# hit-flinch), and the transitions into/out of dying/dead are
+	# edge-triggered off _was_dying/_was_dead so the loop isn't re-started
+	# every single poll while nothing has changed.
+	#
+	# `applyHealing` (engine-server/engine/encounter.js) treats healing a dead
+	# token above 0 HP as a deliberate revival (Revivify, Raise Dead, a DM
+	# ruling -- there's no separate "revive" action, the same generic Heal
+	# button does it) and clears `dead` server-side when that happens -- so a
+	# dead token CAN come back to `is_dead == false` directly, without ever
+	# passing back through `dying`. Only handling the was_dying->idle
+	# transition below and not this one left a revived token permanently
+	# frozen on Death01's last frame even though the server had already
+	# correctly revived it -- a real animation bug, not a rules question.
 	if _initialized and _anim_source_player:
 		if is_dead and not _was_dead:
 			_play_source_animation(_death_animation_key)
@@ -151,8 +162,8 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 			pass # stay frozen on Death01's last frame
 		elif is_dying and not _was_dying:
 			_play_source_animation(_dying_animation_key)
-		elif not is_dying and _was_dying:
-			_play_source_animation(_idle_animation_key) # healed/stood back up
+		elif not is_dying and (_was_dying or _was_dead):
+			_play_source_animation(_idle_animation_key) # healed/revived/stood back up
 		elif not is_dying and _last_hp >= 0 and hp < _last_hp and not _hit_animation_keys.is_empty():
 			_play_source_animation(_hit_animation_keys.pick_random())
 	_last_hp = hp
