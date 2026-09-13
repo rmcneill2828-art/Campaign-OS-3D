@@ -569,6 +569,34 @@ something a generic script generates.
   it changes rather than only once ever -- matches how a real DM's own view
   would jump to a new scene, without fighting a player's manual pan/orbit/
   zoom on whatever map they're currently looking at between polls.
+- [x] **Final conclusion: the room-floor and camera fixes above were both
+  real, correct fixes -- but neither was actually the cause of the specific
+  visual the user kept pointing at (a grid line appearing to cross through
+  the tunnel's archway at roughly mid-height) -- 2026-09-13, confirmed via
+  a live in-engine test.** After both fixes still didn't resolve it, and
+  the user disagreed with the "camera/perspective" explanation with
+  specific reasoning ("the floor in the room matches the squares but the
+  floor in the entrance hall is lower than the squares"), rather than
+  guess again this was settled with an unambiguous live test: a throwaway
+  debug map (`entrance_hall_debug.tscn`, reachable via a direct
+  `switch_map` action so no DM/Claude call was needed) added a thick,
+  fully OPAQUE marker floating a fixed 0.5m above y=0 over the tunnel
+  (magenta) and the room (cyan) separately. If the tunnel's real floor
+  were lower than the room's, the magenta marker would hover visibly
+  higher above its own floor than cyan does above its floor -- the user
+  confirmed live that both hover the exact same height above their own
+  floor, proving the geometry was correct all along. The actual visual
+  (also visible in the marker screenshot itself: the cyan marker reads as
+  sitting near the TOP of the room's far wall, purely because that wall is
+  much farther from camera than the tunnel's near opening, and a level
+  marker read against a receding wall projects higher in frame the
+  farther away it is) was the grid overlay's normal perspective behavior
+  when viewed at an oblique angle through a tall, narrow opening -- not a
+  defect. All debug scaffolding (the debug scene, its 3 supporting
+  headless tools, the temporary `MapScenes.gd`/server map entries) was
+  removed once resolved; `entrance_hall.tscn` itself is unchanged from the
+  room-floor fix above (which remains correct and necessary, just wasn't
+  the visual's actual cause).
   **Known unverified guesses, flagged for a live look rather than assumed
   correct** (same "build first, verify from a real screenshot, fix from
   there" pattern Prototype Chamber and every KayKit/Meshy/Higgsfield model
