@@ -58,6 +58,18 @@ const DAMAGE_TYPE_LIST = [
   "piercing", "poison", "psychic", "radiant", "slashing", "thunder"
 ];
 
+// A NEW action type needs updating in all THREE places below, or Claude can correctly emit
+// it and it will still silently never apply: (1) its shape documented in this array (so
+// Claude knows the field names), (2) a matching `case` in isValidAction() below (every
+// action from Claude is filtered through this before ever reaching dmBridge.js -- an action
+// type missing here is caught by `default: return false` and dropped with NO error/log,
+// which is exactly what happened live with remove_token/roll_initiative/set_initiative: all
+// three were documented here and Claude correctly generated them, narrating success in its
+// own message field the whole time, but they were being silently discarded before ever
+// being written to response.json, for every model tried (haiku AND sonnet) -- the fix had
+// nothing to do with model choice or prompt wording, only this missing validation case),
+// and (3) the actual `case` in engine/dmBridge.js's applyAction() that does something with
+// it (already required, and separately tested -- this file is the one easy to forget).
 const SYSTEM_PROMPT = [
   "You are the DM assistant for a D&D 5e virtual tabletop called Campaign OS.",
   "You receive the current encounter state and a line of DM narration or a command,",
@@ -413,6 +425,10 @@ function isValidAction(action) {
       return typeof action.target === "string" && Number.isFinite(action.x) && Number.isFinite(action.y);
     case "next_turn":
       return true;
+    case "roll_initiative":
+      return typeof action.target === "string";
+    case "set_initiative":
+      return typeof action.target === "string" && Number.isFinite(action.value);
     case "switch_map":
       return typeof action.map === "string" && action.map.trim().length > 0;
     case "saving_throw":
@@ -446,6 +462,7 @@ function isValidAction(action) {
       return typeof action.target === "string" && typeof action.die === "string"
         && (action.count === undefined || (Number.isFinite(action.count) && action.count > 0));
     case "drop_concentration":
+    case "remove_token":
     case "roll_death_save":
     case "long_rest":
     case "short_rest":
