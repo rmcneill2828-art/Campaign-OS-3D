@@ -894,10 +894,66 @@ end for one full monster -- a real pipeline (including its rough edges: a
 failed API mode, a pose that didn't match the prompt, a topology mismatch
 between two parallel steps) documented here for the next one, not just a
 success story. Phase 8's KayKit and Meshy items are both complete and
-live-verified. Below is the untouched
-research from 2026-09-11 for the bigger, still-open questions this phase
-hasn't tackled yet (a unified retargeting pipeline, paid packs, AI
-generation):
+live-verified.
+
+- [x] **Higgsfield "3D Jutsu" catalog explored -- 2026-09-13, 3 test pieces
+  imported and a real pipeline bug found and fixed.** Composio surfaced this
+  as a candidate 3D asset toolkit; connected and explored directly rather
+  than assumed useful from its name alone. Its catalog turned out to be
+  environment/prop-focused, not creature models (searching "orc" returned
+  irrelevant results; "dungeon" returned 85 real hits) -- a genuinely rich,
+  cohesive modular dungeon set: full corridor pieces (straight/corner/
+  T-junction/4-way/ramp/dead-end), walls, stairs, doors, and dense
+  atmospheric set-dressing (torture rack, iron maiden, gibbet cage, bone
+  throne, cursed crystal, magic portal, stone altar/well, treasure chest),
+  noticeably richer than the Kenney kit currently used for Phase 4 maps.
+  **Two real open questions resolved with actual research before using
+  anything, not assumed either way**:
+  1. **Cost**: Higgsfield's own credit system is priced per agent-chat
+     message (by which LLM you pick inside their own chat UI, "Auto" free
+     by default), not per catalog import -- confirmed via their own pricing
+     writeups, and consistent with the API responses themselves never
+     reporting any credit consumption the way Meshy's `consumed_credits`
+     field always did. Calling the search/import tools directly (not
+     through their chat agent) appears to cost nothing.
+  2. **Licensing**: genuinely unresolved, and said so plainly rather than
+     assumed permissive. Higgsfield's actual Terms of Use (read directly,
+     not inferred from a blog post) has no section addressing the pre-made
+     catalog specifically -- only user-uploaded/generated content is
+     covered. Their blog post mentions the catalog mixes Higgsfield's own
+     curated assets with actual Mixamo characters, so it isn't even one
+     uniform source. Discussed directly with the user: for a private,
+     non-commercial, never-distributed project, the practical risk is
+     accepted as near zero (nearly all such restrictions target
+     distribution/resale, not personal use) -- but this is a real, lower
+     level of certainty than the CC0/QAL licenses this project actually
+     read and quoted for Kenney/Quaternius/KayKit, and the moment this
+     project is ever published/distributed even for free, that answer
+     needs to come from Higgsfield directly, not be assumed to still hold.
+  **A real, confirmed pipeline bug found and fixed while testing 3
+  pieces** (wall torch, treasure chest, corridor-straight): every
+  Higgsfield GLB export carries genuine per-vertex color data (confirmed
+  directly -- the treasure chest alone has 349 distinct wood-brown tones,
+  not flat white), but Godot's glTF importer leaves the resulting
+  material's `vertex_color_use_as_albedo` false, so every piece renders
+  flat white regardless of its real color, until fixed. Fixed with a
+  reusable tool (`godot/tools/fix_higgsfield_vertex_colors.gd`) that
+  assigns each mesh a corrected `material_override` and re-saves the
+  result -- likely a pipeline-wide issue for any future Higgsfield import,
+  not specific to these 3 pieces, so this tool is meant to be re-run for
+  the next one too. Also confirmed the corridor piece is a clean 4x4m
+  footprint -- exactly 2x2 of this project's own 2m grid cells -- a good
+  sign the kit was built on a real, consistent module size, not arbitrary
+  dimensions. **Not yet verified live** -- the fix is confirmed correct at
+  the data level (`vertex_color_use_as_albedo` reads back `true` after the
+  fix), but nobody has actually looked at the corrected pieces rendered in
+  the real editor yet. Not wired into any map or `MODEL_CONFIG` entry --
+  this was scoped as a "does this pipeline work at all" test, not yet a
+  decision to actually build Phase 4 content from this kit.
+
+Below is the untouched research from 2026-09-11 for the bigger, still-open
+questions this phase hasn't tackled yet (a unified retargeting pipeline,
+paid packs, AI generation):
 
 **Mixamo (Adobe, free) -- worth investigating before anything else, possibly
 even before this phase formally starts.** Free rigged characters, a huge

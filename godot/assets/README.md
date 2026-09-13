@@ -250,6 +250,35 @@ item if this content's licensing status ever actually matters (e.g.
 distributing this repo's assets beyond personal use), rather than an
 established, confirmed fact the way the CC0/QAL findings above are.
 
+### Higgsfield "3D Jutsu" catalog (test import, Phase 8)
+
+**`Environment/higgsfield-test/`** -- 3 real assets pulled from Higgsfield's
+"3D Jutsu" scene-builder catalog (a Composio-connected toolkit) to test the
+pipeline, not yet a real Phase 4 map-building decision: `dun_wall_torch`,
+`dun_treasure_chest`, `dun_corridor_straight`. The catalog itself turned out
+to be a genuinely rich, cohesive modular dungeon set (85 hits searching
+just "dungeon" -- full corridor pieces, walls, stairs, doors, dense
+atmospheric props) -- see `ROADMAP.md`'s Phase 8 entry for the full
+exploration, including a real pipeline bug found and fixed
+(`_fixed.tscn` alongside each raw `.glb`: Godot's glTF importer leaves
+`vertex_color_use_as_albedo` off, so every piece renders flat white despite
+carrying real per-vertex color data underneath -- confirmed directly, not
+assumed, and fixed via `godot/tools/fix_higgsfield_vertex_colors.gd`).
+
+**Licensing: genuinely unresolved, not established the way CC0/QAL are
+above.** Higgsfield's own Terms of Use has no section covering the
+pre-made catalog specifically, and their blog post says the catalog mixes
+their own curated assets with actual Mixamo characters -- not one uniform
+source. Discussed directly with the user: acceptable for this project's
+own private, non-commercial, never-distributed use (most such
+restrictions target distribution/resale, not personal use), but this is a
+materially lower level of certainty than every other source in this file,
+and NOT something to assume still holds if this project is ever published
+or distributed, even for free -- get Higgsfield's explicit confirmation
+first if that ever changes. **Not committed** (see `.gitignore`) for that
+same reason, on top of the usual repo-hygiene convention every other
+vendor-sourced folder here already follows.
+
 ## Why flattened copies instead of referencing the raw pack folders directly
 
 `Token.gd` loads `res://assets/creatures/hero/superhero_male.gltf` and

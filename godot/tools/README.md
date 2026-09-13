@@ -62,6 +62,28 @@ checking without a live `node server.js` or opening the editor GUI.
   used as the config value, no code change needed, just don't assume a
   short bare name will match.
 
+- **`inspect_higgsfield_test.gd`** / **`fix_higgsfield_vertex_colors.gd`**
+  (Phase 8) -- a matched pair for Higgsfield's "3D Jutsu" catalog imports.
+  The inspector measures real size (same AABB discipline as
+  `measure_pieces.gd`) and checks for a texture; the fix tool exists because
+  that check turned up a real, confirmed bug (not assumed from the flat
+  look alone -- a separate throwaway script dumped the mesh's own
+  `ARRAY_COLOR` data directly and found real, varied colors underneath):
+  every 3D Jutsu GLB export carries genuine per-vertex color data, but
+  Godot's glTF importer leaves the resulting `StandardMaterial3D`'s
+  `vertex_color_use_as_albedo` false, so that color is silently never
+  rendered -- everything comes in looking flat white regardless of its
+  real intended color. The fix tool assigns each mesh surface a fresh
+  `material_override` (never mutating the imported resource's own shared
+  material) with that flag corrected, then re-saves the result as a
+  `.tscn` -- **not** a `.glb`: `ResourceSaver.save()` only writes
+  Godot-native formats, re-exporting an actual `.glb` needs the separate
+  `GLTFDocument` API instead, which this fix didn't need. A `.tscn`
+  referencing the original glTF's meshes plus the corrected material loads
+  from `Token.gd`/`GridManager.gd` exactly like a plain `.glb` would.
+  Re-run both for any future Higgsfield catalog import -- this is very
+  likely a pipeline-wide issue, not specific to the 3 pieces tested so far.
+
 **Second gotcha: a bare `--script` `SceneTree` tool's `_init()` runs before
 any manually `add_child()`-ed node has had a real `_ready()`/`NOTIFICATION_ENTER_TREE`
 pass.** A `Node3D`'s `global_transform` silently reads back as identity
@@ -76,6 +98,17 @@ tool for anything that needs a genuinely "ready" node tree -- write a small
 real scene + `Node` script instead (see `test_skeleton_token.tscn`'s own
 pattern: an `await get_tree().process_frame` before touching anything just
 instantiated), and run it as a normal scene path instead of via `--script`.
+
+**Third gotcha: `ResourceSaver.save()` cannot write an actual `.glb` file,
+even though it happily accepts the path and only fails at the actual write.**
+Passing a `.glb` destination to `ResourceSaver.save(packed_scene, path)`
+fails with error 15, because `ResourceSaver` only knows Godot-native
+formats (`.tscn`/`.res`/`.scn`) -- writing a real glTF/GLB binary needs the
+separate `GLTFDocument` export API instead. If the goal is just "something
+`load()`-able from a Godot script later" (not genuine interop with another
+glTF-reading tool outside Godot), a `.tscn` destination does the job with
+zero extra machinery -- see `fix_higgsfield_vertex_colors.gd`'s own use of
+this.
 
 **Gotcha: a brand new `class_name` isn't visible to these scripts until the
 project's global class cache knows about it.** Adding a new `class_name`

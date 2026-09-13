@@ -80,3 +80,12 @@ godot/assets/Environment/quaternius-props/
 # repo-hygiene-only ignore reasoning as the Quaternius MegaKits above (a raw
 # download bundling gltf/obj/texture variants of ~200 pieces at once).
 godot/assets/Environment/kaykit-dundeons/
+
+# --- Higgsfield "3D Jutsu" catalog imports (Phase 8) -- unlike Kenney/
+# Quaternius/KayKit above, Higgsfield's own Terms of Use has no section
+# covering the pre-made catalog specifically (checked directly, not assumed).
+# Fine for this project's own private, non-commercial use (see ROADMAP.md's
+# Phase 8 entry for the actual reasoning), but not something to distribute
+# via a git clone without a clearer answer from Higgsfield first -- same
+# "convenience AND caution" sweep-up as the Meshy-generated Orc content.
+godot/assets/Environment/higgsfield-test/
