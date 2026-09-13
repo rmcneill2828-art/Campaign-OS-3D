@@ -129,10 +129,34 @@ function seedState() {
   return state;
 }
 
+// A saved session's stateFile is a full snapshot from whatever seedState()
+// looked like the last time this file was written -- adding a brand new map
+// to seedState() (e.g. Phase 4's "Entrance Hall") does nothing for anyone
+// already mid-session with a persisted encounter.json on disk, since this
+// function's normal path never re-runs seedState() once a file exists. Bit
+// this project's own DM bridge integration test caught live: switch_map
+// correctly refused to invent a map that "doesn't exist" from its own
+// snapshot's availableMaps, and a plain server restart didn't help because
+// it just reloaded the same stale file. Fix: merge in any map present in
+// the CURRENT seedState() but missing from the loaded file, by name, leaving
+// every already-persisted map/token/turn/log untouched -- a brand new map
+// is a pure addition, never a field-level change to an existing one, so
+// there's nothing to reconcile beyond "is this name already there."
+function mergeNewSeedMaps(state) {
+  const seeded = seedState();
+  const missingMapNames = Object.keys(seeded.maps || {}).filter((name) => !(state.maps || {})[name]);
+  if (!missingMapNames.length) return state;
+  const mergedMaps = { ...state.maps };
+  missingMapNames.forEach((name) => {
+    mergedMaps[name] = seeded.maps[name];
+  });
+  return { ...state, maps: mergedMaps };
+}
+
 function loadState(stateFile) {
   try {
     const raw = fs.readFileSync(stateFile, "utf8");
-    return JSON.parse(raw);
+    return mergeNewSeedMaps(JSON.parse(raw));
   } catch (err) {
     return seedState();
   }

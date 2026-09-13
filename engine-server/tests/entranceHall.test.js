@@ -23,6 +23,37 @@ function stopTestServer(server) {
   return new Promise((resolve) => server.close(resolve));
 }
 
+test("Phase 8: a pre-existing saved session (no Entrance Hall yet) gets it merged in on load, live combat state untouched", async () => {
+  // Simulates exactly the bug hit live: a real player's already-persisted
+  // encounter.json, saved by an older server build before Entrance Hall
+  // existed -- only Prototype Chamber in `maps`, tokens mid-combat.
+  const stateFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "campaign-os-3d-")), "encounter.json");
+  const { server: seedServer, baseUrl: seedBaseUrl } = await startTestServer();
+  const { state: freshState } = await (await fetch(`${seedBaseUrl}/state`)).json();
+  await stopTestServer(seedServer);
+
+  const staleState = {
+    ...freshState,
+    maps: { "Prototype Chamber": freshState.maps["Prototype Chamber"] }, // Entrance Hall stripped out, as if it never existed
+    log: ["Wren attacks Orc 1 for 13 damage. Orc 1 dies."] // stands in for real mid-combat progress
+  };
+  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+  fs.writeFileSync(stateFile, JSON.stringify(staleState, null, 2));
+
+  const server = createServer({ stateFile });
+  try {
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address();
+    const { state } = await (await fetch(`http://127.0.0.1:${port}/state`)).json();
+
+    assert.ok(state.maps["Entrance Hall"], "Entrance Hall should get merged in even though the saved file predates it");
+    assert.equal(state.mapName, "Prototype Chamber", "merging a new map must not change the active map");
+    assert.deepEqual(state.log, staleState.log, "merging a new map must not touch existing log/combat state");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 async function postAction(baseUrl, action) {
   const res = await fetch(`${baseUrl}/action`, {
     method: "POST",
