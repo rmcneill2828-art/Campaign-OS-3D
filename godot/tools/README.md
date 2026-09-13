@@ -29,6 +29,41 @@ checking without a live `node server.js` or opening the editor GUI.
   just fail to connect, which is fine). A cheap regression check after
   editing any of the scripts either scene uses, before ever opening the
   real editor.
+- **`inspect_kaykit_skeleton.gd`** (Phase 8) -- lists every real animation
+  clip name in a set of KayKit animation files and checks their skeleton's
+  bone names against a target model's, the same "verify a rig actually
+  matches, don't assume from a shared folder name" check that already
+  covered Quaternius's UAL1. A template for verifying the NEXT new
+  monster/hero model family before wiring it into `Token.gd`'s
+  `MODEL_CONFIG` -- edit `SKELETON_MODEL`/`ANIM_FILES` for whatever's being
+  checked next.
+- **`test_skeleton_token.gd`/`.tscn`** and **`test_imp_token.gd`/`.tscn`** --
+  actual `Node`-scene functional checks (NOT bare `--script` SceneTree tools
+  -- those run before `@onready`/`_ready()` ever fire on manually-instanced
+  children, which silently breaks a real `Token.apply_data()` call; see the
+  gotcha these two were written to work around, below) that build a real
+  `Token` for a specific server-shaped name ("Skeleton 1", "Goblin 1") and
+  print whether `MODEL_CONFIG`'s lookup/bone-map/animation resolution
+  actually succeeded. Run via
+  `<Godot>.exe --headless --path godot res://tools/test_skeleton_token.tscn`
+  (a real scene path, not `--script`). A template for confirming the NEXT
+  new per-monster-name `MODEL_CONFIG` entry actually resolves before ever
+  looking at it live in the editor.
+
+**Second gotcha: a bare `--script` `SceneTree` tool's `_init()` runs before
+any manually `add_child()`-ed node has had a real `_ready()`/`NOTIFICATION_ENTER_TREE`
+pass.** A `Node3D`'s `global_transform` silently reads back as identity
+(not an error -- just wrong) when queried this early, and a `Token`'s own
+`@onready var _label` etc. are still null, which crashes the very first
+`apply_data()` call that touches them. Neither of `measure_pieces.gd`'s or
+`build_prototype_chamber.gd`'s own top-level instances actually needed a
+non-identity ancestor transform or `@onready` access at the moment they
+were queried, which is why this didn't surface until `test_skeleton_token.gd`
+needed a real, fully-initialized `Token`. Fix: don't use a bare `--script`
+tool for anything that needs a genuinely "ready" node tree -- write a small
+real scene + `Node` script instead (see `test_skeleton_token.tscn`'s own
+pattern: an `await get_tree().process_frame` before touching anything just
+instantiated), and run it as a normal scene path instead of via `--script`.
 
 **Gotcha: a brand new `class_name` isn't visible to these scripts until the
 project's global class cache knows about it.** Adding a new `class_name`

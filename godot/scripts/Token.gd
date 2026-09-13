@@ -14,46 +14,70 @@ class_name Token
 ## shipped with -- rather than fail to load the scene at all. `load()` +
 ## `ResourceLoader.exists()` achieves that; `preload()` would not.
 
-## token type -> {path: model scene to instance, label_height: where the
-## name/HP label should float above this model's own feet, in meters}.
-## Whatever vertical offset a real model needs to actually stand on the floor
-## is figured out at runtime, not assumed here -- see _ground_model() below.
+## Lookup key -> a full "model family" config: which model to instance, where
+## its name/HP label floats (label_height, meters above its own feet --
+## whatever vertical offset the model actually needs to stand on the floor is
+## figured out at runtime regardless, see _ground_model()), which shared
+## animation-source file drives its skeleton (see _setup_animation()), and
+## the bare clip names (post Godot-import, see IDLE/WALK's own comment below)
+## for idle/walk/death/dying/hit reactions within it.
+##
+## Keys are either a bare token type ("hero", "monster" -- the fallback used
+## when no more specific entry matches) or "monster:<stat-block name>"
+## (lowercased, e.g. "monster:skeleton") for a real per-monster-name model --
+## see _stat_block_key() and _rebuild_model()'s own lookup order. Phase 8's
+## first per-name entry (skeleton) is what proved this two-tier lookup was
+## worth having at all; before it, every monster silently rendered as the
+## Imp regardless of which SRD stat block it actually was (a known,
+## documented gap since Phase 2).
+##
+## `hit_source` is optional -- only needed when a family's hit-reaction clips
+## live in a DIFFERENT animation file than its idle/walk/death/dying (true
+## for the skeleton family below: its own animation-source file has no
+## dedicated hit-reaction clips of its own, so the generic humanoid Hit_A/
+## Hit_B from a sibling file in the same pack get imported into the same
+## player instead -- see _setup_animation()'s own handling). Omitted (or
+## equal to animation_source) means "same file for everything," the
+## Quaternius families' original, simpler case.
 const MODEL_CONFIG := {
-	"hero": {"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0},
-	"monster": {"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9}
+	"hero": {
+		"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0,
+		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
+		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
+		"hits": ["Hit_Chest", "Hit_Head"]
+	},
+	"monster": {
+		"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9,
+		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
+		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
+		"hits": ["Hit_Chest", "Hit_Head"]
+	},
+	## KayKit Skeletons (godot/assets/README.md) -- a genuine per-name match for
+	## the SRD "Skeleton" stat block, not a reuse of something else. Bone-name
+	## compatibility against this specific animation pack was verified directly
+	## (godot/tools/inspect_kaykit_skeleton.gd: 23/23 bones match across every
+	## file checked), not assumed from a shared "Rig_Medium" folder name --
+	## exactly the check godot/assets/README.md's own KayKit section flagged as
+	## still outstanding before wiring anything in. idle/walk/death/dying all
+	## come from the pack's own SKELETON-SPECIFIC clip set (Skeletons_Idle,
+	## Skeletons_Walking, Skeletons_Death, Skeletons_Inactive_Floor_Pose --
+	## e.g. that pack visibly authored a creature literally rising from an
+	## inert heap on the floor, a much better fit than a generic humanoid
+	## idle), found by listing that file's real clips rather than guessing;
+	## hits reuse the pack's generic Hit_A/Hit_B (no skeleton-specific hit
+	## reaction exists) from a separate sibling file in the same pack.
+	"monster:skeleton": {
+		"path": "res://assets/creatures/monster/skeleton_warrior.glb", "label_height": 1.9,
+		"animation_source": "res://assets/creatures/animations/kaykit_rig_medium_special.glb",
+		"idle": "Skeletons_Idle", "walk": "Skeletons_Walking", "death": "Skeletons_Death",
+		"dying": "Skeletons_Inactive_Floor_Pose",
+		"hits": ["Hit_A", "Hit_B"],
+		"hit_source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"
+	}
 }
 const FALLBACK_LABEL_HEIGHT := 1.9
 const FALLBACK_CAPSULE_RADIUS := 0.4
 const FALLBACK_CAPSULE_HEIGHT := 1.6
-
-## Quaternius's free "Universal Animation Library" (UAL1, non-root-motion
-## variant -- our own tween already drives grid position, so we want the
-## animation itself moving limbs in place, not also translating the root
-## bone). Confirmed by direct comparison (not assumed from the "Retargetable"
-## marketing tag) that its skeleton's bone NAMES match the hero model's
-## exactly, and the monster model's bones are a strict subset of the same set
-## -- so this one animation source can drive both. See _setup_animation().
-const ANIMATION_SOURCE_PATH := "res://assets/creatures/animations/mannequin_animations.glb"
-# Not "Idle_Loop"/"Walk_Loop" -- confirmed via this project's own diagnostic
-# print() that Godot's glTF importer strips a trailing "_Loop" from an
-# animation's name and folds that into the clip's own loop_mode property
-# instead, so the actually-imported names are just "Idle"/"Walk".
-const IDLE_ANIMATION := "Idle"
-const WALK_ANIMATION := "Walk"
-## One-shot reaction clips, already sitting unused in the same animation pack
-## since Phase 2 -- confirmed present in that pack's own available-animations
-## dump (see _setup_animation's diagnostic print()), not assumed.
-const DEATH_ANIMATION := "Death01"
-const HIT_ANIMATIONS: Array[String] = ["Hit_Chest", "Hit_Head"]
-## For a token actively making (or stabilized on) death saves -- a persistent
-## held pose, not a one-shot reaction, so it needs to keep looping for however
-## long the token stays down. "Crouch_Idle" (not "Fixing_Kneeling", also in
-## this pack) specifically because its own "_Loop" suffix in the source file
-## says it was actually authored to be held, the same signal this project
-## already leaned on to know Idle/Walk would loop convincingly -- confirmed by
-## reading the pack's real clip list again for this, not reused blind from
-## the earlier idle/walk read.
-const DYING_ANIMATION := "Crouch_Idle"
 
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
@@ -216,7 +240,15 @@ func _rebuild_model() -> void:
 	_dying_animation_key = ""
 	_hit_animation_keys = []
 
-	var config: Dictionary = MODEL_CONFIG.get(token_type, {})
+	# A monster's real per-name entry (e.g. "monster:skeleton") wins over the
+	# generic "monster" fallback if one exists -- see MODEL_CONFIG's own doc
+	# comment for why this two-tier lookup exists at all.
+	var config_key := token_type
+	if token_type == "monster":
+		var specific_key := "monster:" + _stat_block_key(token_name)
+		if MODEL_CONFIG.has(specific_key):
+			config_key = specific_key
+	var config: Dictionary = MODEL_CONFIG.get(config_key, {})
 	var model_path: String = config.get("path", "")
 	var label_height: float = float(config.get("label_height", FALLBACK_LABEL_HEIGHT))
 
@@ -225,7 +257,7 @@ func _rebuild_model() -> void:
 		var instance := scene.instantiate() as Node3D
 		_model_root.add_child(instance)
 		_ground_model(instance)
-		_setup_animation(instance)
+		_setup_animation(instance, config)
 		_label.position.y = label_height
 	else:
 		_add_fallback_capsule()
@@ -238,27 +270,44 @@ func _rebuild_model() -> void:
 	# better; a further tuning pass may still be needed once actually seen.
 	_hp_bar_root.position.y = label_height + 0.35
 
-## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the shared
-## animation-source model (see ANIMATION_SOURCE_PATH), copying bone poses
-## across every frame by matching bone NAMES between the two skeletons --
-## deliberately not attempting to graft the source's Animation resources
-## directly onto this model's own (nonexistent) AnimationPlayer via NodePath
-## surgery, which would depend on Godot's glTF importer producing byte-for-byte
-## identical scene structure across every different file, an assumption this
-## project has already been burned by more than once this phase (see
-## _ground_model's and GridManager.gd's own comments on trusting file
-## structure over measuring the real thing). Copying bone-by-bone through each
-## Skeleton3D's own pose API works regardless of how either scene happens to
-## be structured around its skeleton.
-func _setup_animation(instance: Node3D) -> void:
+## Monster tokens are named "<Stat Block Name> <N>" by the engine's own
+## spawnMonster() (e.g. "Skeleton 2") -- stripping the trailing number and
+## lowercasing recovers the actual stat-block identity a specific
+## MODEL_CONFIG entry should key off, the same name-matching convention
+## dm-bridge/watch.js's own MONSTER_LIST already uses for narration-driven
+## spawning. A name with no trailing number (a hand-placed token, "addToken"
+## instead of "spawn") just lowercases as-is -- no match in MODEL_CONFIG
+## simply falls through to the generic "monster" entry, same as always.
+func _stat_block_key(name: String) -> String:
+	var regex := RegEx.new()
+	regex.compile("^(.*?)\\s+\\d+$")
+	var result := regex.search(name)
+	var base_name := result.get_string(1) if result else name
+	return base_name.strip_edges().to_lower()
+
+## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the
+## family's own shared animation-source model (config["animation_source"]),
+## copying bone poses across every frame by matching bone NAMES between the
+## two skeletons -- deliberately not attempting to graft the source's
+## Animation resources directly onto this model's own (nonexistent)
+## AnimationPlayer via NodePath surgery, which would depend on Godot's glTF
+## importer producing byte-for-byte identical scene structure across every
+## different file, an assumption this project has already been burned by
+## more than once this phase (see _ground_model's and GridManager.gd's own
+## comments on trusting file structure over measuring the real thing).
+## Copying bone-by-bone through each Skeleton3D's own pose API works
+## regardless of how either scene happens to be structured around its
+## skeleton.
+func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 	var skeletons := instance.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
 		return
 	_character_skeleton = skeletons[0] as Skeleton3D
 
-	if not ResourceLoader.exists(ANIMATION_SOURCE_PATH):
+	var animation_source_path: String = config.get("animation_source", "")
+	if animation_source_path == "" or not ResourceLoader.exists(animation_source_path):
 		return
-	var source_scene := load(ANIMATION_SOURCE_PATH) as PackedScene
+	var source_scene := load(animation_source_path) as PackedScene
 	var source_instance := source_scene.instantiate() as Node3D
 	source_instance.visible = false # only its skeleton/player matter -- never rendered itself
 	_model_root.add_child(source_instance)
@@ -276,26 +325,51 @@ func _setup_animation(instance: Node3D) -> void:
 		if source_idx != -1:
 			_bone_map[char_idx] = source_idx
 
-	# Resolved once here rather than assumed as bare "Idle_Loop"/"Walk_Loop" --
-	# a glTF import can namespace its animations under a named AnimationLibrary
-	# (yielding a key like "somelib/Idle_Loop") rather than the default
-	# unnamed one, and has_animation()/play() need the exact key either way.
-	_idle_animation_key = _resolve_animation_name(_anim_source_player, IDLE_ANIMATION)
-	_walk_animation_key = _resolve_animation_name(_anim_source_player, WALK_ANIMATION)
-	_death_animation_key = _resolve_animation_name(_anim_source_player, DEATH_ANIMATION)
-	_dying_animation_key = _resolve_animation_name(_anim_source_player, DYING_ANIMATION)
-	_hit_animation_keys = []
-	for hit_name in HIT_ANIMATIONS:
-		var resolved := _resolve_animation_name(_anim_source_player, hit_name)
-		if resolved != "":
-			_hit_animation_keys.append(resolved)
+	# Resolved once here rather than assumed from config's bare clip name
+	# directly -- a glTF import can namespace its animations under a named
+	# AnimationLibrary (yielding a key like "somelib/Idle") rather than the
+	# default unnamed one, and has_animation()/play() need the exact key
+	# either way.
+	_idle_animation_key = _resolve_animation_name(_anim_source_player, config.get("idle", ""))
+	_walk_animation_key = _resolve_animation_name(_anim_source_player, config.get("walk", ""))
+	_death_animation_key = _resolve_animation_name(_anim_source_player, config.get("death", ""))
+	_dying_animation_key = _resolve_animation_name(_anim_source_player, config.get("dying", ""))
 
-	# "_Loop"-suffixed clips in this pack aren't necessarily flagged to loop by
-	# default on import -- force it so Idle/Walk/Dying actually repeat instead
-	# of freezing on their last frame. Death/hit clips are deliberately NOT
-	# forced to loop -- a death pose should freeze on its last frame, and a
-	# hit reaction should play once and hand back to idle (see
-	# _on_source_animation_finished).
+	# Hit-reaction clips normally resolve against the same primary player as
+	# everything above -- EXCEPT when config["hit_source"] names a different
+	# file entirely (true for the skeleton family: its own animation source
+	# has no dedicated hit-reaction clips of its own). In that case, the
+	# needed clips are imported into the primary player's own animation
+	# library first (_import_animation_clip), so the rest of this class
+	# (playback, loop-forcing, the finished-signal handler) never needs to
+	# know or care that a clip's Animation resource originally came from a
+	# second file -- it's just another key on _anim_source_player either way.
+	_hit_animation_keys = []
+	var hit_names: Array = config.get("hits", [])
+	var hit_source_path: String = config.get("hit_source", animation_source_path)
+	if hit_source_path == animation_source_path:
+		for hit_name in hit_names:
+			var resolved := _resolve_animation_name(_anim_source_player, hit_name)
+			if resolved != "":
+				_hit_animation_keys.append(resolved)
+	elif ResourceLoader.exists(hit_source_path):
+		var hit_scene := load(hit_source_path) as PackedScene
+		var hit_instance := hit_scene.instantiate() as Node3D
+		var hit_players := hit_instance.find_children("*", "AnimationPlayer", true, false)
+		if not hit_players.is_empty():
+			var hit_player := hit_players[0] as AnimationPlayer
+			for hit_name in hit_names:
+				var imported := _import_animation_clip(_anim_source_player, hit_player, hit_name)
+				if imported != "":
+					_hit_animation_keys.append(imported)
+		hit_instance.queue_free() # never added to the tree -- just a temporary clip source
+
+	# "_Loop"-suffixed clips in some packs aren't necessarily flagged to loop
+	# by default on import -- force it so Idle/Walk/Dying actually repeat
+	# instead of freezing on their last frame. Death/hit clips are
+	# deliberately NOT forced to loop -- a death pose should freeze on its
+	# last frame, and a hit reaction should play once and hand back to idle
+	# (see _on_source_animation_finished).
 	for key in [_idle_animation_key, _walk_animation_key, _dying_animation_key]:
 		if key != "":
 			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
@@ -313,6 +387,32 @@ func _setup_animation(instance: Node3D) -> void:
 	])
 
 	_play_source_animation(_idle_animation_key)
+
+## Copies one named clip's Animation resource from `source_player` (a
+## temporary, never-added-to-the-tree instance -- see its caller above) into
+## `target_player`'s own default animation library, so a single
+## AnimationPlayer can play a clip that actually lives in a completely
+## different imported file. Returns the clip's own bare name (now playable
+## directly on `target_player`) once imported, or "" if `clip_name` isn't
+## found in `source_player` at all. Reuses (mutates in place), not replaces,
+## `target_player`'s existing default library if it already has one -- a
+## fresh glTF-imported AnimationPlayer already owns its own default library
+## full of its native clips, and replacing it outright would lose all of them.
+func _import_animation_clip(target_player: AnimationPlayer, source_player: AnimationPlayer, clip_name: String) -> String:
+	var resolved_source_key := _resolve_animation_name(source_player, clip_name)
+	if resolved_source_key == "":
+		return ""
+	var animation: Animation = source_player.get_animation(resolved_source_key)
+	var library: AnimationLibrary
+	if target_player.has_animation_library(""):
+		library = target_player.get_animation_library("")
+	else:
+		library = AnimationLibrary.new()
+		target_player.add_animation_library("", library)
+	if library.has_animation(clip_name):
+		library.remove_animation(clip_name)
+	library.add_animation(clip_name, animation)
+	return clip_name
 
 ## A one-shot reaction clip (hit or death) finishing playback hands control
 ## back to idle -- EXCEPT death, which should stay frozen on its final pose,

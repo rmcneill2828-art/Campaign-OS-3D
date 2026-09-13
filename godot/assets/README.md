@@ -23,6 +23,20 @@
 - **`creatures/animations/mannequin_animations.glb`** -- the flattened file
   `Token.gd` actually loads (`UAL1_Standard.glb`, the **non**-`_RM` variant --
   see Licensing below for why). Also not committed.
+- **`creatures/monster/skeleton_warrior.glb`** (+ its sibling
+  `skeleton_texture.png`) and **`creatures/animations/kaykit_rig_medium_special.glb`**/
+  **`kaykit_rig_medium_general.glb`** -- Phase 8's flattened KayKit files,
+  same pattern as the two above. `_movementbasic.glb`/`_combatmelee.glb`/
+  `_simulation.glb` were also flattened while surveying the pack's real clip
+  list (`godot/tools/inspect_kaykit_skeleton.gd`) but aren't actually loaded
+  by `Token.gd` -- harmless to delete, kept only as a convenient local copy
+  if a future monster wants a clip from one of them too. **Not committed**
+  either, despite being genuinely CC0 with no license reason to exclude them
+  -- `.gitignore`'s existing blanket `godot/assets/creatures/` rule (there
+  for the QAL-licensed Quaternius files next to them) sweeps these up too,
+  the same "convenience, not license" sweep-up its own comment already
+  applies to the raw KayKit pack folders. A fresh clone needs to re-run the
+  copy step below for these too, same as the Quaternius-derived files.
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.
@@ -44,9 +58,22 @@
   **`Environment/kaykit-dundeons/`** -- Kay Lousberg's "KayKit" packs,
   downloaded as a real per-name monster/hero option (see KayKit below) and a
   stylistically-different dungeon-kit alternative. **Genuinely CC0**
-  (confirmed per-pack). Not yet wired into `Token.gd`/`GridManager.gd` --
-  downloaded and cataloged only so far, same "gather now, integrate when a
-  real feature needs it" pattern as the Quaternius MegaKits above.
+  (confirmed per-pack). **Phase 8 (2026-09-13): Skeletons wired into
+  `Token.gd`** -- `Skeleton_Warrior.glb` + a merged animation source (the
+  Character Animations pack's Rig_Medium `Special.glb` for its own
+  skeleton-specific idle/walk/death/dying clips, `General.glb` for generic
+  Hit_A/Hit_B reactions imported into the same player at runtime) drive any
+  monster token named "Skeleton" (matching the SRD stat block spawnMonster()
+  produces), via a new per-monster-name entry in `Token.gd`'s own
+  `MODEL_CONFIG` (`"monster:skeleton"`) -- see that file's own doc comment
+  for the two-tier type/name lookup this introduced. Rig compatibility
+  verified directly (`godot/tools/inspect_kaykit_skeleton.gd`: 23/23 bones
+  match across every animation file checked), not assumed from a shared
+  "Rig_Medium" folder name, exactly the check this section used to flag as
+  outstanding. Adventurers (hero replacement) and Dungeon Remastered
+  (environment) remain downloaded and cataloged only, same "gather now,
+  integrate when a real feature needs it" pattern as the Quaternius MegaKits
+  above.
 
 ## Licensing -- read before adding more assets from either site
 
@@ -236,6 +263,18 @@ cp "$MONSTER_SRC/Imp.glb" godot/assets/creatures/monster/imp.glb
 mkdir -p godot/assets/creatures/animations
 cp "godot/assets/Creatures/animation-library/Universal Animation Library[Standard]/Unreal-Godot/UAL1_Standard.glb" \
    godot/assets/creatures/animations/mannequin_animations.glb
+
+# Phase 8 -- KayKit Skeletons + its own animation-library files. Genuinely
+# CC0 (no gtlf-typo/bin-rename fixups needed, unlike Quaternius above), just
+# swept into the same gitignored tree by convenience, not license -- see
+# this file's own KayKit section.
+SKELETON_SRC="godot/assets/Creatures/monster-pack/KayKit_Skeletons_1.1_FREE/characters/gltf"
+cp "$SKELETON_SRC/Skeleton_Warrior.glb" godot/assets/creatures/monster/skeleton_warrior.glb
+cp "$SKELETON_SRC/skeleton_texture.png" godot/assets/creatures/monster/skeleton_texture.png
+
+ANIM_SRC="godot/assets/Creatures/animation-library/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium"
+cp "$ANIM_SRC/Rig_Medium_Special.glb" godot/assets/creatures/animations/kaykit_rig_medium_special.glb
+cp "$ANIM_SRC/Rig_Medium_General.glb" godot/assets/creatures/animations/kaykit_rig_medium_general.glb
 ```
 
 ## Adding more monsters/heroes later

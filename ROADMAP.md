@@ -715,15 +715,67 @@ exhaustion/legendary-action rules text. None of that needed reimplementing.
 
 Phase 7 complete.
 
-## Phase 8 -- Art investment (later, per decision #4 above)
+## Phase 8 -- Art investment
 
 Free Quaternius/Kenney/KayKit assets proved the pipeline in Phase 2 and
 filled real gaps (see the Creatures/ catalog in `godot/assets/README.md`).
-Once the feature set from Phases 3-6 feels worth dressing up, this is where
-to evaluate paid asset packs or bespoke/commissioned art to replace them.
-Deliberately not scoped further until that point -- but a research pass on
-2026-09-11 already surveyed the real options, recorded here so it doesn't
-need re-doing when this phase actually starts:
+This is where to evaluate paid asset packs or bespoke/commissioned art, and
+where to close out remaining free-asset gaps -- a research pass on
+2026-09-11 already surveyed the real paid/AI options, recorded below so it
+doesn't need re-doing.
+
+- [x] **KayKit Skeletons wired into `Token.gd` -- 2026-09-13, built and
+  tested.** The obvious, free, zero-risk starting move once this phase
+  actually began: every monster had rendered as the generic Imp regardless
+  of its real SRD stat block since Phase 2, a known, explicitly documented
+  gap, and the KayKit Skeletons pack (already downloaded, genuinely CC0) was
+  sitting there specifically to fix it. `Token.gd`'s `MODEL_CONFIG` gained a
+  two-tier lookup: a monster's real stat-block name (parsed from its token
+  name, e.g. "Skeleton 2" -> "skeleton" -- the same name-matching convention
+  `dm-bridge/watch.js`'s own `MONSTER_LIST` already uses) checked against a
+  per-name entry first, falling back to the original generic "monster" (Imp)
+  entry for anything without one -- so this is purely additive, not a
+  reshuffle of existing behavior. Confirmed by testing BOTH paths
+  functionally, not just the new one: a "Skeleton 1" token resolves its new
+  per-name entry; a "Goblin 1" token (no specific entry) still resolves
+  the original generic Imp family exactly as before, 55/55 bones, unchanged.
+  Rig compatibility was verified directly first (`godot/tools/inspect_kaykit_skeleton.gd`:
+  23/23 bones match across every KayKit animation file checked), exactly the
+  check `godot/assets/README.md`'s own KayKit section had flagged as still
+  outstanding since it was written -- not assumed from a shared "Rig_Medium"
+  folder name. The pack's SKELETON-SPECIFIC clips (`Skeletons_Idle`,
+  `Skeletons_Walking`, `Skeletons_Death`, `Skeletons_Inactive_Floor_Pose` for
+  the dying/kneeling pose) drive idle/walk/death/dying -- a noticeably
+  better thematic fit than a generic humanoid idle, found by listing the
+  file's real clips rather than guessing one existed. Hit-reaction clips
+  (`Hit_A`/`Hit_B`) don't exist in that same file, so `_setup_animation()`
+  gained the ability to import a named clip's `Animation` resource from a
+  SECOND animation file into the primary one's own animation library at
+  runtime -- letting one `AnimationPlayer` play clips that actually live in
+  two different imported files, without changing the bone-copying loop at
+  all. Hit two real headless-tooling gotchas along the way, both now
+  documented in `godot/tools/README.md` for next time: a brand new asset
+  under a normally-scanned folder needs one headless editor pass
+  (`--headless --editor --quit`) to actually get imported before
+  `ResourceLoader` can see it (same fix as Phase 6's `class_name` gotcha,
+  different trigger); and a bare `--script` `SceneTree` tool's `_init()`
+  runs before any manually-added node's `@onready`/`_ready()` has actually
+  fired, which crashed the first functional Token test until it became a
+  real scene + `Node` script instead. **Verified**: 2 new functional test
+  scenes (`test_skeleton_token.tscn`, `test_imp_token.tscn`) plus
+  `smoke_test_main.gd` still passing; `engine-server`'s own 16/16 tests
+  unaffected (this was a Godot-only change). **NOT yet verified live in the
+  editor** -- whether the Skeleton_Warrior model/texture actually render
+  correctly and whether the animations look right in motion both still need
+  a human looking at a real spawned skeleton, the same "build, then verify
+  live" step every visual feature in this project has needed.
+  Adventurers (a real per-hero-name option, same pack family) and the
+  KayKit Dungeon Remastered environment kit remain downloaded and cataloged
+  only -- not wired up this pass.
+
+Below is the untouched research from 2026-09-11 for the bigger, still-open
+questions this phase hasn't tackled yet (a unified retargeting pipeline,
+paid packs, AI generation):
 
 **Mixamo (Adobe, free) -- worth investigating before anything else, possibly
 even before this phase formally starts.** Free rigged characters, a huge
