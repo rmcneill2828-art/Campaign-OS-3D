@@ -44,13 +44,16 @@
   one animation-library clip per file) rather than downloaded from a fixed
   pack -- there's no raw source folder to point back to the way the
   Quaternius/KayKit entries above have; regenerating means re-running the
-  same API calls, not re-flattening a re-downloaded zip. Cost ~65 Meshy
-  credits total for this one monster (see MODEL_CONFIG's own comment in
-  `Token.gd` for the exact pipeline and why every clip needed the
-  `{clip, source}` cross-file import form). **Not committed** -- same
-  gitignore sweep-up as the KayKit files above, no license reason either
-  (this is the user's own generated content) but swept into the same
-  ignored tree by convenience.
+  same API calls, not re-flattening a re-downloaded zip. Cost 78 Meshy
+  credits total for this one monster, including a real follow-up fix (see
+  `ROADMAP.md`'s Phase 8 entry: the first texture came out scrambled
+  because it was baked for a different mesh topology than the one that got
+  rigged -- fixed with a proper `MESHY_CREATE_RETEXTURE_TASK` against the
+  actual final geometry). See `MODEL_CONFIG`'s own comment in `Token.gd`
+  for the exact pipeline and why every clip needed the `{clip, source}`
+  cross-file import form. **Not committed** -- same gitignore sweep-up as
+  the KayKit files above, no license reason either (this is the user's own
+  generated content) but swept into the same ignored tree by convenience.
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.

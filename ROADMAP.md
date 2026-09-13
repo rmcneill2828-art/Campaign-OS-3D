@@ -855,10 +855,33 @@ doesn't need re-doing.
   while the pre-existing skeleton and generic-monster (Imp) tests still
   pass unaffected by the generalization. `engine-server`'s own 16/16 tests
   unaffected (Godot-only change); "orc" already exists as a real SRD stat
-  block server-side, so it's spawnable today. **NOT yet verified live in
-  the editor** -- same "build, then verify live" gap every visual feature
-  here starts with, flagged rather than assumed to work from the headless
-  checks alone.
+  block server-side, so it's spawnable today.
+  **Verified live in Godot, 2026-09-13 (user-confirmed): animations all
+  correct** -- kneels and stands back up on saving throws (the dying
+  stand-in reads fine in motion despite being a transition clip, not a
+  true held pose), staggers on a hit, and collapses to the floor on
+  death. **Texture was genuinely wrong, not a false alarm** -- a real
+  camouflage-looking scramble, not the clean green-skin/leather result
+  from the earlier preview thumbnail. Root cause confirmed rather than
+  guessed: the rig had been built from the REMESHED (low-poly) geometry
+  while the texture came from a `MESHY_REFINE_TEXT_TO_3D_TASK` run
+  against the ORIGINAL high-poly preview in parallel -- remeshing
+  regenerates UV coordinates for the new topology, so a texture image
+  baked for the old UVs doesn't line up on the new ones, even though
+  passing it via rigging's own `texture_image_url` field "worked" (no
+  error, just visibly wrong). Fixed with the right tool for the job:
+  `MESHY_CREATE_RETEXTURE_TASK` against the REMESHED task specifically
+  (10 more credits) -- unlike refine, retexture generates a fresh
+  texture matching whatever UVs the input model actually has right now,
+  confirmed correct in a new preview thumbnail before spending anything
+  further -- then one more rigging pass (5 credits) on that correctly
+  textured result, reusing the same skeleton/animation files unchanged
+  (they only ever contributed skeleton + one clip each to Token.gd,
+  never their own visible mesh, so nothing about them needed
+  redoing). Re-verified after the swap: bone map and all animation
+  keys still resolve identically (24/24 bones, same clip keys) since
+  only the visible mesh/texture changed, not the skeleton. Total cost
+  for the full Orc including this fix: 78 credits (1100 -> 1022).
 
 Phase 8's first item complete and live-verified. Below is the untouched
 research from 2026-09-11 for the bigger, still-open questions this phase
