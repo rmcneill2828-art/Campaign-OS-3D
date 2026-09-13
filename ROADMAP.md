@@ -764,18 +764,35 @@ doesn't need re-doing.
   real scene + `Node` script instead. **Verified**: 2 new functional test
   scenes (`test_skeleton_token.tscn`, `test_imp_token.tscn`) plus
   `smoke_test_main.gd` still passing; `engine-server`'s own 16/16 tests
-  unaffected (this was a Godot-only change). **NOT yet verified live in the
-  editor** -- whether the Skeleton_Warrior model/texture actually render
-  correctly and whether the animations look right in motion both still need
-  a human looking at a real spawned skeleton, the same "build, then verify
-  live" step every visual feature in this project has needed.
+  unaffected (this was a Godot-only change).
+  **Verified live in Godot, 2026-09-13 (user-confirmed).** Model/texture
+  render correctly, stands and animates properly. Death and revival both
+  confirmed working too -- killing it produced a real collapsed-heap pose
+  and healing it afterward correctly stood it back up, the exact
+  dead-to-idle transition Phase 3 had to specifically fix generalizing
+  cleanly to a whole new model family with no further changes needed.
+  One real observation, checked rather than dismissed: the user didn't
+  notice the kneeling/dying pose play before death. Confirmed via the
+  engine code that this project has no "massive damage = instant death"
+  rule -- a token always passes through `dying` first, even from a single
+  overkill hit -- so the animation almost certainly did play; the likely
+  explanation is that this pack's own dying pose
+  (`Skeletons_Inactive_Floor_Pose`) and its death pose (`Skeletons_Death`)
+  both read as "a skeleton collapsed on the floor," unlike the hero/Imp
+  models where kneeling (upright) and death (a distinctly different
+  collapsed pose) are easy to tell apart at a glance -- a real cosmetic
+  quirk of this specific pack's pose choices, not a wiring bug (the dying
+  key's resolution was already independently confirmed via the functional
+  test above). Left as-is; revisit the specific pose choice later only if
+  it actually causes confusion at the table.
   Adventurers (a real per-hero-name option, same pack family) and the
   KayKit Dungeon Remastered environment kit remain downloaded and cataloged
   only -- not wired up this pass.
 
-Below is the untouched research from 2026-09-11 for the bigger, still-open
-questions this phase hasn't tackled yet (a unified retargeting pipeline,
-paid packs, AI generation):
+Phase 8's first item complete and live-verified. Below is the untouched
+research from 2026-09-11 for the bigger, still-open questions this phase
+hasn't tackled yet (a unified retargeting pipeline, paid packs, AI
+generation):
 
 **Mixamo (Adobe, free) -- worth investigating before anything else, possibly
 even before this phase formally starts.** Free rigged characters, a huge
