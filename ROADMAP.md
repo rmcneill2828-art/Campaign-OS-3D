@@ -539,12 +539,36 @@ something a generic script generates.
   piece's own measured `highest.y`) to `build_entrance_hall.gd`'s offset
   dict, so it's placed 0.198m lower and its top lands exactly on the grid
   plane -- same "measure the real thing" fix pattern as the torch/chest
-  offsets, just aligning a TOP surface instead of a bottom one. Also
-  confirmed unrelated to this: the earlier separate `loadState()` bug (a
-  saved session never picking up a newly-added map even after a server
-  restart, since it only re-seeds when no stateFile exists yet at all) --
-  fixed the same day by merging new `seedState()` maps into an
-  already-persisted session on load.
+  offsets, just aligning a TOP surface instead of a bottom one -- a real,
+  correct fix, but **not actually the cause of what the user kept seeing**
+  (see the camera-centering fix immediately below, found once the user
+  confirmed a full Godot restart still didn't help, which pointed at
+  something more fundamental than a single piece's placement).
+- [x] **The real cause of the "floor level" report: the camera never
+  re-centered on a map switch -- 2026-09-13, found and fixed.** After the
+  room-floor fix above still didn't resolve it even across a full Godot
+  restart, a headless diagnostic that loads the actual saved
+  `entrance_hall.tscn` and measures every top-level piece's real rendered Y
+  range (not just each piece in isolation, which had already looked
+  correct) confirmed the scene geometry itself was genuinely correct --
+  every piece flush at y=0 as intended. The actual bug was in
+  `Main.gd`/`PlayerView.gd`'s own `_apply_state()`: `_camera_centered` was
+  a one-shot flag that ran `_camera_rig.center_on(_board.board_center())`
+  exactly once, the very first time a map ever loaded after connecting --
+  never again. With only one map (Prototype Chamber) that was invisible;
+  the moment a second, differently-sized/positioned map (Entrance Hall)
+  existed to switch to, the camera stayed pointed at Prototype Chamber's
+  old board center forever after, making Entrance Hall's real (correct)
+  geometry look arbitrarily misaligned/floating relative to the grid
+  overlay depending on where the camera happened to be looking from --
+  exactly the visual reported, and immune to a client restart because a
+  fresh client still loads Prototype Chamber first by default before any
+  switch_map. Fixed in both `Main.gd` and `PlayerView.gd` (both had the
+  identical bug, PlayerView never exercised with a second map before now)
+  by tracking the last map name actually centered on, re-centering whenever
+  it changes rather than only once ever -- matches how a real DM's own view
+  would jump to a new scene, without fighting a player's manual pan/orbit/
+  zoom on whatever map they're currently looking at between polls.
   **Known unverified guesses, flagged for a live look rather than assumed
   correct** (same "build first, verify from a real screenshot, fix from
   there" pattern Prototype Chamber and every KayKit/Meshy/Higgsfield model

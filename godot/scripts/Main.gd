@@ -136,7 +136,7 @@ var _last_target_names: Array[String] = [] # last set the spell-target UI was bu
 
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
-var _camera_centered := false
+var _last_centered_map_name := "" # not just a one-time flag -- see _apply_state()'s own use, below
 var _action_in_flight := false
 
 var _right_press_pos := Vector2.ZERO
@@ -269,9 +269,22 @@ func _apply_state(state: Dictionary) -> void:
 	var feet_per_square: float = float(map_data.get("feetPerSquare", 5))
 	_board.build(columns, rows, feet_per_square, MapScenes.resolve(map_name))
 
-	if not _camera_centered:
+	# Re-centers whenever the ACTIVE map actually changes, not just once ever --
+	# the original one-shot flag correctly centered on whichever map happened
+	# to be active when the client first connected, then never again, so
+	# switching to a second map with a different board size/position (Phase 4's
+	# "Entrance Hall", much smaller than "Prototype Chamber") left the camera
+	# pointed at the OLD map's board_center() forever after, which read as a
+	# baffling "everything is floating/misaligned" visual (reported live as
+	# "floor level" wrong, though the actual saved scene geometry was already
+	# correct -- confirmed by direct measurement before this fix) rather than
+	# the camera-framing bug it actually was. A named map switch is the right
+	# trigger to re-center on (matches how a real DM's view would jump to the
+	# new scene), not e.g. every state poll, which would fight the player's
+	# own manual pan/orbit/zoom on the map they're currently looking at.
+	if map_name != _last_centered_map_name:
 		_camera_rig.center_on(_board.board_center())
-		_camera_centered = true
+		_last_centered_map_name = map_name
 
 	var tokens_on_map: Array = []
 	var seen_ids := {}

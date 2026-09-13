@@ -39,7 +39,7 @@ const TokenScene := preload("res://scenes/Token.tscn")
 @onready var _combat_log_list: VBoxContainer = $HUD/SidePanel/SidePanelScroll/SidePanelList/CombatLogList
 
 var _tokens := {} # token id (String) -> Token node
-var _camera_centered := false
+var _last_centered_map_name := "" # not just a one-time flag -- see _apply_state()'s own use, below
 
 func _ready() -> void:
 	_poll_timer.wait_time = poll_interval_seconds
@@ -89,9 +89,14 @@ func _apply_state(state: Dictionary, visibility: Dictionary) -> void:
 	var feet_per_square: float = float(map_data.get("feetPerSquare", 5))
 	_board.build(columns, rows, feet_per_square, MapScenes.resolve(map_name))
 
-	if not _camera_centered:
+	# Re-centers whenever the ACTIVE map actually changes -- same fix as
+	# Main.gd's own _apply_state(), for the same reason: a one-shot flag left
+	# this view's camera pointed at whichever map was active when it first
+	# connected, forever, once a second differently-sized map existed to
+	# switch to.
+	if map_name != _last_centered_map_name:
 		_camera_rig.center_on(_board.board_center())
-		_camera_centered = true
+		_last_centered_map_name = map_name
 
 	# The one filter this entire client exists to apply: server-computed
 	# visibleTokenIds already folds in BOTH hiddenFromPlayers and real line of
