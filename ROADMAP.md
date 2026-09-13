@@ -1169,6 +1169,23 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   "Roll Initiative (1d20 + DEX)" button and a manual "Set to <N>" row,
   placed first in the list since it's the thing a DM reaches for before
   anything else once a fight starts.
+  **Follow-up, found live -- 2026-09-13, fixed.** User clicked Roll
+  Initiative and saw no confirmation at all. Checked the live server
+  directly (`GET /state`) rather than guessing: the roll HAD actually
+  succeeded (the token's initiative was a real, plausible DEX+d20 result),
+  but the message wasn't anywhere in the visible log -- it turned out
+  `Main.gd`'s `_status_label` only ever shows `state.log[0]`, the single
+  most recent entry, trivially pushed out by the very next action or even
+  the next 1-second poll tick if anything else happened first. This
+  wasn't initiative-specific at all -- every action's confirmation was
+  this easy to miss, `PlayerView.gd` just never had the problem because
+  it already has a real scrolling combat log. Added the same thing to
+  `Main.gd`'s own view (`_update_combat_log()`, ported directly from
+  `PlayerView.gd`'s own function) rather than patching initiative alone
+  -- a new `CombatLogPanel` on the left side below the hint label,
+  listing the full `state.log` (newest first, matching its own storage
+  order), so a DM can actually see what just happened and scroll back
+  through recent history instead of only ever seeing the latest line.
 - [x] **No Advantage/Disadvantage toggle anywhere -- 2026-09-13, fixed.**
   Turned out bigger than expected: `attack()`/`castSpell()` already
   accepted `options.advantage`/`options.disadvantage` server-side, but

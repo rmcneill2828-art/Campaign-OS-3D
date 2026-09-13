@@ -99,6 +99,26 @@ theme_override_constants/shadow_offset_x = 1
 theme_override_constants/shadow_offset_y = 1
 autowrap_mode = 2
 
+[node name="CombatLogPanel" type="PanelContainer" parent="HUD"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 310.0
+offset_right = -380.0
+offset_bottom = -16.0
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="CombatLogScroll" type="ScrollContainer" parent="HUD/CombatLogPanel"]
+horizontal_scroll_mode = 0
+follow_focus = true
+
+[node name="CombatLogList" type="VBoxContainer" parent="HUD/CombatLogPanel/CombatLogScroll"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
 [node name="HintTimer" type="Timer" parent="HUD"]
 wait_time = 3.0
 one_shot = true

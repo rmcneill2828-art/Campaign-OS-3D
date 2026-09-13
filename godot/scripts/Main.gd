@@ -75,6 +75,16 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
 @onready var _open_player_window_button: Button = $HUD/OpenPlayerWindowButton
 
+## Found live: a DM clicked Roll Initiative and saw no confirmation at all --
+## the action DID succeed server-side (confirmed by checking /state directly),
+## but _status_label only ever shows state.log[0], the single most recent
+## entry, easy to miss and trivially pushed out by the very next action or
+## poll tick. PlayerView.gd already solved this for the player-facing view
+## with a real scrolling combat log; this mirrors that exact pattern
+## (newest-first, matching state.log's own storage order) for the DM's own
+## view too, rather than patching initiative specifically.
+@onready var _combat_log_list: VBoxContainer = $HUD/CombatLogPanel/CombatLogScroll/CombatLogList
+
 ## Applies to whichever roll comes next for the selected token -- attack (right-click),
 ## saving throw, ability check, or a spell's own attack roll -- rather than a separate
 ## advantage/disadvantage control duplicated in each of those sections. Matches how a real
@@ -336,6 +346,7 @@ func _apply_state(state: Dictionary) -> void:
 	_sync_condition_buttons(tokens_on_map)
 	_sync_spell_targets(tokens_on_map)
 	_update_status_label(state, map_name, tokens_on_map)
+	_update_combat_log(state.get("log", []))
 
 ## Reflects the selected token's real conditions array onto the toggle
 ## buttons -- set_pressed_no_signal(), not the plain button_pressed property,
@@ -421,6 +432,28 @@ func _update_status_label(state: Dictionary, map_name: String, tokens_on_map: Ar
 		last_log = str(log[0])
 
 	_status_label.text = "Connected -- %s\n%s%s\n%s" % [map_name, turn_line, selection_note, last_log]
+
+## Mirrors PlayerView.gd's own _update_combat_log() exactly -- see this
+## project's own note on _combat_log_list above for why the DM's view needed
+## this too, not just the player-facing one. Newest-first, matching
+## state.log's own storage order (see engine-server/engine/dmBridge.js's
+## appendLog), so the log reads top-to-bottom the same direction a DM's eye
+## naturally lands after an action.
+func _update_combat_log(log: Array) -> void:
+	for child in _combat_log_list.get_children():
+		child.queue_free()
+	if log.is_empty():
+		var empty_label := Label.new()
+		empty_label.text = "No actions yet."
+		empty_label.add_theme_font_size_override("font_size", 14)
+		_combat_log_list.add_child(empty_label)
+		return
+	for entry in log:
+		var label := Label.new()
+		label.text = str(entry)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.add_theme_font_size_override("font_size", 14)
+		_combat_log_list.add_child(label)
 
 func _on_next_turn_pressed() -> void:
 	_send_action({"type": "next_turn"})
