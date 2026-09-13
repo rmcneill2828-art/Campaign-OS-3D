@@ -250,20 +250,25 @@ item if this content's licensing status ever actually matters (e.g.
 distributing this repo's assets beyond personal use), rather than an
 established, confirmed fact the way the CC0/QAL findings above are.
 
-### Higgsfield "3D Jutsu" catalog (test import, Phase 8)
+### Higgsfield "3D Jutsu" catalog (Phase 8 test import, now a real Phase 4 map)
 
-**`Environment/higgsfield-test/`** -- 3 real assets pulled from Higgsfield's
-"3D Jutsu" scene-builder catalog (a Composio-connected toolkit) to test the
-pipeline, not yet a real Phase 4 map-building decision: `dun_wall_torch`,
-`dun_treasure_chest`, `dun_corridor_straight`. The catalog itself turned out
-to be a genuinely rich, cohesive modular dungeon set (85 hits searching
-just "dungeon" -- full corridor pieces, walls, stairs, doors, dense
-atmospheric props) -- see `ROADMAP.md`'s Phase 8 entry for the full
+**`Environment/higgsfield-test/`** -- 8 real assets pulled from Higgsfield's
+"3D Jutsu" scene-builder catalog (a Composio-connected toolkit): the
+original 3 test pieces (`dun_wall_torch`, `dun_treasure_chest`,
+`dun_corridor_straight`) plus 5 more pulled specifically to build a real
+second map (`dun_room_floor`, `dun_room_wall`, `dun_arch_doorway`,
+`dun_wall_corner`, `dun_wall_doorway`) -- see `godot/scenes/maps/
+entrance_hall.tscn` and `ROADMAP.md`'s Phase 4 entry. The catalog itself
+turned out to be a genuinely rich, cohesive modular dungeon set (85 hits
+searching just "dungeon" -- full corridor pieces, walls, stairs, doors,
+dense atmospheric props) -- see `ROADMAP.md`'s Phase 8 entry for the full
 exploration, including a real pipeline bug found and fixed
 (`_fixed.tscn` alongside each raw `.glb`: Godot's glTF importer leaves
 `vertex_color_use_as_albedo` off, so every piece renders flat white despite
 carrying real per-vertex color data underneath -- confirmed directly, not
-assumed, and fixed via `godot/tools/fix_higgsfield_vertex_colors.gd`).
+assumed, and fixed via `godot/tools/fix_higgsfield_vertex_colors.gd`; all 8
+pieces have a `_fixed.tscn` counterpart, and only the fixed versions are
+ever referenced from `build_entrance_hall.gd`/the saved map scene).
 
 **Licensing: genuinely unresolved, not established the way CC0/QAL are
 above.** Higgsfield's own Terms of Use has no section covering the

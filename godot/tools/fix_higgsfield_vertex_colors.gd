@@ -28,6 +28,11 @@ const FIXES := {
 	"res://assets/Environment/higgsfield-test/dun_wall_torch.glb": "res://assets/Environment/higgsfield-test/dun_wall_torch_fixed.tscn",
 	"res://assets/Environment/higgsfield-test/dun_treasure_chest.glb": "res://assets/Environment/higgsfield-test/dun_treasure_chest_fixed.tscn",
 	"res://assets/Environment/higgsfield-test/dun_corridor_straight.glb": "res://assets/Environment/higgsfield-test/dun_corridor_straight_fixed.tscn",
+	"res://assets/Environment/higgsfield-test/dun_room_floor.glb": "res://assets/Environment/higgsfield-test/dun_room_floor_fixed.tscn",
+	"res://assets/Environment/higgsfield-test/dun_room_wall.glb": "res://assets/Environment/higgsfield-test/dun_room_wall_fixed.tscn",
+	"res://assets/Environment/higgsfield-test/dun_arch_doorway.glb": "res://assets/Environment/higgsfield-test/dun_arch_doorway_fixed.tscn",
+	"res://assets/Environment/higgsfield-test/dun_wall_corner.glb": "res://assets/Environment/higgsfield-test/dun_wall_corner_fixed.tscn",
+	"res://assets/Environment/higgsfield-test/dun_wall_doorway.glb": "res://assets/Environment/higgsfield-test/dun_wall_doorway_fixed.tscn",
 }
 
 func _init() -> void:

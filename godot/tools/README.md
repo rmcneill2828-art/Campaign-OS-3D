@@ -84,6 +84,28 @@ checking without a live `node server.js` or opening the editor GUI.
   Re-run both for any future Higgsfield catalog import -- this is very
   likely a pipeline-wide issue, not specific to the 3 pieces tested so far.
 
+- **`measure_higgsfield_dungeon.gd`** / **`build_entrance_hall.gd`** (Phase
+  4/8) -- the same measure-then-build pattern as `measure_pieces.gd` +
+  `build_prototype_chamber.gd`, applied to the second hand-built map,
+  "Entrance Hall" (`scenes/maps/entrance_hall.tscn`), using 8 Higgsfield "3D
+  Jutsu" pieces (the vertex-color-fixed `.tscn` versions -- see
+  `fix_higgsfield_vertex_colors.gd` above) instead of Kenney's kit. The
+  measure tool confirmed Higgsfield's modules are natively 4m x 4m, exactly
+  2x2 of this project's own 2m grid cells, before any placement math was
+  written. The build tool composes a self-contained arch-doorway entrance
+  and straight-corridor tunnel (each already walled on its own, no separate
+  wall pieces needed) leading into a 2x2-module room built from separate
+  floor/wall/corner pieces, with a doorway left open in the one wall
+  segment that actually faces the corridor. See `ROADMAP.md`'s Phase 4
+  entry for the full layout, the known corner-rotation/torch-mounting
+  guesses still awaiting a live look, and the accepted "L-shaped void" gap
+  where the narrower tunnel meets the wider room.
+- **`smoke_test_entrance_hall.gd`** -- confirms `MapScenes.resolve("Entrance
+  Hall")` resolves to a real path and that `entrance_hall.tscn` loads with
+  exactly the 21 nodes `build_entrance_hall.gd` is expected to produce, the
+  same regression-check role `smoke_test_main.gd`/`smoke_test_player_view.gd`
+  play for their own scenes.
+
 **Second gotcha: a bare `--script` `SceneTree` tool's `_init()` runs before
 any manually `add_child()`-ed node has had a real `_ready()`/`NOTIFICATION_ENTER_TREE`
 pass.** A `Node3D`'s `global_transform` silently reads back as identity

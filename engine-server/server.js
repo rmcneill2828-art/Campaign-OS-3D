@@ -100,6 +100,32 @@ function seedState() {
   const spawned = CampaignOS.parseCommand(state, "spawn 2 goblin");
   state = spawned.state;
 
+  // Phase 8: a second, real hand-built map -- an entrance/corridor/room dungeon built
+  // from the Higgsfield "3D Jutsu" catalog (see godot/tools/build_entrance_hall.gd and
+  // ROADMAP.md's Phase 8 entry). Registered here via setMapImage/setMapGrid WITHOUT
+  // calling setActiveMap -- "Prototype Chamber" stays the default active map, this one
+  // just becomes available to switch_map to (via the DM Assistant or a direct action),
+  // matching the exact "available maps a DM can switch between" model this engine
+  // already supports. No tokens start on it; switching maps never moves a token off
+  // its own mapName, so it's simply empty until a DM populates it.
+  const entranceHallMap = "Entrance Hall";
+  state = CampaignOS.setMapImage(state, entranceHallMap, null, { sourcePath: "3d-generated" });
+  state = CampaignOS.setMapGrid(state, entranceHallMap, 4, 8);
+
+  // Wall segments in vertex space (see addWall's own doc comment) tracing the ACTUAL
+  // solid geometry build_entrance_hall.gd placed -- not a simple rectangle, since the
+  // entrance/corridor (1 module/2 cells wide) is narrower than the room behind it (2
+  // modules/4 cells wide). The south end (y=0, the entrance itself) is deliberately
+  // left open -- that's the dungeon's entrance from "outside," not a wall -- and the
+  // door-aligned segment of the room's south wall (vertex x 0..2) is left open too,
+  // the one actual connection between the corridor and the room.
+  state = CampaignOS.addWall(state, entranceHallMap, 0, 0, 0, 4); // west side of the entrance/corridor tunnel
+  state = CampaignOS.addWall(state, entranceHallMap, 2, 0, 2, 4); // east side of the tunnel (nothing connects sideways there)
+  state = CampaignOS.addWall(state, entranceHallMap, 2, 4, 4, 4); // room's south wall, solid half (east of the doorway)
+  state = CampaignOS.addWall(state, entranceHallMap, 0, 8, 4, 8); // room's north (far) wall
+  state = CampaignOS.addWall(state, entranceHallMap, 0, 4, 0, 8); // room's west wall
+  state = CampaignOS.addWall(state, entranceHallMap, 4, 4, 4, 8); // room's east wall
+
   return state;
 }
 

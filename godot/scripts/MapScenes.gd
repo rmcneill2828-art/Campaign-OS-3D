@@ -9,7 +9,8 @@ class_name MapScenes
 ## drift risk here too. Extend SCENES as more real maps get built.
 
 const SCENES := {
-	"Prototype Chamber": "res://scenes/maps/prototype_chamber.tscn"
+	"Prototype Chamber": "res://scenes/maps/prototype_chamber.tscn",
+	"Entrance Hall": "res://scenes/maps/entrance_hall.tscn"
 }
 
 static func resolve(map_name: String) -> String:

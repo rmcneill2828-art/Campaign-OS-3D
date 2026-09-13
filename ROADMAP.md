@@ -492,10 +492,59 @@ something a generic script generates.
   the existing tokens (Darkhawk, Wren, 2 goblins) render correctly inside
   the new room with their HP bars/labels intact, unaffected by the switch
   from a procedural to a hand-built floor. No follow-up fixes needed.
+- [x] **Second hand-built map: "Entrance Hall" (entrance -> corridor -> room)
+  -- 2026-09-13, built; pending live visual verification.** User request:
+  "lets build a simple dungeon from scratch - entrance , corridor and room."
+  Built from 8 Higgsfield "3D Jutsu" catalog pieces (see `godot/assets/
+  README.md`'s Higgsfield section) instead of Kenney, reusing the exact same
+  "measure the real thing, generate the scene via script, verify against the
+  saved `.tscn`'s raw transforms" discipline as Prototype Chamber above:
+  - `godot/tools/measure_higgsfield_dungeon.gd` measured all 8 pieces' real
+    AABBs first, confirming Higgsfield's modules are natively 4m x 4m --
+    exactly 2x2 of this project's own 2m grid cells at 5 ft/square.
+  - `godot/tools/build_entrance_hall.gd` composes them into
+    `res://scenes/maps/entrance_hall.tscn` (21 nodes): a self-contained arch
+    doorway (entrance, module row 1), a self-contained straight corridor
+    (module row 2), a 2x2-module room (4 floor tiles) south of it, its walls
+    built from separate wall/corner/doorway pieces (the room's south wall
+    has a doorway aligned with the corridor -- its one real connection --
+    and a solid segment on the other half), plus 2 torches and 1 treasure
+    chest as props.
+  - `MapScenes.gd`'s `SCENES` dict now has an "Entrance Hall" entry; a
+    Godot headless smoke test (`godot/tools/smoke_test_entrance_hall.gd`)
+    confirms `MapScenes.resolve("Entrance Hall")` resolves to a real,
+    loadable scene with exactly the expected 21 children.
+  - `engine-server/server.js`'s `seedState()` registers "Entrance Hall" as a
+    **second** map (4 columns x 8 rows) alongside Prototype Chamber, with 6
+    real wall segments matching the built geometry exactly (both sides of
+    the entrance/corridor tunnel, the room's 3 solid walls, and the room's
+    south wall's solid half) -- deliberately does NOT call `setActiveMap` on
+    it, so Prototype Chamber stays the default and Entrance Hall is only
+    reached via `switch_map` (through the DM Assistant or a manual action).
+    3 new tests in `engine-server/tests/entranceHall.test.js` confirm the
+    map is registered without becoming active, that `switch_map` actually
+    moves between the two maps and back, and -- most importantly -- that
+    real line-of-sight is blocked through the solid wall sections and open
+    through the one doorway that connects the corridor to the room. All 19
+    engine-server tests pass (was 16).
+  **Known unverified guesses, flagged for a live look rather than assumed
+  correct** (same "build first, verify from a real screenshot, fix from
+  there" pattern Prototype Chamber and every KayKit/Meshy/Higgsfield model
+  used): the 4 room corner pieces' rotations (0/90/180/270, the most
+  defensible guess without being able to see which way the piece is
+  actually authored to face); the 2 torches' wall-mounting rotations; and a
+  known, deliberately-accepted **gap**, not a bug -- the tunnel (entrance +
+  corridor) is only 1 module (2 cells) wide while the room is 2 modules (4
+  cells) wide, so cells x=3-4 for rows y=1-4 fall inside the engine's
+  rectangular columns x rows grid bounds but have no rendered floor/walls at
+  all (an "L-shaped void"). Left alone rather than engineered around -- a
+  token would only end up there via deliberate DM action, matching this
+  project's existing pattern of accepting known low-priority limitations
+  rather than preemptively solving problems nobody has hit yet.
 - [ ] Per-map lighting/mood (a hand-built room may want its own atmosphere --
   torches, color grading -- rather than the single fixed sky+sun every map
-  currently shares) -- not started; the single existing map still uses the
-  one shared sky+sun every map has had since Phase 0.
+  currently shares) -- not started; both existing maps still use the one
+  shared sky+sun every map has had since Phase 0.
 
 ## Phase 5 -- Line of sight / fog of war in 3D
 
