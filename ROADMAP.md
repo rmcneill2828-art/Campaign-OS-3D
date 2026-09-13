@@ -699,16 +699,21 @@ exhaustion/legendary-action rules text. None of that needed reimplementing.
   blocked from working the whole time just because a narration command is
   also pending. On a successful response, refreshes the board immediately
   from the returned `state` rather than waiting for the next poll tick.
-  **Verified**: `Main.tscn` still instantiates headlessly with no script
-  errors after the new nodes/wiring, and a direct HTTP smoke test against
-  the real (non-test-overridden) default `dm-bridge/` path resolved
-  correctly end to end. **NOT yet verified live in Godot with a real
-  running `claude` CLI** -- typing an actual narration command, watching
-  `node dm-bridge/watch.js`'s own console output, and seeing Claude's
-  actions land on the 3D board all still need a human running the full
-  3-process stack (`node server.js` + `node dm-bridge/watch.js` + Godot) at
-  least once. Flagged explicitly rather than assumed to work from the
-  server-side tests and headless checks alone.
+  **Verified live end to end, 2026-09-13 (user-confirmed).** One real
+  snag on the way, worth recording: the first live attempt hit `HTTP 404`
+  on `/dm-command` -- not a bug in the new code, but the user's already-
+  running `node server.js` process predating this phase's changes (Node
+  doesn't hot-reload). Restarting it picked up the new route immediately.
+  Once running, the full 3-process stack (`node server.js` +
+  `node dm-bridge/watch.js` + Godot) worked exactly as designed: typing
+  "Three goblins emerge from the trees" in the DM Assistant panel produced
+  a real Claude response ("Three goblins emerge from the trees, joining the
+  fray!") and three real goblin tokens spawned on the 3D board via the
+  actual engine (each with its own real 7/7 HP bar, matching the SRD
+  goblin stat block), with the board refreshing immediately, no extra poll
+  tick needed.
+
+Phase 7 complete.
 
 ## Phase 8 -- Art investment (later, per decision #4 above)
 
