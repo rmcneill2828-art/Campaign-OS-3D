@@ -42,24 +42,43 @@ const TREASURE_CHEST := ASSETS + "dun_treasure_chest_fixed.tscn"
 # different things need aligning to y=0 depending on the piece's shape,
 # and this one dict covers both (the formula in _place() is the same
 # either way: position.y = -offset):
-#   - Free-standing props/walls/corner pieces need their LOWEST point at
-#     y=0 (stand ON the ground) -- offset is that piece's own lowest.y
-#     (WALL_TORCH, TREASURE_CHEST here; the wall/corner/doorway pieces
-#     measure close enough to already-flush, or with a deliberate few-cm
-#     embed matching how modular kits usually avoid a visible gap between
-#     a wall's base and the floor, that neither needed an explicit entry).
+#   - Free-standing props/walls/corners/tunnel modules need their LOWEST
+#     point at y=0 (stand ON the ground) -- offset is that piece's own
+#     lowest.y.
 #   - ROOM_FLOOR needs its TOP surface at y=0 instead (it's a genuinely
-#     free-standing floor tile, unlike the corridor/arch modules where the
-#     floor is baked into the bottom of an already-flush combined mesh) --
-#     offset is that piece's own highest.y (its full 0.198m thickness),
-#     so placing it 0.198m LOWER brings its walkable top up to y=0. Found
-#     live: without this, the room's floor rendered a visible ~0.2m step
-#     up from the corridor floor it connects to (user: "only issue is
-#     floor level") -- confirmed by re-measuring rather than guessed.
+#     free-standing floor tile, meant to be walked ON, not through) --
+#     offset is that piece's own highest.y.
+#
+# v2, EVERY entry corrected -- found live, the hard way: every piece in
+# this Higgsfield catalog turns out to be vertically CENTERED on its own
+# origin, not flush-bottom (Kenney's convention, which is what the v1
+# offsets above wrongly assumed for anything not explicitly listed, i.e.
+# everything except WALL_TORCH/TREASURE_CHEST/ROOM_FLOOR). Worse, even
+# those 3 v1 offsets were themselves measured wrong: measure_higgsfield_
+# dungeon.gd's original version trusted MeshInstance3D.global_transform in
+# a bare --script SceneTree, which silently returns a partially-composed
+# transform for any node with real translation in its own nested wrapper
+# hierarchy (no error, no identity fallback -- just plausible-looking
+# wrong numbers) since a bare --script tool never gets the real process
+# frame Godot needs to propagate a freshly add_child()-ed node's transform
+# down through its children. Every one of these 8 pieces has that kind of
+# nesting (from fix_higgsfield_vertex_colors.gd's own wrapper structure).
+# Found live: with the v1 offsets, tokens standing in the corridor/entrance
+# rendered at roughly wall-TOP height over a visibly deep, dark recess --
+# ARCH_DOORWAY/CORRIDOR_STRAIGHT's real floor sat 1.27m underground the
+# whole time, not flush at 0 as the buggy measurement claimed. Re-measured
+# every piece with a fixed tool (manually composing local .transform up
+# the parent chain instead of trusting the cache) and corrected every
+# entry below -- see that tool's own header comment for the full story.
 const PROP_GROUND_OFFSET := {
-	WALL_TORCH: -0.06,
-	TREASURE_CHEST: -0.030412,
-	ROOM_FLOOR: 0.197893,
+	ARCH_DOORWAY: -1.27,
+	CORRIDOR_STRAIGHT: -1.27,
+	ROOM_WALL: -1.517863,
+	WALL_DOORWAY: -1.517061,
+	WALL_CORNER: -1.505448,
+	WALL_TORCH: -0.501524,
+	TREASURE_CHEST: -0.439507,
+	ROOM_FLOOR: 0.091833, # top-aligned, not bottom -- see comment above
 }
 
 var _root: Node3D

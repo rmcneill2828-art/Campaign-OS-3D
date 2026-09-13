@@ -100,6 +100,12 @@ checking without a live `node server.js` or opening the editor GUI.
   entry for the full layout, the known corner-rotation/torch-mounting
   guesses still awaiting a live look, and the accepted "L-shaped void" gap
   where the narrower tunnel meets the wider room.
+  **`measure_higgsfield_dungeon.gd` is on its 2nd version** -- its first
+  version trusted `global_transform` directly and got every single one of
+  the 8 pieces' Y-offsets wrong (see the fourth gotcha below); it now
+  manually composes each mesh's real world transform instead of trusting
+  the cache, which is the only version of this tool that should ever be
+  copied as a template again.
 - **`smoke_test_entrance_hall.gd`** -- confirms `MapScenes.resolve("Entrance
   Hall")` resolves to a real path and that `entrance_hall.tscn` loads with
   exactly the 21 nodes `build_entrance_hall.gd` is expected to produce, the
@@ -132,8 +138,45 @@ glTF-reading tool outside Godot), a `.tscn` destination does the job with
 zero extra machinery -- see `fix_higgsfield_vertex_colors.gd`'s own use of
 this.
 
-**Gotcha: a brand new `class_name` isn't visible to these scripts until the
-project's global class cache knows about it.** Adding a new `class_name`
+**Fourth gotcha, and the most dangerous one found so far: in a bare
+`--script` `SceneTree` tool, `MeshInstance3D.global_transform` can silently
+return a WRONG (not identity, not an error -- just plausible-looking wrong)
+transform for any node with real translation in its own nested wrapper
+hierarchy.** This is a worse variant of the second gotcha above: that one
+at least fails obviously (null `@onready` vars, identity transform on a
+never-moved node). This one doesn't -- it returns SOME transform, composed
+from part of the ancestor chain but not all of it, because a freshly
+`add_child()`-ed node's transform doesn't get pushed down through its own
+children without a real process frame, which a bare `--script` tool never
+gets. Found live, the hard way: `measure_higgsfield_dungeon.gd`'s first
+version measured every one of the 8 Entrance Hall pieces as flush-bottom
+(`lowest.y` at or near 0) using plain `global_transform` -- every one of
+those numbers looked completely plausible, `build_entrance_hall.gd` used
+them to place all 8 pieces, and the generated scene loaded and smoke-tested
+fine. It wasn't until tokens were spawned live in Godot (a real running
+process, unaffected by this bug) and appeared to be standing at wall-TOP
+height over a visibly deep, dark recess that anything looked wrong at all
+-- the corridor/arch modules' real floor was actually 1.27m underground the
+entire time, because those pieces are vertically CENTERED on their own
+origin, not flush-bottom, and the buggy measurement couldn't see that.
+Fix: never trust `global_transform` (or `get_aabb()` combined with it) in a
+bare `--script` tool for any node with meaningful nesting -- manually
+compose each node's own LOCAL `.transform` by walking `get_parent()` up to
+the root instead (see `measure_higgsfield_dungeon.gd`'s own
+`_real_global_transform()` for the pattern: plain already-resolved
+`Transform3D` multiplication, no lazy/dirty propagation involved, correct
+with zero process frames). `measure_pieces.gd`/`build_prototype_chamber.gd`
+happened not to hit this (Kenney's GLBs don't have the same nested-wrapper
+translation structure), and the `test_*_token.gd/.tscn` tools were already
+immune for an unrelated reason (real scene + `await
+get_tree().process_frame`, which gives Godot the process frame this bug is
+actually missing) -- but any FUTURE bare `--script` tool measuring a
+piece's real world position, especially anything that went through
+`fix_higgsfield_vertex_colors.gd`'s wrapper-adding process, needs this
+fix from the start, not discovered after guessing wrong for a whole map.
+
+**Fifth gotcha: a brand new `class_name` isn't visible to these scripts until
+the project's global class cache knows about it.** Adding a new `class_name`
 (e.g. `MapScenes`, Phase 6) and immediately running a `--headless --script`
 tool against code that references it fails with `Identifier "X" not
 declared in the current scope"`, even though the exact same code opens fine

@@ -527,76 +527,79 @@ something a generic script generates.
     real line-of-sight is blocked through the solid wall sections and open
     through the one doorway that connects the corridor to the room. All 19
     engine-server tests pass (was 16).
-  **Live-verified fix: room floor sat ~0.2m too high -- 2026-09-13,
-  fixed.** User feedback after switching to the map live: "looks good -
-  only issue is floor level." Re-measuring confirmed it: `dun_room_floor`
-  is a genuinely free-standing floor tile (0.198m thick), unlike the
-  corridor/arch modules where the floor is baked flush into the bottom of
-  an already-flush combined mesh -- placing it the same "leave at its own
-  origin" way left its walkable TOP surface 0.198m above y=0 (the grid
-  overlay's fixed height), a visible step up from the corridor floor,
-  which sits flush at 0. Fixed by adding `ROOM_FLOOR: 0.197893` (that
-  piece's own measured `highest.y`) to `build_entrance_hall.gd`'s offset
-  dict, so it's placed 0.198m lower and its top lands exactly on the grid
-  plane -- same "measure the real thing" fix pattern as the torch/chest
-  offsets, just aligning a TOP surface instead of a bottom one -- a real,
-  correct fix, but **not actually the cause of what the user kept seeing**
-  (see the camera-centering fix immediately below, found once the user
-  confirmed a full Godot restart still didn't help, which pointed at
-  something more fundamental than a single piece's placement).
-- [x] **The real cause of the "floor level" report: the camera never
-  re-centered on a map switch -- 2026-09-13, found and fixed.** After the
-  room-floor fix above still didn't resolve it even across a full Godot
-  restart, a headless diagnostic that loads the actual saved
-  `entrance_hall.tscn` and measures every top-level piece's real rendered Y
-  range (not just each piece in isolation, which had already looked
-  correct) confirmed the scene geometry itself was genuinely correct --
-  every piece flush at y=0 as intended. The actual bug was in
-  `Main.gd`/`PlayerView.gd`'s own `_apply_state()`: `_camera_centered` was
-  a one-shot flag that ran `_camera_rig.center_on(_board.board_center())`
-  exactly once, the very first time a map ever loaded after connecting --
-  never again. With only one map (Prototype Chamber) that was invisible;
-  the moment a second, differently-sized/positioned map (Entrance Hall)
-  existed to switch to, the camera stayed pointed at Prototype Chamber's
-  old board center forever after, making Entrance Hall's real (correct)
-  geometry look arbitrarily misaligned/floating relative to the grid
-  overlay depending on where the camera happened to be looking from --
-  exactly the visual reported, and immune to a client restart because a
-  fresh client still loads Prototype Chamber first by default before any
-  switch_map. Fixed in both `Main.gd` and `PlayerView.gd` (both had the
-  identical bug, PlayerView never exercised with a second map before now)
-  by tracking the last map name actually centered on, re-centering whenever
-  it changes rather than only once ever -- matches how a real DM's own view
-  would jump to a new scene, without fighting a player's manual pan/orbit/
-  zoom on whatever map they're currently looking at between polls.
-- [x] **Final conclusion: the room-floor and camera fixes above were both
-  real, correct fixes -- but neither was actually the cause of the specific
-  visual the user kept pointing at (a grid line appearing to cross through
-  the tunnel's archway at roughly mid-height) -- 2026-09-13, confirmed via
-  a live in-engine test.** After both fixes still didn't resolve it, and
-  the user disagreed with the "camera/perspective" explanation with
-  specific reasoning ("the floor in the room matches the squares but the
-  floor in the entrance hall is lower than the squares"), rather than
-  guess again this was settled with an unambiguous live test: a throwaway
-  debug map (`entrance_hall_debug.tscn`, reachable via a direct
-  `switch_map` action so no DM/Claude call was needed) added a thick,
-  fully OPAQUE marker floating a fixed 0.5m above y=0 over the tunnel
-  (magenta) and the room (cyan) separately. If the tunnel's real floor
-  were lower than the room's, the magenta marker would hover visibly
-  higher above its own floor than cyan does above its floor -- the user
-  confirmed live that both hover the exact same height above their own
-  floor, proving the geometry was correct all along. The actual visual
-  (also visible in the marker screenshot itself: the cyan marker reads as
-  sitting near the TOP of the room's far wall, purely because that wall is
-  much farther from camera than the tunnel's near opening, and a level
-  marker read against a receding wall projects higher in frame the
-  farther away it is) was the grid overlay's normal perspective behavior
-  when viewed at an oblique angle through a tall, narrow opening -- not a
-  defect. All debug scaffolding (the debug scene, its 3 supporting
-  headless tools, the temporary `MapScenes.gd`/server map entries) was
-  removed once resolved; `entrance_hall.tscn` itself is unchanged from the
-  room-floor fix above (which remains correct and necessary, just wasn't
-  the visual's actual cause).
+  **The "floor level" saga -- 2026-09-13, several real but incomplete fixes
+  before finding the actual root cause.** User feedback after switching to
+  the map live: "looks good - only issue is floor level." What followed
+  was three rounds of genuine, verified-at-the-time fixes that each turned
+  out not to be the real cause, followed by the actual answer:
+  1. **Room floor sat ~0.2m too high.** `dun_room_floor` is a genuinely
+     free-standing floor tile; re-measuring (with the still-buggy
+     measurement approach at the time, see step 4) suggested its walkable
+     top sat 0.198m above the grid plane. Fixed by offsetting it down --
+     a real, still-correct fix, but not the cause of the reported visual.
+  2. **The camera never re-centered on a map switch.** `_camera_centered`
+     in `Main.gd`/`PlayerView.gd` was a one-shot flag: it centered the
+     camera once, on whichever map first loaded after connecting, and
+     never again. With only one map that was invisible; the moment a
+     second, differently-sized map (Entrance Hall) existed, the camera
+     stayed locked on Prototype Chamber's old center. A real bug, fixed by
+     tracking the last map name centered on and re-centering on every
+     change -- but still not the cause of the reported visual.
+  3. **A live marker test that gave a misleading "matches" result.** After
+     both fixes above still didn't resolve it, a throwaway debug map
+     floated opaque markers a fixed 0.5m above y=0 over the tunnel and the
+     room separately, and the user judged both to hover the same height
+     above their own floor. In hindsight this comparison was unreliable --
+     judging relative height between two markers at different distances
+     and against walls of different heights is exactly the kind of depth
+     perception a human eye gets wrong, the same category of illusion this
+     whole investigation kept (wrongly, in the end) reaching for as an
+     explanation.
+  4. **The actual root cause: every measurement tool in this pipeline was
+     silently wrong.** What actually broke the case open was real tokens
+     (goblins spawned by the DM assistant) landing at server-verifiable
+     grid coordinates right at the corridor/room threshold, rendering at
+     roughly WALL-TOP height over a visibly deep, dark, genuinely-textured
+     recess -- not a perspective illusion, not a void gap, a real recessed
+     floor. Investigating the doorway piece's own geometry directly (see
+     `godot/tools/README.md`'s fourth gotcha for the full technical story)
+     found it: `measure_higgsfield_dungeon.gd` had been using
+     `MeshInstance3D.global_transform` in a bare `--script` `SceneTree`
+     tool, which silently returns a WRONG (not identity, not an error --
+     just plausible-looking wrong) transform for any node with real
+     translation in its own nested wrapper hierarchy, because a bare
+     `--script` tool never gets the real process frame Godot needs to
+     propagate a freshly `add_child()`-ed node's transform down through
+     its children. Every one of the 8 Entrance Hall pieces has that kind
+     of nesting. The tool had been reporting every piece as flush-bottom
+     at y=0 the entire time; the corridor/arch modules are actually
+     vertically CENTERED on their own origin, so their real floor sat
+     1.27m underground from the very first build -- and so did every
+     wall/corner/torch/chest's true ground offset, all wrong in the same
+     way, all "confirmed correct" by the same broken measurement.
+  **The real fix**: rewrote `measure_higgsfield_dungeon.gd` to manually
+  compose each mesh's real world transform by walking `get_parent()` up
+  to the root (plain already-resolved `Transform3D` multiplication, no
+  lazy propagation involved, correct with zero process frames) instead of
+  trusting the cache, re-measured all 8 pieces, and corrected every entry
+  in `build_entrance_hall.gd`'s `PROP_GROUND_OFFSET` dict -- not just the
+  ones that had looked wrong. Verified with a second, equally
+  transform-bug-free diagnostic that every piece now sits genuinely flush:
+  tunnel modules' floors at y=0, walls' bases at y=0, room floor's
+  walkable top at y=0. Regenerated `entrance_hall.tscn`, re-ran the
+  headless smoke test (still 21/21 children, loads clean). All debug
+  scaffolding from steps 3-4 (the debug map, its supporting headless
+  tools, temporary `MapScenes.gd`/server map entries) removed once
+  resolved. The room-floor fix from step 1 and the camera fix from step 2
+  both remain in place -- genuinely correct, independently useful fixes,
+  just not the ones that mattered here.
+  **Lesson for next time, now documented as this project's most severe
+  headless-tooling gotcha** (`godot/tools/README.md`): never trust
+  `global_transform` in a bare `--script` tool for anything with
+  meaningful scene nesting, especially anything that went through
+  `fix_higgsfield_vertex_colors.gd`'s wrapper-adding process -- manually
+  compose local transforms instead, from the start, not after guessing
+  wrong for a whole map.
   **Known unverified guesses, flagged for a live look rather than assumed
   correct** (same "build first, verify from a real screenshot, fix from
   there" pattern Prototype Chamber and every KayKit/Meshy/Higgsfield model
