@@ -13,6 +13,13 @@ npm-debug.log*
 engine-server/state/*.json
 !engine-server/state/.gitkeep
 
+# Phase 7: runtime request/response files this server and dm-bridge/watch.js write at
+# play time (combat narration) -- generated locally, never meant to be committed. Same
+# entry, same reasoning, as Campaign-OS's own .gitignore for its identical dm-bridge/
+# folder -- these accidentally got committed once already (a live test session's real
+# request/response) before this entry existed; that commit was reverted.
+dm-bridge/*.json
+
 # OS cruft
 .DS_Store
 Thumbs.db
