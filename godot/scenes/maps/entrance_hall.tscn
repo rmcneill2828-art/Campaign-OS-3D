@@ -361,7 +361,7 @@ vertex_color_use_as_albedo = true
 metallic = 0.02
 roughness = 0.92
 
-[node name="EntranceHall" type="Node3D" unique_id=1217660995]
+[node name="EntranceHall" type="Node3D" unique_id=941797967]
 
 [node name="dun_arch_doorway2" type="Node3D" parent="." unique_id=1759615501 instance=ExtResource("1_mra2v")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 2)
@@ -400,7 +400,7 @@ metadata/extras = {
 }
 
 [node name="dun_room_floor2" type="Node3D" parent="." unique_id=1187297760 instance=ExtResource("3_aw4nt")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 10)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, -0.197893, 10)
 
 [node name="Dun Room Floor" type="Node3D" parent="dun_room_floor2" unique_id=936315423]
 metadata/extras = {
@@ -417,16 +417,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@2" type="Node3D" parent="." unique_id=446913059 instance=ExtResource("3_aw4nt")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 10)
+[node name="@Node3D@2" type="Node3D" parent="." unique_id=1752266656 instance=ExtResource("3_aw4nt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.197893, 10)
 
-[node name="Dun Room Floor" type="Node3D" parent="@Node3D@2" unique_id=1297184219]
+[node name="Dun Room Floor" type="Node3D" parent="@Node3D@2" unique_id=2011282909]
 metadata/extras = {
 "hf_asset": "019670b9-1d8a-44ec-b8b8-036aedad73d6",
 "hf_id": "955c4b35-ea28-4f76-8567-a2535993d3f6"
 }
 
-[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@2/Dun Room Floor" unique_id=2046295600]
+[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@2/Dun Room Floor" unique_id=1810813224]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0012835264, -0.09897233, 0)
 mesh = SubResource("ArrayMesh_x8xst")
 skeleton = NodePath("")
@@ -435,16 +435,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@3" type="Node3D" parent="." unique_id=917954878 instance=ExtResource("3_aw4nt")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 14)
+[node name="@Node3D@3" type="Node3D" parent="." unique_id=1735645171 instance=ExtResource("3_aw4nt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, -0.197893, 14)
 
-[node name="Dun Room Floor" type="Node3D" parent="@Node3D@3" unique_id=469635546]
+[node name="Dun Room Floor" type="Node3D" parent="@Node3D@3" unique_id=1390018162]
 metadata/extras = {
 "hf_asset": "019670b9-1d8a-44ec-b8b8-036aedad73d6",
 "hf_id": "955c4b35-ea28-4f76-8567-a2535993d3f6"
 }
 
-[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@3/Dun Room Floor" unique_id=1306329080]
+[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@3/Dun Room Floor" unique_id=353071825]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0012835264, -0.09897233, 0)
 mesh = SubResource("ArrayMesh_x8xst")
 skeleton = NodePath("")
@@ -453,16 +453,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@4" type="Node3D" parent="." unique_id=1034053220 instance=ExtResource("3_aw4nt")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 14)
+[node name="@Node3D@4" type="Node3D" parent="." unique_id=1588601176 instance=ExtResource("3_aw4nt")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, -0.197893, 14)
 
-[node name="Dun Room Floor" type="Node3D" parent="@Node3D@4" unique_id=1280999885]
+[node name="Dun Room Floor" type="Node3D" parent="@Node3D@4" unique_id=1848022380]
 metadata/extras = {
 "hf_asset": "019670b9-1d8a-44ec-b8b8-036aedad73d6",
 "hf_id": "955c4b35-ea28-4f76-8567-a2535993d3f6"
 }
 
-[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@4/Dun Room Floor" unique_id=1060590287]
+[node name="dun_room_floor" type="MeshInstance3D" parent="@Node3D@4/Dun Room Floor" unique_id=663037354]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0012835264, -0.09897233, 0)
 mesh = SubResource("ArrayMesh_x8xst")
 skeleton = NodePath("")
@@ -507,16 +507,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@5" type="Node3D" parent="." unique_id=716518394 instance=ExtResource("5_wu216")]
+[node name="@Node3D@5" type="Node3D" parent="." unique_id=1276851053 instance=ExtResource("5_wu216")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 16)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@5" unique_id=338448671]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@5" unique_id=332663966]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@5/Dun Room Wall" unique_id=925875822]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@5/Dun Room Wall" unique_id=1187725976]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -525,16 +525,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@6" type="Node3D" parent="." unique_id=803861824 instance=ExtResource("5_wu216")]
+[node name="@Node3D@6" type="Node3D" parent="." unique_id=109503528 instance=ExtResource("5_wu216")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 16)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@6" unique_id=1205936167]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@6" unique_id=658814824]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@6/Dun Room Wall" unique_id=1781312923]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@6/Dun Room Wall" unique_id=1484230187]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -543,16 +543,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@7" type="Node3D" parent="." unique_id=1597408271 instance=ExtResource("5_wu216")]
+[node name="@Node3D@7" type="Node3D" parent="." unique_id=375519300 instance=ExtResource("5_wu216")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 10)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@7" unique_id=1225347100]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@7" unique_id=1186143503]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@7/Dun Room Wall" unique_id=1025071256]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@7/Dun Room Wall" unique_id=2128983374]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -561,16 +561,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@8" type="Node3D" parent="." unique_id=1432331508 instance=ExtResource("5_wu216")]
+[node name="@Node3D@8" type="Node3D" parent="." unique_id=219054577 instance=ExtResource("5_wu216")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 8, 0, 10)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@8" unique_id=1901659659]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@8" unique_id=42883389]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@8/Dun Room Wall" unique_id=586455756]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@8/Dun Room Wall" unique_id=931773071]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -579,16 +579,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@9" type="Node3D" parent="." unique_id=418563998 instance=ExtResource("5_wu216")]
+[node name="@Node3D@9" type="Node3D" parent="." unique_id=597441050 instance=ExtResource("5_wu216")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 0, 0, 14)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@9" unique_id=1602462759]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@9" unique_id=871213648]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@9/Dun Room Wall" unique_id=306507791]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@9/Dun Room Wall" unique_id=192539347]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -597,16 +597,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@10" type="Node3D" parent="." unique_id=1690688108 instance=ExtResource("5_wu216")]
+[node name="@Node3D@10" type="Node3D" parent="." unique_id=585409027 instance=ExtResource("5_wu216")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 8, 0, 14)
 
-[node name="Dun Room Wall" type="Node3D" parent="@Node3D@10" unique_id=665261679]
+[node name="Dun Room Wall" type="Node3D" parent="@Node3D@10" unique_id=1704144106]
 metadata/extras = {
 "hf_asset": "a0b5a4df-d2fb-44a8-8436-7eb975151518",
 "hf_id": "baf1db7a-70cb-4336-87ea-a968657f720a"
 }
 
-[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@10/Dun Room Wall" unique_id=1908085831]
+[node name="dun_room_wall" type="MeshInstance3D" parent="@Node3D@10/Dun Room Wall" unique_id=1695750008]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.4821372, -0.0036886185)
 mesh = SubResource("ArrayMesh_yaqsu")
 skeleton = NodePath("")
@@ -633,16 +633,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@11" type="Node3D" parent="." unique_id=579992360 instance=ExtResource("6_xq7g8")]
+[node name="@Node3D@11" type="Node3D" parent="." unique_id=440486119 instance=ExtResource("6_xq7g8")]
 transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, 8, 0, 8)
 
-[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@11" unique_id=1329435336]
+[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@11" unique_id=1679065601]
 metadata/extras = {
 "hf_asset": "80ef2b26-f9bc-42f3-807f-431ab748f58d",
 "hf_id": "d66b63d8-3d25-4a5f-b9db-daa8912ff4f0"
 }
 
-[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@11/Dun Wall Corner" unique_id=457339201]
+[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@11/Dun Wall Corner" unique_id=1064852159]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009957895, -1.4930801, 0.0051374584)
 mesh = SubResource("ArrayMesh_q7ypv")
 skeleton = NodePath("")
@@ -651,16 +651,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@12" type="Node3D" parent="." unique_id=417723592 instance=ExtResource("6_xq7g8")]
+[node name="@Node3D@12" type="Node3D" parent="." unique_id=1371580391 instance=ExtResource("6_xq7g8")]
 transform = Transform3D(-1, 0, -8.742278e-08, 0, 1, 0, 8.742278e-08, 0, -1, 8, 0, 16)
 
-[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@12" unique_id=896272834]
+[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@12" unique_id=1750106039]
 metadata/extras = {
 "hf_asset": "80ef2b26-f9bc-42f3-807f-431ab748f58d",
 "hf_id": "d66b63d8-3d25-4a5f-b9db-daa8912ff4f0"
 }
 
-[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@12/Dun Wall Corner" unique_id=1565460905]
+[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@12/Dun Wall Corner" unique_id=927936302]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009957895, -1.4930801, 0.0051374584)
 mesh = SubResource("ArrayMesh_q7ypv")
 skeleton = NodePath("")
@@ -669,16 +669,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@13" type="Node3D" parent="." unique_id=739318306 instance=ExtResource("6_xq7g8")]
+[node name="@Node3D@13" type="Node3D" parent="." unique_id=1484378735 instance=ExtResource("6_xq7g8")]
 transform = Transform3D(1.1924881e-08, 0, -1, 0, 1, 0, 1, 0, 1.1924881e-08, 0, 0, 16)
 
-[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@13" unique_id=977156675]
+[node name="Dun Wall Corner" type="Node3D" parent="@Node3D@13" unique_id=759734923]
 metadata/extras = {
 "hf_asset": "80ef2b26-f9bc-42f3-807f-431ab748f58d",
 "hf_id": "d66b63d8-3d25-4a5f-b9db-daa8912ff4f0"
 }
 
-[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@13/Dun Wall Corner" unique_id=609540956]
+[node name="dun_wall_corner" type="MeshInstance3D" parent="@Node3D@13/Dun Wall Corner" unique_id=1396475582]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.009957895, -1.4930801, 0.0051374584)
 mesh = SubResource("ArrayMesh_q7ypv")
 skeleton = NodePath("")
@@ -705,16 +705,16 @@ metadata/extras = {
 "hf_asset_child": true
 }
 
-[node name="@Node3D@14" type="Node3D" parent="." unique_id=1884423149 instance=ExtResource("7_gwfta")]
+[node name="@Node3D@14" type="Node3D" parent="." unique_id=978612020 instance=ExtResource("7_gwfta")]
 transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 7.5, 0.06, 14)
 
-[node name="Dun Wall Torch" type="Node3D" parent="@Node3D@14" unique_id=1975434450]
+[node name="Dun Wall Torch" type="Node3D" parent="@Node3D@14" unique_id=839599068]
 metadata/extras = {
 "hf_asset": "a23eb936-2873-42e0-9ef0-dbbb2a31a0d3",
 "hf_id": "6d59cc64-b707-48b0-ab45-b133bbdea7c2"
 }
 
-[node name="dun_wall_torch" type="MeshInstance3D" parent="@Node3D@14/Dun Wall Torch" unique_id=1807855909]
+[node name="dun_wall_torch" type="MeshInstance3D" parent="@Node3D@14/Dun Wall Torch" unique_id=181966016]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0052452236, -0.5015, -0.15384705)
 mesh = SubResource("ArrayMesh_as0xk")
 skeleton = NodePath("")

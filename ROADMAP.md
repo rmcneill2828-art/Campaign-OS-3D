@@ -527,6 +527,24 @@ something a generic script generates.
     real line-of-sight is blocked through the solid wall sections and open
     through the one doorway that connects the corridor to the room. All 19
     engine-server tests pass (was 16).
+  **Live-verified fix: room floor sat ~0.2m too high -- 2026-09-13,
+  fixed.** User feedback after switching to the map live: "looks good -
+  only issue is floor level." Re-measuring confirmed it: `dun_room_floor`
+  is a genuinely free-standing floor tile (0.198m thick), unlike the
+  corridor/arch modules where the floor is baked flush into the bottom of
+  an already-flush combined mesh -- placing it the same "leave at its own
+  origin" way left its walkable TOP surface 0.198m above y=0 (the grid
+  overlay's fixed height), a visible step up from the corridor floor,
+  which sits flush at 0. Fixed by adding `ROOM_FLOOR: 0.197893` (that
+  piece's own measured `highest.y`) to `build_entrance_hall.gd`'s offset
+  dict, so it's placed 0.198m lower and its top lands exactly on the grid
+  plane -- same "measure the real thing" fix pattern as the torch/chest
+  offsets, just aligning a TOP surface instead of a bottom one. Also
+  confirmed unrelated to this: the earlier separate `loadState()` bug (a
+  saved session never picking up a newly-added map even after a server
+  restart, since it only re-seeds when no stateFile exists yet at all) --
+  fixed the same day by merging new `seedState()` maps into an
+  already-persisted session on load.
   **Known unverified guesses, flagged for a live look rather than assumed
   correct** (same "build first, verify from a real screenshot, fix from
   there" pattern Prototype Chamber and every KayKit/Meshy/Higgsfield model

@@ -36,16 +36,30 @@ const WALL_CORNER := ASSETS + "dun_wall_corner_fixed.tscn"
 const WALL_TORCH := ASSETS + "dun_wall_torch_fixed.tscn"
 const TREASURE_CHEST := ASSETS + "dun_treasure_chest_fixed.tscn"
 
-# Real, Godot-resolved "how far below its own origin does this piece's lowest
-# point sit" (measure_higgsfield_dungeon.gd's own printed lowest.y) -- only
-# the small standalone props needed an explicit lift; the modular
-# entrance/corridor/room-floor/wall/corner pieces all already sit flush
-# (or with a deliberate few-cm embed matching how modular kits usually avoid
-# a visible gap between a wall's base and the floor -- left alone, not
-# "fixed," since that's the kit's own intended overlap, not a bug).
+# Real, Godot-resolved offset to subtract from a piece's placement Y so it
+# sits correctly at ground level -- values come straight from
+# measure_higgsfield_dungeon.gd's own printed output, never guessed. Two
+# different things need aligning to y=0 depending on the piece's shape,
+# and this one dict covers both (the formula in _place() is the same
+# either way: position.y = -offset):
+#   - Free-standing props/walls/corner pieces need their LOWEST point at
+#     y=0 (stand ON the ground) -- offset is that piece's own lowest.y
+#     (WALL_TORCH, TREASURE_CHEST here; the wall/corner/doorway pieces
+#     measure close enough to already-flush, or with a deliberate few-cm
+#     embed matching how modular kits usually avoid a visible gap between
+#     a wall's base and the floor, that neither needed an explicit entry).
+#   - ROOM_FLOOR needs its TOP surface at y=0 instead (it's a genuinely
+#     free-standing floor tile, unlike the corridor/arch modules where the
+#     floor is baked into the bottom of an already-flush combined mesh) --
+#     offset is that piece's own highest.y (its full 0.198m thickness),
+#     so placing it 0.198m LOWER brings its walkable top up to y=0. Found
+#     live: without this, the room's floor rendered a visible ~0.2m step
+#     up from the corridor floor it connects to (user: "only issue is
+#     floor level") -- confirmed by re-measuring rather than guessed.
 const PROP_GROUND_OFFSET := {
 	WALL_TORCH: -0.06,
 	TREASURE_CHEST: -0.030412,
+	ROOM_FLOOR: 0.197893,
 }
 
 var _root: Node3D
