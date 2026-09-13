@@ -643,13 +643,72 @@ three-state fog overlay (never explored / explored-but-not-currently-visible
 
 Phase 6 complete.
 
-## Phase 7 -- Claude DM bridge integration (later, per decision #3 above)
+## Phase 7 -- Claude DM bridge integration
 
-`engine-server`'s `POST /action` already accepts the exact same action
-vocabulary (`attack`, `cast_spell`, `move_token`, ...) the 2D app's
-`dm-bridge/watch.js` produces -- wiring narration/tool-calling into this
-client later should mean reusing that contract, not redesigning it. Not
-scoped further until Phases 3-6 exist for it to sit on top of.
+Read `dm-bridge/watch.js` and `ui/app.js`'s own bridge code directly before
+building anything, rather than re-deriving the protocol from the action
+vocabulary alone -- `POST /action` accepting the same actions was necessary
+but not sufficient; the actual bridge is a file-based IPC loop (write
+`request.json`, poll `response.json`) with a very specific request shape
+`watch.js`'s `buildPrompt()` expects, and a SYSTEM_PROMPT/action-validation
+pipeline already fully implementing 5e's move/attack/spell/rest/death-save/
+exhaustion/legendary-action rules text. None of that needed reimplementing.
+
+- [x] **`dm-bridge/watch.js` copied verbatim -- 2026-09-13, built.**
+  Byte-for-byte identical to Campaign-OS's own copy (same "copied verbatim,
+  never hand-edited" convention as `engine/encounter.js`/`engine/dmBridge.js`)
+  -- it has no idea whether a browser or this project's own server wrote its
+  `request.json`, or whether an HTML page or a Godot window reads its
+  `response.json`. `DND_REPO_PATH`-gated features (End Session, Create/
+  Update Character -- writing to the actual DND campaign repo) degrade
+  gracefully if unset and needed zero changes either; **not wired up from
+  Godot this phase** (no free-text session-transcript concept exists in this
+  client yet) -- a real, explicitly scoped-out gap, not silently dropped.
+- [x] **`engine-server`: `POST /dm-command` -- 2026-09-13, built and tested.**
+  One round trip does everything `ui/app.js`'s `sendDMBridgeCommand()`/
+  `checkDMBridgeResponse()` pair does across two separate browser-side
+  polling loops: write `dm-bridge/request.json` in the EXACT shape
+  `buildPrompt()` expects (a new `buildBridgeStateSnapshot()`, ported
+  field-for-field from `ui/app.js`'s own function of the same name -- grid,
+  wallCount, round, activeToken, lairActionUsedThisRound, availableMaps, and
+  a full per-token line covering abilityScores/spellSlots/resources/
+  hitDice/resistances/concentration/dying/exhaustion/legendaryActions/
+  visionRange/hiddenFromPlayers), poll `response.json` for a matching `id`
+  (same ~1s cadence, 120s timeout matching `ui/app.js`'s own 2-minute give
+  up), then apply the returned actions through the exact same
+  `DMBridge.applyActions` the plain `/action` endpoint already uses, fold in
+  `revealVisibleTiles` the same way, and hand back updated `state` +
+  `visibility` in one response. Doesn't block the server's event loop while
+  waiting -- `GET /state` and ordinary `/action` calls keep working normally
+  during the up-to-2-minute wait.
+  **Tested without needing a real `claude` CLI call** (not something to
+  depend on for a fast, deterministic, free test suite): 3 new tests isolate
+  the actual integration surface this server owns -- `request.json` matches
+  `buildPrompt()`'s expected shape field-for-field, a simulated
+  `response.json` (the exact shape the real, unmodified `watch.js` would
+  produce) gets correctly picked up and applied through the real engine, and
+  an empty command is rejected before ever writing a request. 16/16 tests
+  passing total.
+- [x] **Godot: a DM Assistant panel -- 2026-09-13, built.** A new
+  collapsible "DM Assistant (Claude)" section on `Main.tscn` (same pattern
+  every other Phase 3 section uses) -- a free-text line, a Send button, and
+  a response label. Deliberately not gated on a selected token (narration is
+  scene-wide, same as `trigger_lair_action`), and uses its OWN in-flight
+  flag separate from ordinary actions' -- a Claude round trip can take up to
+  ~2 minutes, and there's no reason Attack/Cast Spell/Next Turn should be
+  blocked from working the whole time just because a narration command is
+  also pending. On a successful response, refreshes the board immediately
+  from the returned `state` rather than waiting for the next poll tick.
+  **Verified**: `Main.tscn` still instantiates headlessly with no script
+  errors after the new nodes/wiring, and a direct HTTP smoke test against
+  the real (non-test-overridden) default `dm-bridge/` path resolved
+  correctly end to end. **NOT yet verified live in Godot with a real
+  running `claude` CLI** -- typing an actual narration command, watching
+  `node dm-bridge/watch.js`'s own console output, and seeing Claude's
+  actions land on the 3D board all still need a human running the full
+  3-process stack (`node server.js` + `node dm-bridge/watch.js` + Godot) at
+  least once. Flagged explicitly rather than assumed to work from the
+  server-side tests and headless checks alone.
 
 ## Phase 8 -- Art investment (later, per decision #4 above)
 

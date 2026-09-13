@@ -123,6 +123,13 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _lair_description_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LairRow/LairDescriptionInput
 @onready var _trigger_lair_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LairRow/TriggerLairButton
 
+@onready var _dm_assistant_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantHeaderButton
+@onready var _dm_assistant_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody
+@onready var _dm_command_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody/DmCommandInput
+@onready var _send_dm_command_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody/SendDmCommandButton
+@onready var _dm_response_label: Label = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody/DmResponseLabel
+@onready var _dm_command_request: HTTPRequest = $DmCommandRequest
+
 var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 var _area_target_checkboxes := {} # token name (String) -> CheckBox
 var _last_target_names: Array[String] = [] # last set the spell-target UI was built from -- see _sync_spell_targets()
@@ -134,6 +141,13 @@ var _action_in_flight := false
 
 var _right_press_pos := Vector2.ZERO
 var _right_press_active := false
+
+## Phase 7 -- a SEPARATE in-flight flag from _action_in_flight: a DM-command
+## round trip can take up to ~2 minutes (waiting on a real Claude call via
+## dm-bridge/watch.js), and there's no reason ordinary button-driven actions
+## (attack, cast a spell, next turn) should be blocked from working for that
+## whole time just because a narration command is also pending.
+var _dm_command_in_flight := false
 
 ## Phase 6 -- the "second monitor/TV" window. A real separate OS window (not
 ## embedded in this one), same technique the 2D app's own "Open Player
@@ -189,6 +203,8 @@ func _ready() -> void:
 	_legendary_action_button.pressed.connect(_on_legendary_action_pressed)
 	_use_recharge_button.pressed.connect(_on_use_recharge_pressed)
 	_trigger_lair_button.pressed.connect(_on_trigger_lair_pressed)
+	_send_dm_command_button.pressed.connect(_on_send_dm_command_pressed)
+	_dm_command_request.request_completed.connect(_on_dm_command_response)
 
 	# Collapsible sections -- the panel grew large enough across Phase 3 that
 	# showing everything open at once ran the whole thing off-screen (reported
@@ -199,6 +215,7 @@ func _ready() -> void:
 	_wire_collapsible_section(_spell_header, _spell_body, "Spellcasting")
 	_wire_collapsible_section(_resource_header, _resource_body, "Resources & Rests")
 	_wire_collapsible_section(_other_header, _other_body, "Other Actions")
+	_wire_collapsible_section(_dm_assistant_header, _dm_assistant_body, "DM Assistant (Claude)")
 
 	_poll_state()
 
@@ -621,6 +638,67 @@ func _on_trigger_lair_pressed() -> void:
 		_show_hint("Describe what the lair action does before triggering it.")
 		return
 	_send_action({"type": "trigger_lair_action", "description": description})
+
+## Phase 7 -- POSTs free-text DM narration to engine-server's /dm-command,
+## which does the entire "ask Claude what should happen" round trip in one
+## call (write dm-bridge/request.json, wait for dm-bridge/watch.js to answer,
+## apply the actions through the real engine, hand back updated state) --
+## same contract ui/app.js's own DM-command box uses against the 2D app's
+## identical dm-bridge/watch.js. Deliberately NOT gated on a selected token
+## (narration is scene-wide, same as trigger_lair_action above) and uses its
+## own in-flight flag so ordinary button actions keep working while this is
+## pending -- it can take up to ~2 minutes for a real Claude response.
+func _on_send_dm_command_pressed() -> void:
+	if _dm_command_in_flight:
+		return
+	var command := _dm_command_input.text.strip_edges()
+	if command == "":
+		_show_hint("Type a DM command/narration line before sending it.")
+		return
+
+	_dm_command_in_flight = true
+	_send_dm_command_button.disabled = true
+	_dm_command_input.editable = false
+	_dm_response_label.text = "Waiting for Claude Code (run \"node dm-bridge/watch.js\" if it isn't already running) -- can take up to 2 minutes..."
+
+	var body := JSON.stringify({"command": command})
+	var error := _dm_command_request.request(
+		server_base_url + "/dm-command",
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body
+	)
+	if error != OK:
+		_dm_command_in_flight = false
+		_send_dm_command_button.disabled = false
+		_dm_command_input.editable = true
+		_dm_response_label.text = "Could not send to engine-server (error %d)." % error
+
+func _on_dm_command_response(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+	_dm_command_in_flight = false
+	_send_dm_command_button.disabled = false
+	_dm_command_input.editable = true
+	var parsed = JSON.parse_string(body.get_string_from_utf8())
+
+	if response_code != 200:
+		var error_text: String = "unknown error"
+		if typeof(parsed) == TYPE_DICTIONARY and parsed.has("error"):
+			error_text = str(parsed["error"])
+		_dm_response_label.text = "DM Assistant error (HTTP %d): %s" % [response_code, error_text]
+		return
+
+	if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("state"):
+		_dm_response_label.text = "engine-server sent a response this client doesn't understand."
+		return
+
+	_dm_command_input.text = ""
+	var message: String = str(parsed.get("message", ""))
+	_dm_response_label.text = message if message != "" else "(The DM assistant didn't include a narration.)"
+	# Refresh immediately rather than waiting up to poll_interval_seconds for the
+	# next tick -- the actions this response applied (moves, attacks, spawns)
+	# should be visible on the board right away, same as every other action
+	# response already does via _on_action_response.
+	_apply_state(parsed["state"])
 
 ## Shared guard for every "acts on the selected token" HUD control (rolls,
 ## condition toggles) -- same "show a status hint, don't just silently no-op"

@@ -18,6 +18,22 @@ const DMBridge = engineWindow.CampaignOSDMBridge;
 
 const DEFAULT_STATE_FILE = path.join(__dirname, "state", "encounter.json");
 
+// Phase 7: the Claude DM bridge. `dm-bridge/watch.js` here is a byte-for-byte copy of
+// Campaign-OS's own dm-bridge/watch.js (same "copied verbatim, never hand-edited"
+// convention as engine/encounter.js and engine/dmBridge.js) -- it already reads a
+// request.json {id, command, context, state, createdAt}, spawns the local `claude` CLI
+// with the exact SYSTEM_PROMPT/action vocabulary this project's own DMBridge.applyActions
+// already implements, and writes a response.json {id, message, actions}. Nothing about
+// that file needed to change for a 3D client: it has no idea whether the browser or this
+// server wrote its request, or whether a Godot window or an HTML page will read its
+// response. This server just plays the exact role ui/app.js's own sendDMBridgeCommand()/
+// checkDMBridgeResponse() pair already plays for the 2D app -- write the request in the
+// same shape, poll for the matching response, apply the returned actions -- so it can't
+// drift from what dm-bridge/watch.js actually expects.
+const DEFAULT_DM_BRIDGE_DIR = path.join(__dirname, "..", "dm-bridge");
+const DM_BRIDGE_TIMEOUT_MS = 120000; // matches ui/app.js's own 2-minute give-up
+const DM_BRIDGE_POLL_MS = 1000;
+
 // A fresh board to play with on first run (or after /reset). This is a convenience
 // starting point for the 3D prototype, not campaign data -- real campaign import
 // (engine/campaign.js, already copied alongside encounter.js/dmBridge.js) is a later
@@ -131,6 +147,85 @@ function computeVisibility(state) {
   return { mapName, currentlyVisible, revealed, visibleTokenIds };
 }
 
+// Mirrors ui/app.js's own buildBridgeStateSnapshot() field-for-field -- the shape
+// dm-bridge/watch.js's buildPrompt() reads (see its own comment on where each field
+// gets used: grid/wallCount/round/activeToken/lairActionUsedThisRound/availableMaps at
+// the top, then a big per-token line built from everything else). Read directly off
+// this project's own copy of the same engine functions (currentGrid, effectiveSpeed,
+// tokensOnCurrentMap) rather than re-derived by hand, so this can't drift from what the
+// 2D app actually sends for the exact same fields.
+function buildBridgeStateSnapshot(state) {
+  const tokens = CampaignOS.tokensOnCurrentMap(state);
+  const activeTokenId = state.turn?.tokenId;
+  const availableMaps = Object.keys(state.maps || {}).filter((name) => name !== state.mapName);
+  return {
+    mapName: state.mapName,
+    grid: CampaignOS.currentGrid(state),
+    wallCount: (state.maps?.[state.mapName]?.walls || []).length,
+    round: state.turn?.round || 0,
+    activeToken: tokens.find((token) => token.id === activeTokenId)?.name || null,
+    lairActionUsedThisRound: state.lairActionRound === (state.turn?.round || 0),
+    availableMaps,
+    tokens: tokens.map((token) => ({
+      name: token.name,
+      type: token.type,
+      x: token.x,
+      y: token.y,
+      hp: token.hp,
+      maxHp: token.maxHp,
+      ac: token.ac,
+      speed: CampaignOS.effectiveSpeed(token),
+      movementLeft: Math.max(0, CampaignOS.effectiveSpeed(token) - (token.movementUsed || 0)),
+      conditions: token.conditions,
+      abilityScores: token.abilityScores,
+      spellcasting: token.spellcasting,
+      spellSlots: token.spellSlots,
+      resources: token.resources,
+      hitDice: token.hitDice,
+      damageResistances: token.damageResistances,
+      damageVulnerabilities: token.damageVulnerabilities,
+      damageImmunities: token.damageImmunities,
+      concentratingOn: token.concentratingOn,
+      dying: token.dying,
+      dead: token.dead,
+      exhaustion: token.exhaustion,
+      legendaryActions: token.legendaryActions,
+      regeneration: token.regeneration,
+      rechargeAbilities: token.rechargeAbilities,
+      extraAttacks: token.extraAttacks,
+      visionRange: token.visionRange,
+      actionUsed: Boolean(token.actionUsed),
+      bonusActionUsed: Boolean(token.bonusActionUsed),
+      hiddenFromPlayers: Boolean(token.hiddenFromPlayers)
+    }))
+  };
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Polls responsePath the same 1s-ish cadence ui/app.js's own checkDMBridgeResponse()
+// uses, until a response with a matching `id` shows up or timeoutMs runs out. A
+// mid-write partial JSON read (dm-bridge/watch.js writing the file at the exact moment
+// this reads it) is treated the same as "not there yet" and retried next tick, not a
+// hard failure -- matching ui/app.js's own "partial write mid-poll -- try again" handling.
+async function waitForBridgeResponse(responsePath, id, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const raw = fs.readFileSync(responsePath, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id === id) return parsed;
+    } catch (err) {
+      // ENOENT (watch.js hasn't written yet) or a mid-write partial JSON parse
+      // failure -- both just mean "keep waiting," not an error to surface.
+    }
+    await sleep(DM_BRIDGE_POLL_MS);
+  }
+  return null;
+}
+
 function sendJson(res, status, body) {
   const json = JSON.stringify(body);
   res.writeHead(status, {
@@ -167,8 +262,10 @@ function readJsonBody(req) {
 // Factory rather than a module-level side effect, so tests (and any future second
 // consumer) can spin up an isolated server against a throwaway state file/port
 // instead of sharing the one real prototype save file and a fixed port.
-function createServer({ stateFile = DEFAULT_STATE_FILE } = {}) {
+function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_BRIDGE_DIR } = {}) {
   let state = loadState(stateFile);
+  const bridgeRequestPath = path.join(bridgeDir, "request.json");
+  const bridgeResponsePath = path.join(bridgeDir, "response.json");
 
   const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
@@ -203,6 +300,67 @@ function createServer({ stateFile = DEFAULT_STATE_FILE } = {}) {
       if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
       saveState(stateFile, state);
       return sendJson(res, 200, { state, messages: result.messages, visibility: computeVisibility(state) });
+    }
+
+    // Phase 7: one round trip for the whole "ask Claude what should happen" loop --
+    // Godot (or curl, or a browser) POSTs {command, context}, and this handler does
+    // everything ui/app.js's sendDMBridgeCommand()/checkDMBridgeResponse() pair does
+    // across two separate polling loops, in one blocking-from-the-CALLER's-perspective
+    // call: write request.json, wait for dm-bridge/watch.js to answer, apply the
+    // returned actions through the exact same DMBridge.applyActions this project's
+    // /action endpoint already uses, and hand back the updated state. This does NOT
+    // block the server's event loop while waiting -- other requests (GET /state, a
+    // Godot poll tick) are served normally in the meantime, same as Node's http server
+    // always behaves under an async handler.
+    if (req.method === "POST" && req.url === "/dm-command") {
+      let body;
+      try {
+        body = await readJsonBody(req);
+      } catch (err) {
+        return sendJson(res, 400, { error: "Malformed JSON body." });
+      }
+      const command = typeof body.command === "string" ? body.command.trim() : "";
+      if (!command) {
+        return sendJson(res, 400, { error: "\"command\" must be a non-empty string." });
+      }
+
+      const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const request = {
+        id,
+        command,
+        // Campaign lore injection (ui/app.js's dmBridgeContext) isn't wired up on the
+        // 3D side yet -- no campaign-context UI exists in Godot to source it from.
+        // watch.js's buildPrompt() already treats a null context as "none provided",
+        // so this is a real, working default, not a stub standing in for missing work.
+        context: (body.context && typeof body.context.text === "string") ? body.context : null,
+        state: buildBridgeStateSnapshot(state),
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        fs.mkdirSync(bridgeDir, { recursive: true });
+        fs.writeFileSync(bridgeRequestPath, JSON.stringify(request, null, 2));
+      } catch (err) {
+        return sendJson(res, 500, { error: `Could not write to the DM bridge folder: ${err.message}` });
+      }
+
+      const response = await waitForBridgeResponse(bridgeResponsePath, id, DM_BRIDGE_TIMEOUT_MS);
+      if (!response) {
+        return sendJson(res, 504, {
+          error: `No response after ${Math.round(DM_BRIDGE_TIMEOUT_MS / 1000)}s -- make sure "node dm-bridge/watch.js" is running, then try again.`
+        });
+      }
+
+      const result = DMBridge.applyActions(state, Array.isArray(response.actions) ? response.actions : []);
+      state = result.state;
+      if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
+      saveState(stateFile, state);
+      return sendJson(res, 200, {
+        state,
+        message: typeof response.message === "string" ? response.message : "",
+        actionMessages: result.messages,
+        visibility: computeVisibility(state)
+      });
     }
 
     if (req.method === "POST" && req.url === "/reset") {

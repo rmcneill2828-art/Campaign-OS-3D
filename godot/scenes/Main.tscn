@@ -47,6 +47,9 @@ script = ExtResource("3")
 
 [node name="ActionRequest" type="HTTPRequest" parent="."]
 
+[node name="DmCommandRequest" type="HTTPRequest" parent="."]
+timeout = 150.0
+
 [node name="PollTimer" type="Timer" parent="."]
 wait_time = 1.0
 autostart = true
@@ -382,3 +385,28 @@ placeholder_text = "What happens"
 
 [node name="TriggerLairButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/LairRow"]
 text = "Trigger"
+
+[node name="DmAssistantHeaderButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+toggle_mode = true
+text = "▸ DM Assistant (Claude)"
+
+[node name="DmAssistantBody" type="VBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+visible = false
+theme_override_constants/separation = 8
+
+[node name="DmAssistantHintLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody"]
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.75, 0.75, 0.75, 1)
+autowrap_mode = 2
+text = "Type DM narration/a command; Claude decides what mechanically happens. Needs \"node dm-bridge/watch.js\" running separately -- see ../dm-bridge/watch.js. Not gated on a selected token."
+
+[node name="DmCommandInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody"]
+placeholder_text = "e.g. Three goblins emerge from the trees."
+
+[node name="SendDmCommandButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody"]
+text = "Send"
+
+[node name="DmResponseLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody"]
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 2
+text = "Ready."
