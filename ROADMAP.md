@@ -1139,14 +1139,36 @@ calls from `Main.gd` do) actually exposes, cross-referenced function-by-
 function against `ui/app.js` (~4000 lines) and its sibling modules.
 
 **Real gaps found, roughly in the order worth tackling:**
-- **No way to set or roll initiative order at all**, in either the 3D UI or
-  the Claude DM Assistant -- `dmBridge.js`'s shared action vocabulary
-  (`spawn_monster` through `switch_map`, ~24 cases) has no
-  `set_initiative`/`roll_initiative` case; the 2D app sets it via a plain
-  `<input name="initiative">` form field on the token sheet that was never
-  carried over as an action type when the 3D client's HTTP action API was
-  built. Combat currently proceeds in whatever default order tokens spawn
-  in, with no DM control over it at all.
+- [x] **No way to set or roll initiative order at all -- 2026-09-13,
+  fixed.** `dmBridge.js`'s shared action vocabulary had no
+  `set_initiative`/`roll_initiative` case; the 2D app set it via a plain
+  `<input name="initiative">` form field on the token sheet
+  (`updateToken(state, id, { initiative })`, already engine-supported,
+  clamped 0-99) that was never carried over as an action type when the 3D
+  client's HTTP action API was built, and `nextTurn()` already sorts by
+  initiative (confirmed by reading it) so this was a real, complete
+  blocker on using rolled initiative order at all, not just a UI nicety.
+  Added a new `rollInitiative(state, tokenId)` to `encounter.js` (1d20 +
+  the token's real DEX modifier, RAW, no advantage/disadvantage support --
+  not a RAW thing for initiative outside a specific feat this engine
+  doesn't model) for the "roll it" case, and reused the existing
+  `updateToken` for the "a player reports their own physical roll, or the
+  DM corrects/tie-breaks a value" flat-assignment case -- two new
+  `dmBridge.js` cases (`roll_initiative`, `set_initiative`) cover both.
+  Applied to both Campaign-OS and Campaign-OS-3D (separate repos) to keep
+  `engine/encounter.js`/`engine/dmBridge.js` byte-identical, confirmed
+  with `diff`; `dm-bridge/watch.js`'s prompt updated in both too, so the
+  Claude DM Assistant can roll initiative for every combatant at the
+  start of a fight in one response. 4 new unit tests in Campaign-OS's own
+  `tests/encounter.test.js` (370/370 passing there), 2 new integration
+  tests in Campaign-OS-3D's `tests/server.test.js` confirming the actions
+  reach the engine and persist onto the token through the real
+  `POST /action` path (24/24 passing).
+  On the 3D client: a new collapsible "Initiative" section (matching the
+  existing Saving Throws/Checks/Conditions/etc. accordion pattern) with a
+  "Roll Initiative (1d20 + DEX)" button and a manual "Set to <N>" row,
+  placed first in the list since it's the thing a DM reaches for before
+  anything else once a fight starts.
 - [x] **No Advantage/Disadvantage toggle anywhere -- 2026-09-13, fixed.**
   Turned out bigger than expected: `attack()`/`castSpell()` already
   accepted `options.advantage`/`options.disadvantage` server-side, but

@@ -1063,6 +1063,31 @@
     return { state: addLogEntry(state, message), message, success, total };
   }
 
+  // Rolls initiative for `tokenId`: 1d20 + the token's real DEX modifier (RAW), sets
+  // token.initiative directly, and logs it -- a flat re-roll every call, with no "keep the
+  // higher of two rolls"/Alert-feat-style bonus modeled, matching this engine's existing
+  // "derive from the ability score, don't model every possible modifier" pattern
+  // (abilityCheckBonus/savingThrowBonus do the same). No advantage/disadvantage support
+  // here unlike attack/save/check/spell -- an initiative roll having advantage isn't a RAW
+  // thing outside a specific feat this engine doesn't model. For a player who rolls their
+  // own physical d20 and just reports the total, or a DM correcting/tie-breaking an
+  // already-set value, use updateToken(state, tokenId, { initiative }) directly instead --
+  // the exact mechanism the 2D app's own plain number field on the token sheet already
+  // uses, no dedicated function needed for a flat assignment.
+  function rollInitiative(state, tokenId) {
+    const nextState = clone(state);
+    const token = nextState.tokens.find((item) => item.id === tokenId);
+    if (!token) return { state, message: "Initiative roll failed: token was not found." };
+
+    const dexScore = token.abilityScores?.DEX;
+    const dexMod = Number.isFinite(dexScore) ? abilityModifier(dexScore) : 0;
+    const roll = rollDie(20);
+    const total = roll + dexMod;
+    token.initiative = clampNumber(total, 0, 99);
+    const message = `${token.name} rolls initiative: ${roll} ${dexMod >= 0 ? "+" : ""}${dexMod} = ${token.initiative}.`;
+    return { state: addLogEntry(nextState, message), message };
+  }
+
   // Spends one of `caster`'s spell slots at `level` (0 = cantrip, never consumes one),
   // mutating `caster` in place -- a live reference into a cloned state's tokens array, the
   // same in-place-mutation convention every primitive in this file follows -- and returning
@@ -2938,6 +2963,7 @@
     restoreResource,
     rollAbilityCheck,
     rollFreeform,
+    rollInitiative,
     setExhaustion,
     spendHitDie,
     shortRest,

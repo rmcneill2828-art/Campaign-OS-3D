@@ -135,6 +135,29 @@
           alreadyLogged: false
         };
       }
+      case "roll_initiative": {
+        const target = findTokenByName(state, action.target);
+        if (!target) return { state, message: `(DM assistant) could not find "${action.target}" to roll initiative for.`, alreadyLogged: false };
+        const result = window.CampaignOS.rollInitiative(state, target.id);
+        return { state: result.state, message: result.message, alreadyLogged: true };
+      }
+      case "set_initiative": {
+        const target = findTokenByName(state, action.target);
+        if (!target) return { state, message: `(DM assistant) could not find "${action.target}" to set initiative for.`, alreadyLogged: false };
+        // A flat assignment, not a roll -- the same mechanism the 2D app's own plain
+        // number field on the token sheet uses (updateToken), for a player reporting
+        // their own physical d20 roll or a DM correcting/tie-breaking a value. Reads
+        // the value back off the updated token rather than echoing action.value
+        // directly -- updateToken clamps to 0-99 internally, and the message should
+        // report what was actually set, not an out-of-range input.
+        const nextState = window.CampaignOS.updateToken(state, target.id, { initiative: action.value });
+        const updatedTarget = findTokenByName(nextState, action.target);
+        return {
+          state: nextState,
+          message: `${target.name}'s initiative is set to ${updatedTarget.initiative}.`,
+          alreadyLogged: false
+        };
+      }
       case "saving_throw": {
         const target = findTokenByName(state, action.target);
         if (!target) return { state, message: `(DM assistant) could not find "${action.target}" for a saving throw.`, alreadyLogged: false };

@@ -143,6 +143,33 @@ popup/item_1/id = 1
 popup/item_2/text = "Disadvantage"
 popup/item_2/id = 2
 
+[node name="InitiativeHeaderButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+toggle_mode = true
+text = "▸ Initiative"
+
+[node name="InitiativeBody" type="VBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
+visible = false
+theme_override_constants/separation = 8
+
+[node name="RollInitiativeButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody"]
+text = "Roll Initiative (1d20 + DEX)"
+
+[node name="SetInitiativeRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody"]
+theme_override_constants/separation = 8
+
+[node name="SetInitiativeLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/SetInitiativeRow"]
+theme_override_font_sizes/font_size = 16
+text = "Set to"
+
+[node name="SetInitiativeInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/SetInitiativeRow"]
+custom_minimum_size = Vector2(80, 0)
+min_value = 0.0
+max_value = 99.0
+value = 10.0
+
+[node name="SetInitiativeButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/SetInitiativeRow"]
+text = "Set"
+
 [node name="ChecksHeaderButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList"]
 toggle_mode = true
 text = "▸ Saving Throws / Checks"

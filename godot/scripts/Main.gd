@@ -86,6 +86,12 @@ const FULL_HEAL_AMOUNT := 9999
 ## save, not "everyone in the blast," which castAreaSpell doesn't expose per-target anyway.
 @onready var _roll_mode_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RollModeRow/RollModeOption
 
+@onready var _initiative_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeHeaderButton
+@onready var _initiative_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody
+@onready var _roll_initiative_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/RollInitiativeButton
+@onready var _set_initiative_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/SetInitiativeRow/SetInitiativeInput
+@onready var _set_initiative_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/InitiativeBody/SetInitiativeRow/SetInitiativeButton
+
 @onready var _checks_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksHeaderButton
 @onready var _checks_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody
 @onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/SaveRow/SaveAbilityOption
@@ -185,6 +191,8 @@ func _ready() -> void:
 		_check_skill_option.add_item(skill)
 	_roll_save_button.pressed.connect(_on_roll_save_pressed)
 	_roll_check_button.pressed.connect(_on_roll_check_pressed)
+	_roll_initiative_button.pressed.connect(_on_roll_initiative_pressed)
+	_set_initiative_button.pressed.connect(_on_set_initiative_pressed)
 	_hint_timer.timeout.connect(func(): _hint_label.text = "")
 
 	for condition in CONDITION_LIST:
@@ -221,6 +229,7 @@ func _ready() -> void:
 	# showing everything open at once ran the whole thing off-screen (reported
 	# directly, not guessed at). Each header toggle just shows/hides its own
 	# body; all start collapsed so the panel opens compact.
+	_wire_collapsible_section(_initiative_header, _initiative_body, "Initiative")
 	_wire_collapsible_section(_checks_header, _checks_body, "Saving Throws / Checks")
 	_wire_collapsible_section(_conditions_header, _conditions_body, "Conditions")
 	_wire_collapsible_section(_spell_header, _spell_body, "Spellcasting")
@@ -443,6 +452,32 @@ func _on_open_player_window_pressed() -> void:
 	get_tree().root.add_child(_player_window)
 	_player_window.show()
 	_player_window.grab_focus()
+
+## rollInitiative (see engine-server/engine/encounter.js) rolls 1d20 + the
+## target's real DEX modifier (RAW) and sets its initiative directly --
+## no Roll mode support here (advantage/disadvantage on an initiative roll
+## isn't a thing outside a specific feat this engine doesn't model, unlike
+## attacks/saves/checks/spells).
+func _on_roll_initiative_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({
+		"type": "roll_initiative",
+		"target": _tokens[_selected_token_id].token_name
+	})
+
+## set_initiative -- the 2D app's own equivalent is a plain number field
+## on the token sheet (no roll, no log message); this mirrors that exactly
+## for a player who rolls their own physical d20 and just reports the
+## total, or a DM correcting/tie-breaking an already-rolled value.
+func _on_set_initiative_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({
+		"type": "set_initiative",
+		"target": _tokens[_selected_token_id].token_name,
+		"value": int(_set_initiative_input.value)
+	})
 
 ## rollSavingThrow (see engine-server/engine/encounter.js) uses the target's
 ## real ability modifier or a stated save-bonus override, rolls once, and

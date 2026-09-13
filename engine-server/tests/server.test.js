@@ -123,6 +123,47 @@ test("POST /action ability_check with disadvantage produces a roll message namin
   }
 });
 
+// Confirms Main.gd's new Initiative section actually reaches the engine through the real
+// POST /action -> DMBridge.applyActions path -- roll_initiative's own d20+DEX-modifier math
+// is unit-tested precisely against a stubbed RNG in Campaign-OS's tests/encounter.test.js;
+// this just checks the plumbing (real dice here, not seedable through this HTTP layer) and
+// that the resulting value is actually persisted onto the token.
+test("POST /action roll_initiative sets the token's initiative and reports the roll", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "roll_initiative", target: "Darkhawk" })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], /Darkhawk rolls initiative: \d+ [+-]\d+ = \d+\./);
+    const darkhawk = result.state.tokens.find((token) => token.name === "Darkhawk");
+    assert.ok(darkhawk.initiative >= 0 && darkhawk.initiative <= 99);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /action set_initiative assigns a flat value with no roll", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "set_initiative", target: "Darkhawk", value: 17 })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], /Darkhawk's initiative is set to 17\./);
+    const darkhawk = result.state.tokens.find((token) => token.name === "Darkhawk");
+    assert.equal(darkhawk.initiative, 17);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /action with no type is rejected without mutating state", async () => {
   const { server, baseUrl } = await startTestServer();
   try {
