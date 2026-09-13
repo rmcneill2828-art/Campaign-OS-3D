@@ -788,6 +788,77 @@ doesn't need re-doing.
   Adventurers (a real per-hero-name option, same pack family) and the
   KayKit Dungeon Remastered environment kit remain downloaded and cataloged
   only -- not wired up this pass.
+- [x] **Custom-generated Orc via the Meshy API -- 2026-09-13, built.** The
+  user's own Meshy trial, driven via the already-connected Composio
+  integration (no separate API key setup needed -- `MESHY_*` tools were
+  already available and active, 1100 credits at the start). First real test
+  of "custom created models" as its own option alongside free packs, for a
+  monster (Orc) neither Quaternius nor KayKit's free tiers cover.
+  **Full pipeline, ~65 credits total, three real problems hit and fixed
+  along the way rather than assumed away**:
+  1. `MESHY_CREATE_TEXT_TO_3D_TASK`'s `generation_path: "fused"` (one-call
+     geometry+texture) failed outright (`"Mode is a required field"`) --
+     switched to the more basic `"preview"` path (geometry only) instead,
+     which worked; not investigated further since the 2-step preview+refine
+     flow works fine anyway.
+  2. The preview came back in a fighting stance (fists clenched) despite
+     `pose_mode: "t-pose"` being requested -- flagged to the user directly
+     rather than assumed fine, with the actual live tradeoff (regenerate
+     now vs. risk a bad rig later); the user chose to just try rigging it,
+     which happened to work.
+  3. **The real one**: rigging outright rejected the first attempt (over
+     the 320,000-face rigging limit -- the raw preview was ~1,031,956
+     faces), fixed with `MESHY_CREATE_REMESH_TASK` down to 30,000 -- but
+     texturing had already been kicked off against the ORIGINAL high-poly
+     preview in parallel, meaning the rig (low-poly) and the texture
+     (high-poly) ended up on two different, incompatible topologies. Fixed
+     by re-rigging the REMESHED geometry a second time, this time passing
+     the already-generated texture image directly via
+     `MESHY_CREATE_RIGGING_TASK`'s own `texture_image_url` field (which
+     Meshy supports specifically for this) rather than trying to re-refine
+     the remeshed geometry (confirmed by testing that refine only accepts
+     an actual preview task, not a remesh one -- would have needed a third
+     texture pass otherwise). One rigging task now correctly produces a
+     rigged, skinned, AND textured result in one output.
+  Six separate `MESHY_CREATE_ANIMATION_TASK` calls (one clip per file --
+  Meshy's animation API returns one full skinned model per requested clip,
+  not a shared multi-clip library file) supplied idle/walk/death/2
+  hit-reactions/a kneel stand-in, picked from Meshy's own preset animation
+  catalog after actually searching it rather than guessing what existed:
+  confirmed no dedicated "death" or "held wounded/kneeling" pose category
+  exists by name, but found real, usable picks anyway --
+  `Fall_Dead_from_Abdominal_Injury` (sub-category "Dying") for death, and
+  `Slow_Orc_Walk_inplace` for walk (the library visibly anticipates orc
+  characters specifically). No good held kneel/dying pose exists in the
+  library at all (checked directly) -- `Kneel_on_One_Knee_and_Stand` (a
+  kneel-then-stand transition clip, not a true held pose) is used as an
+  imperfect stand-in, looped the same way the other families' real held
+  poses are.
+  **`Token.gd`'s `MODEL_CONFIG` generalized to support this**: every
+  animation field (idle/walk/death/dying, each `hits` entry) can now be
+  either a plain clip name (the existing simple case) or a
+  `{"clip": ..., "source": ...}` Dictionary naming a completely different
+  file to import that one clip from -- the Orc needed this for literally
+  every field, since each Meshy animation task produces its own separate
+  file. This replaces (and generalizes) the skeleton family's earlier
+  single-purpose `hit_source` field with the same mechanism, now reusable
+  for any field, not just hits. Also confirmed and worked around a real
+  Meshy-specific naming quirk: its clips come back pipe-delimited
+  (`"Armature|Idle|baselayer"`), not the bare names every other pack here
+  uses -- handled by using the full literal string as the config value, no
+  code change needed once actually checked (`godot/tools/inspect_meshy_orc.gd`).
+  **Verified**: bone-name compatibility checked directly (24/24 match
+  across all 6 animation files -- expected, since Meshy retargets onto the
+  exact rig it generated, but checked rather than assumed anyway), and a
+  new functional test (`test_orc_token.tscn`) confirms every field
+  (idle/walk/death/both hits/dying) resolves correctly end to end, all
+  while the pre-existing skeleton and generic-monster (Imp) tests still
+  pass unaffected by the generalization. `engine-server`'s own 16/16 tests
+  unaffected (Godot-only change); "orc" already exists as a real SRD stat
+  block server-side, so it's spawnable today. **NOT yet verified live in
+  the editor** -- same "build, then verify live" gap every visual feature
+  here starts with, flagged rather than assumed to work from the headless
+  checks alone.
 
 Phase 8's first item complete and live-verified. Below is the untouched
 research from 2026-09-11 for the bigger, still-open questions this phase

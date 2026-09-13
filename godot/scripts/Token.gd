@@ -31,14 +31,15 @@ class_name Token
 ## Imp regardless of which SRD stat block it actually was (a known,
 ## documented gap since Phase 2).
 ##
-## `hit_source` is optional -- only needed when a family's hit-reaction clips
-## live in a DIFFERENT animation file than its idle/walk/death/dying (true
-## for the skeleton family below: its own animation-source file has no
-## dedicated hit-reaction clips of its own, so the generic humanoid Hit_A/
-## Hit_B from a sibling file in the same pack get imported into the same
-## player instead -- see _setup_animation()'s own handling). Omitted (or
-## equal to animation_source) means "same file for everything," the
-## Quaternius families' original, simpler case.
+## Any of idle/walk/death/dying, or one entry of hits, may be EITHER a plain
+## clip name (String, resolved against animation_source -- the simple case
+## every Quaternius/KayKit entry below uses) OR a `{"clip": <name>, "source":
+## <path>}` Dictionary, meaning that one clip actually lives in a DIFFERENT
+## file entirely and needs importing into animation_source's own player
+## first (see _setup_animation()'s _resolve_or_import() helper). The Orc
+## entry below needs this for literally every field -- Meshy's per-clip
+## animation API hands back one full skinned model per requested clip, not
+## one shared library file the way Quaternius/KayKit ship theirs.
 const MODEL_CONFIG := {
 	"hero": {
 		"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0,
@@ -71,8 +72,47 @@ const MODEL_CONFIG := {
 		"animation_source": "res://assets/creatures/animations/kaykit_rig_medium_special.glb",
 		"idle": "Skeletons_Idle", "walk": "Skeletons_Walking", "death": "Skeletons_Death",
 		"dying": "Skeletons_Inactive_Floor_Pose",
-		"hits": ["Hit_A", "Hit_B"],
-		"hit_source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"
+		"hits": [
+			{"clip": "Hit_A", "source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"},
+			{"clip": "Hit_B", "source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"}
+		]
+	},
+	## Meshy AI (Phase 8, 2026-09-13) -- a custom-generated model for the SRD
+	## "Orc" stat block, no free pre-made pack covered it. Generated via the
+	## Composio-connected Meshy API: text-to-3D preview -> remesh to under the
+	## 320k-face rigging limit -> rig (biped) with the preview's own texture
+	## baked on -> one MESHY_CREATE_ANIMATION_TASK per needed clip against
+	## Meshy's own preset animation library (its own search turned up
+	## thematically-fitting picks: "Slow_Orc_Walk" already exists in that
+	## library by name, and "Fall_Dead_from_Abdominal_Injury" is a real death
+	## clip -- neither guessed at). Bone-name compatibility confirmed directly
+	## (godot/tools/inspect_meshy_orc.gd: 24/24 bones match across every
+	## animation file), same discipline as every other family here -- expected
+	## to hold since Meshy retargets each requested clip onto the exact rig it
+	## generated, but checked rather than assumed anyway.
+	##
+	## Every clip below needs the `{clip, source}` import form: Meshy's
+	## animation API returns one full skinned model per requested clip
+	## (`Armature|<ClipName>|baselayer`, its own export naming, not a
+	## Godot-namespacing thing), not one shared multi-clip file the way
+	## Quaternius/KayKit ship theirs -- animation_source (idle) is the only
+	## clip that needs no import, since its own file already has a usable
+	## skeleton+player pair to serve as the primary one _process() drives.
+	## No good held "kneeling/wounded" pose exists in Meshy's preset library
+	## (checked directly, not assumed) -- "dying" reuses a kneel-then-stand
+	## transition clip as an imperfect stand-in, looped like the other
+	## families' real held poses; revisit if it reads oddly at the table.
+	"monster:orc": {
+		"path": "res://assets/creatures/monster/orc_warrior.glb", "label_height": 2.1,
+		"animation_source": "res://assets/creatures/animations/meshy_orc_idle.glb",
+		"idle": "Armature|Idle|baselayer",
+		"walk": {"clip": "Armature|Slow_Orc_Walk_inplace|baselayer", "source": "res://assets/creatures/animations/meshy_orc_walk.glb"},
+		"death": {"clip": "Armature|Fall_Dead_from_Abdominal_Injury|baselayer", "source": "res://assets/creatures/animations/meshy_orc_death.glb"},
+		"dying": {"clip": "Armature|Kneel_on_One_Knee_and_Stand|baselayer", "source": "res://assets/creatures/animations/meshy_orc_kneel.glb"},
+		"hits": [
+			{"clip": "Armature|Hit_Reaction|baselayer", "source": "res://assets/creatures/animations/meshy_orc_hit1.glb"},
+			{"clip": "Armature|Hit_Reaction_1|baselayer", "source": "res://assets/creatures/animations/meshy_orc_hit2.glb"}
+		]
 	}
 }
 const FALLBACK_LABEL_HEIGHT := 1.9
@@ -329,40 +369,20 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 	# directly -- a glTF import can namespace its animations under a named
 	# AnimationLibrary (yielding a key like "somelib/Idle") rather than the
 	# default unnamed one, and has_animation()/play() need the exact key
-	# either way.
-	_idle_animation_key = _resolve_animation_name(_anim_source_player, config.get("idle", ""))
-	_walk_animation_key = _resolve_animation_name(_anim_source_player, config.get("walk", ""))
-	_death_animation_key = _resolve_animation_name(_anim_source_player, config.get("death", ""))
-	_dying_animation_key = _resolve_animation_name(_anim_source_player, config.get("dying", ""))
+	# either way. Each of these may instead be a {clip, source} Dictionary
+	# naming a DIFFERENT file entirely -- see _resolve_or_import() and
+	# MODEL_CONFIG's own doc comment for why the Orc family needs that for
+	# every field.
+	_idle_animation_key = _resolve_or_import(config.get("idle", ""))
+	_walk_animation_key = _resolve_or_import(config.get("walk", ""))
+	_death_animation_key = _resolve_or_import(config.get("death", ""))
+	_dying_animation_key = _resolve_or_import(config.get("dying", ""))
 
-	# Hit-reaction clips normally resolve against the same primary player as
-	# everything above -- EXCEPT when config["hit_source"] names a different
-	# file entirely (true for the skeleton family: its own animation source
-	# has no dedicated hit-reaction clips of its own). In that case, the
-	# needed clips are imported into the primary player's own animation
-	# library first (_import_animation_clip), so the rest of this class
-	# (playback, loop-forcing, the finished-signal handler) never needs to
-	# know or care that a clip's Animation resource originally came from a
-	# second file -- it's just another key on _anim_source_player either way.
 	_hit_animation_keys = []
-	var hit_names: Array = config.get("hits", [])
-	var hit_source_path: String = config.get("hit_source", animation_source_path)
-	if hit_source_path == animation_source_path:
-		for hit_name in hit_names:
-			var resolved := _resolve_animation_name(_anim_source_player, hit_name)
-			if resolved != "":
-				_hit_animation_keys.append(resolved)
-	elif ResourceLoader.exists(hit_source_path):
-		var hit_scene := load(hit_source_path) as PackedScene
-		var hit_instance := hit_scene.instantiate() as Node3D
-		var hit_players := hit_instance.find_children("*", "AnimationPlayer", true, false)
-		if not hit_players.is_empty():
-			var hit_player := hit_players[0] as AnimationPlayer
-			for hit_name in hit_names:
-				var imported := _import_animation_clip(_anim_source_player, hit_player, hit_name)
-				if imported != "":
-					_hit_animation_keys.append(imported)
-		hit_instance.queue_free() # never added to the tree -- just a temporary clip source
+	for hit_entry in config.get("hits", []):
+		var resolved: String = _resolve_or_import(hit_entry)
+		if resolved != "":
+			_hit_animation_keys.append(resolved)
 
 	# "_Loop"-suffixed clips in some packs aren't necessarily flagged to loop
 	# by default on import -- force it so Idle/Walk/Dying actually repeat
@@ -387,6 +407,34 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 	])
 
 	_play_source_animation(_idle_animation_key)
+
+## Resolves one config animation VALUE (idle/walk/death/dying, or one hits
+## entry) against `_anim_source_player` -- either a plain clip name (String,
+## resolved directly, the common case every Quaternius/KayKit field uses) or
+## a `{"clip": <name>, "source": <path>}` Dictionary meaning that clip
+## actually lives in a different file and needs importing first (see
+## MODEL_CONFIG's own doc comment for why the Orc family needs this for
+## every field). Returns "" if the clip can't be found/imported at all --
+## every caller already treats an empty key as "this family has no
+## animation for this state," the same graceful-degradation convention
+## _play_source_animation()'s own no-op-on-empty-key already relies on.
+func _resolve_or_import(value) -> String:
+	if value is String:
+		return _resolve_animation_name(_anim_source_player, value)
+	if value is Dictionary:
+		var clip_name: String = value.get("clip", "")
+		var source_path: String = value.get("source", "")
+		if clip_name == "" or source_path == "" or not ResourceLoader.exists(source_path):
+			return ""
+		var source_scene := load(source_path) as PackedScene
+		var source_instance := source_scene.instantiate() as Node3D
+		var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
+		var imported := ""
+		if not source_players.is_empty():
+			imported = _import_animation_clip(_anim_source_player, source_players[0] as AnimationPlayer, clip_name)
+		source_instance.queue_free() # never added to the tree -- just a temporary clip source
+		return imported
+	return ""
 
 ## Copies one named clip's Animation resource from `source_player` (a
 ## temporary, never-added-to-the-tree instance -- see its caller above) into

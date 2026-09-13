@@ -37,18 +37,30 @@ checking without a live `node server.js` or opening the editor GUI.
   monster/hero model family before wiring it into `Token.gd`'s
   `MODEL_CONFIG` -- edit `SKELETON_MODEL`/`ANIM_FILES` for whatever's being
   checked next.
-- **`test_skeleton_token.gd`/`.tscn`** and **`test_imp_token.gd`/`.tscn`** --
-  actual `Node`-scene functional checks (NOT bare `--script` SceneTree tools
-  -- those run before `@onready`/`_ready()` ever fire on manually-instanced
-  children, which silently breaks a real `Token.apply_data()` call; see the
-  gotcha these two were written to work around, below) that build a real
-  `Token` for a specific server-shaped name ("Skeleton 1", "Goblin 1") and
-  print whether `MODEL_CONFIG`'s lookup/bone-map/animation resolution
-  actually succeeded. Run via
+- **`test_skeleton_token.gd`/`.tscn`**, **`test_imp_token.gd`/`.tscn`**, and
+  **`test_orc_token.gd`/`.tscn`** -- actual `Node`-scene functional checks
+  (NOT bare `--script` SceneTree tools -- those run before
+  `@onready`/`_ready()` ever fire on manually-instanced children, which
+  silently breaks a real `Token.apply_data()` call; see the gotcha these
+  were written to work around, below) that build a real `Token` for a
+  specific server-shaped name ("Skeleton 1", "Goblin 1", "Orc 1") and print
+  whether `MODEL_CONFIG`'s lookup/bone-map/animation resolution actually
+  succeeded. Run via
   `<Godot>.exe --headless --path godot res://tools/test_skeleton_token.tscn`
   (a real scene path, not `--script`). A template for confirming the NEXT
   new per-monster-name `MODEL_CONFIG` entry actually resolves before ever
   looking at it live in the editor.
+- **`inspect_meshy_orc.gd`** (Phase 8) -- same bone/clip check as
+  `inspect_kaykit_skeleton.gd`, but for a set of Meshy-generated animation
+  files against a Meshy-generated character model. A template for verifying
+  the next custom-generated model before wiring it in -- edit
+  `CHARACTER_MODEL`/`ANIM_FILES`. Confirmed a real, non-obvious thing worth
+  checking rather than assuming: Meshy's own animation-clip names come back
+  pipe-delimited (`"Armature|Idle|baselayer"`), not the plain bare names
+  every other pack here uses -- `_resolve_animation_name()`'s exact-match
+  branch already handles this correctly once the FULL literal string is
+  used as the config value, no code change needed, just don't assume a
+  short bare name will match.
 
 **Second gotcha: a bare `--script` `SceneTree` tool's `_init()` runs before
 any manually `add_child()`-ed node has had a real `_ready()`/`NOTIFICATION_ENTER_TREE`

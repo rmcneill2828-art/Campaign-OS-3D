@@ -37,6 +37,20 @@
   the same "convenience, not license" sweep-up its own comment already
   applies to the raw KayKit pack folders. A fresh clone needs to re-run the
   copy step below for these too, same as the Quaternius-derived files.
+- **`creatures/monster/orc_warrior.glb`** and **`creatures/animations/meshy_orc_*.glb`**
+  (idle/walk/death/hit1/hit2/kneel, 6 files) -- Phase 8's custom-generated
+  model for the SRD "Orc," no free pack covered it. Generated on demand via
+  the Composio-connected Meshy API (text-to-3D -> remesh -> rig+texture ->
+  one animation-library clip per file) rather than downloaded from a fixed
+  pack -- there's no raw source folder to point back to the way the
+  Quaternius/KayKit entries above have; regenerating means re-running the
+  same API calls, not re-flattening a re-downloaded zip. Cost ~65 Meshy
+  credits total for this one monster (see MODEL_CONFIG's own comment in
+  `Token.gd` for the exact pipeline and why every clip needed the
+  `{clip, source}` cross-file import form). **Not committed** -- same
+  gitignore sweep-up as the KayKit files above, no license reason either
+  (this is the user's own generated content) but swept into the same
+  ignored tree by convenience.
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.
@@ -203,11 +217,35 @@ Skeletons' actual skeleton bone names match the Character Animations pack's
 `superhero_male.gltf` were checked against Quaternius's UAL1 earlier in this
 file -- don't assume a shared rig NAME implies shared bone names without
 checking. **KayKit's rig is a different, separate skeleton from
-Quaternius's** (different creator, no shared convention) -- a KayKit model
-would need `Token.gd`'s single `ANIMATION_SOURCE_PATH` generalized into a
-per-model-family setting (Quaternius models keep using
-`mannequin_animations.glb`, KayKit models use a KayKit animation source
-instead), not a drop-in replacement for it.
+Quaternius's** (different creator, no shared convention).
+
+**Update, Phase 8 (2026-09-13): done.** The Skeletons check above came back
+23/23 matched (`godot/tools/inspect_kaykit_skeleton.gd`), and `Token.gd`'s
+`MODEL_CONFIG` is now genuinely per-model-family -- each entry names its own
+`animation_source` file, so Quaternius families keep using
+`mannequin_animations.glb` while the skeleton family uses a KayKit one,
+with no shared global constant forcing them to match. See `Token.gd`'s own
+doc comment on `MODEL_CONFIG` for the full shape, including the later
+`{clip, source}` per-field form Meshy's orc needed.
+
+### Meshy AI (custom-generated, Phase 8)
+
+Unlike every pack above, `orc_warrior.glb` and its animations aren't from a
+fixed downloadable pack at all -- they were generated on demand via the
+Composio-connected Meshy API (text-to-3D -> remesh -> rig+texture -> one
+preset animation-library clip per file), the first entry in this project's
+own "custom created models" research (see `ROADMAP.md`'s Phase 8 entry for
+the full pipeline and a real gotcha hit along the way: texturing and
+rigging had to target the SAME remeshed/low-poly geometry, not the
+original high-poly preview, or the two outputs end up on different,
+incompatible topologies). **Licensing not independently verified the way
+Kenney/Quaternius/KayKit's were above** -- Meshy's own terms of service
+govern ownership/usage of content generated through a paid account, and
+haven't been read line-by-line here the way this project insists on doing
+for a real license file elsewhere in this document; treat that as an open
+item if this content's licensing status ever actually matters (e.g.
+distributing this repo's assets beyond personal use), rather than an
+established, confirmed fact the way the CC0/QAL findings above are.
 
 ## Why flattened copies instead of referencing the raw pack folders directly
 
