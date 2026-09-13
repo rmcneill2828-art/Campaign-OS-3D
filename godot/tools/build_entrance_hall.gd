@@ -126,11 +126,20 @@ func _set_owners_recursive(node: Node, root_owner: Node) -> void:
 func _module_center(module_col: int, module_row: int) -> Vector2:
 	return Vector2((2 * module_col - 1) * CELL_SIZE, (2 * module_row - 1) * CELL_SIZE)
 
-func _place(path: String, world_x: float, world_z: float, rotation_deg: float = 0.0) -> void:
+## `mount_height` lifts a piece an EXTRA amount above its own normal
+## ground-flush placement -- for wall-mounted props like WALL_TORCH, which
+## PROP_GROUND_OFFSET still grounds at y=0 (correct for a piece sitting ON
+## the floor), but a torch/sconce is meant to be mounted partway UP a
+## wall, not standing on the ground like a floor lamp. Kept as a separate
+## parameter rather than folded into PROP_GROUND_OFFSET itself, since that
+## dict's values are real measured data (this project's whole "measure the
+## real thing" discipline) -- mount_height is a genuine design choice
+## (how high a torch hangs), not a measurement.
+func _place(path: String, world_x: float, world_z: float, rotation_deg: float = 0.0, mount_height: float = 0.0) -> void:
 	var scene := load(path) as PackedScene
 	var node := scene.instantiate() as Node3D
 	var ground_offset: float = PROP_GROUND_OFFSET.get(path, 0.0)
-	node.position = Vector3(world_x, -ground_offset, world_z)
+	node.position = Vector3(world_x, -ground_offset + mount_height, world_z)
 	node.rotation_degrees.y = rotation_deg
 	_root.add_child(node)
 
@@ -182,6 +191,16 @@ func _place_props() -> void:
 	# treasure chest tucked near the back wall as a reward -- placement
 	# is a reasonable guess (exact mounting rotation for the torches
 	# especially), flagged for a live look same as the corners above.
-	_place(WALL_TORCH, 0.5, 10.0, 90.0)
-	_place(WALL_TORCH, 7.5, 14.0, -90.0)
+	#
+	# TORCH_MOUNT_HEIGHT: found live -- PROP_GROUND_OFFSET correctly grounds
+	# WALL_TORCH's own base at y=0 (right for a piece meant to stand ON the
+	# floor), but a wall-mounted sconce isn't a floor lamp; it reads as
+	# "sitting on the ground" until lifted. 1.4m puts its base at roughly
+	# shoulder height on the room's ~3m walls, with its ~1.06m height
+	# leaving a sensible margin below the wall top -- a design choice, not
+	# a measurement, so it lives here as a named constant rather than in
+	# PROP_GROUND_OFFSET's real measured data.
+	const TORCH_MOUNT_HEIGHT := 1.4
+	_place(WALL_TORCH, 0.5, 10.0, 90.0, TORCH_MOUNT_HEIGHT)
+	_place(WALL_TORCH, 7.5, 14.0, -90.0, TORCH_MOUNT_HEIGHT)
 	_place(TREASURE_CHEST, 6.0, 15.0)
