@@ -142,7 +142,10 @@
         // from their sheet) and only reports pass/fail -- it does not apply a follow-up
         // effect (e.g. half damage on success). A separate apply_damage/toggle_condition
         // action, decided from the reported result, covers that.
-        const result = window.CampaignOS.rollSavingThrow(state, target.id, action.ability, action.dc);
+        const result = window.CampaignOS.rollSavingThrow(state, target.id, action.ability, action.dc, {
+          advantage: Boolean(action.advantage),
+          disadvantage: Boolean(action.disadvantage)
+        });
         return { state: result.state, message: result.message, alreadyLogged: true };
       }
       case "ability_check": {
@@ -151,7 +154,10 @@
         // rollAbilityCheck resolves target.skill against a named skill's stated override
         // (or the ability modifier of its governing ability) or a bare ability with no
         // named skill -- same one-roll, pass/fail-only shape as saving_throw.
-        const result = window.CampaignOS.rollAbilityCheck(state, target.id, action.skill, action.dc);
+        const result = window.CampaignOS.rollAbilityCheck(state, target.id, action.skill, action.dc, {
+          advantage: Boolean(action.advantage),
+          disadvantage: Boolean(action.disadvantage)
+        });
         return { state: result.state, message: result.message, alreadyLogged: true };
       }
       case "cast_spell": {

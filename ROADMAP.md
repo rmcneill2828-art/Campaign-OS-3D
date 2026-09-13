@@ -1147,12 +1147,37 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   carried over as an action type when the 3D client's HTTP action API was
   built. Combat currently proceeds in whatever default order tokens spawn
   in, with no DM control over it at all.
-- **No Advantage/Disadvantage toggle anywhere** in `Main.gd` -- confirmed by
-  reading every `_on_..._pressed()` handler that builds an action: attack
-  (`_send_action({"type": "attack", ...})`, no `advantage`/`disadvantage`
-  key at all), `saving_throw`, `ability_check`, `cast_spell`, and
-  `cast_area_spell` all silently roll "normal" even though `attack()`/
-  `castSpell()`/`castAreaSpell()` all accept those params server-side.
+- [x] **No Advantage/Disadvantage toggle anywhere -- 2026-09-13, fixed.**
+  Turned out bigger than expected: `attack()`/`castSpell()` already
+  accepted `options.advantage`/`options.disadvantage` server-side, but
+  `rollSavingThrow()`/`rollAbilityCheck()` didn't accept them AT ALL --
+  only ever auto-applying disadvantage from specific conditions
+  (exhaustion, Restrained, Poisoned). A DM declaring "advantage from
+  Bless" on a save had no way to express that, in either the 3D UI or the
+  Claude DM Assistant (its shared action vocabulary had no such field
+  either). Fixed at the engine level first (`rollSavingThrow`/
+  `rollAbilityCheck` now take an `options` param, combined with automatic
+  condition-based disadvantage using `attack()`'s own established
+  convention: explicit + automatic on the same side both just count as
+  one, explicit advantage + disadvantage together cancel to a normal
+  roll) -- applied to **both** Campaign-OS and Campaign-OS-3D (separate
+  git repos) to keep `engine/encounter.js`/`engine/dmBridge.js` byte-
+  identical, confirmed with `diff`. 4 new unit tests in Campaign-OS's own
+  `tests/encounter.test.js` (366/366 passing there), 2 new integration
+  tests in Campaign-OS-3D's `tests/server.test.js` confirming the field
+  actually reaches the engine through the real `POST /action` path
+  (22/22 passing). `dm-bridge/watch.js`'s system prompt updated in both
+  repos so the Claude DM Assistant knows about the new fields too.
+  On the 3D client itself: added one shared "Roll mode" dropdown
+  (Normal/Advantage/Disadvantage) near the top of the selected-token
+  panel in `Main.tscn`/`Main.gd`, applying to whichever roll comes next --
+  attack (right-click), saving throw, ability check, or a spell's attack
+  roll -- rather than duplicating the control in every section, matching
+  how a real table treats it as one standing declaration rather than a
+  per-button setting. Deliberately NOT wired into `cast_area_spell`,
+  which resolves as one save per target -- no single "advantage" applies
+  to "everyone in the blast," and the engine doesn't expose per-target
+  advantage there anyway.
 - **No dedicated UI for `apply_damage` (direct damage without a full attack
   roll), `drop_concentration`, `spend_hit_die`, or `remove_token`** -- all
   four are real cases in the shared `DMBridge.applyActions` vocabulary

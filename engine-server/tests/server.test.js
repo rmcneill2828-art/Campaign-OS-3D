@@ -84,6 +84,45 @@ test("POST /action attack resolves through the real engine (hit or miss, HP or m
   }
 });
 
+// Confirms the advantage/disadvantage fields actually reach rollSavingThrow/
+// rollAbilityCheck through the real POST /action -> DMBridge.applyActions path Main.gd's
+// UI would use (see engine/dmBridge.js's saving_throw/ability_check cases) -- the exact
+// die-roll math (cancel-out when both are set, combining with an automatic condition
+// source) is already unit-tested precisely against a stubbed RNG in Campaign-OS's own
+// tests/encounter.test.js; this just checks the plumbing, since dice here are real and
+// not seedable through this HTTP layer.
+test("POST /action saving_throw with advantage produces a roll message naming it", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "saving_throw", target: "Darkhawk", ability: "DEX", dc: 10, advantage: true })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], /\(advantage: \d+, \d+\)/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test("POST /action ability_check with disadvantage produces a roll message naming it", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "ability_check", target: "Darkhawk", skill: "Perception", dc: 10, disadvantage: true })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], /\(disadvantage: \d+, \d+\)/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test("POST /action with no type is rejected without mutating state", async () => {
   const { server, baseUrl } = await startTestServer();
   try {

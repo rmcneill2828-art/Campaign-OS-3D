@@ -75,6 +75,17 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
 @onready var _open_player_window_button: Button = $HUD/OpenPlayerWindowButton
 
+## Applies to whichever roll comes next for the selected token -- attack (right-click),
+## saving throw, ability check, or a spell's own attack roll -- rather than a separate
+## advantage/disadvantage control duplicated in each of those sections. Matches how a real
+## table actually talks about it ("this attack has advantage") as one standing declaration,
+## not a per-button-press setting; the DM resets it back to Normal themselves once whatever
+## granted it stops applying (this client has no way to know that on its own). Deliberately
+## NOT wired into cast_area_spell -- area spells resolve as saving throws per target, and
+## rollSavingThrow's own advantage/disadvantage support is for a single declared target's
+## save, not "everyone in the blast," which castAreaSpell doesn't expose per-target anyway.
+@onready var _roll_mode_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/RollModeRow/RollModeOption
+
 @onready var _checks_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksHeaderButton
 @onready var _checks_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody
 @onready var _save_ability_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/ChecksBody/SaveRow/SaveAbilityOption
@@ -443,12 +454,12 @@ func _on_roll_save_pressed() -> void:
 	if not _require_selected_token():
 		return
 	var ability: String = _save_ability_option.get_item_text(_save_ability_option.selected)
-	_send_action({
+	_send_action(_apply_roll_mode({
 		"type": "saving_throw",
 		"target": _tokens[_selected_token_id].token_name,
 		"ability": ability,
 		"dc": int(_dc_input.value)
-	})
+	}))
 
 ## ability_check's `skill` accepts either a bare ability key or a named skill
 ## interchangeably (rollAbilityCheck resolves either) -- the same one
@@ -457,12 +468,12 @@ func _on_roll_check_pressed() -> void:
 	if not _require_selected_token():
 		return
 	var skill: String = _check_skill_option.get_item_text(_check_skill_option.selected)
-	_send_action({
+	_send_action(_apply_roll_mode({
 		"type": "ability_check",
 		"target": _tokens[_selected_token_id].token_name,
 		"skill": skill,
 		"dc": int(_dc_input.value)
-	})
+	}))
 
 ## cast_spell handles everything server-side: spends the caster's slot at
 ## `level` (0 = cantrip, never consumes one), and -- only when a target is
@@ -494,7 +505,7 @@ func _on_cast_spell_pressed() -> void:
 		var damage_type := _spell_damage_type_option.get_item_text(_spell_damage_type_option.selected)
 		if damage_type != DAMAGE_TYPE_NONE:
 			action["damageType"] = damage_type
-	_send_action(action)
+	_send_action(_apply_roll_mode(action))
 
 ## cast_area_spell resolves a save-for-half effect (Fireball, Burning Hands)
 ## against every checked target in one call: one damage roll for the whole
@@ -723,6 +734,30 @@ func _require_selected_token() -> bool:
 		return false
 	return true
 
+## RollModeOption's fixed item order (see Main.tscn) -- index, not id, since a plain
+## OptionButton's `selected` is an index into however items were added.
+const ROLL_MODE_NORMAL := 0
+const ROLL_MODE_ADVANTAGE := 1
+const ROLL_MODE_DISADVANTAGE := 2
+
+func _roll_mode_advantage() -> bool:
+	return _roll_mode_option.selected == ROLL_MODE_ADVANTAGE
+
+func _roll_mode_disadvantage() -> bool:
+	return _roll_mode_option.selected == ROLL_MODE_DISADVANTAGE
+
+## Merges the shared roll-mode selector's advantage/disadvantage into an action
+## dict already built by a caller -- only adds the keys when actually set, so
+## a Normal roll's action payload looks exactly like it did before this
+## control existed (no stray `"advantage": false` clutter for the server/log
+## to ignore).
+func _apply_roll_mode(action: Dictionary) -> Dictionary:
+	if _roll_mode_advantage():
+		action["advantage"] = true
+	if _roll_mode_disadvantage():
+		action["disadvantage"] = true
+	return action
+
 ## toggleCondition (see engine-server/engine/encounter.js) is a true flip --
 ## add if absent, remove if present -- matching a toggle button exactly.
 ## Godot flips the button's own pressed state immediately on click (before
@@ -800,7 +835,7 @@ func _handle_right_click(screen_pos: Vector2) -> void:
 		return
 
 	var attacker_name: String = _tokens[_selected_token_id].token_name
-	_send_action({"type": "attack", "attacker": attacker_name, "target": target.token_name})
+	_send_action(_apply_roll_mode({"type": "attack", "attacker": attacker_name, "target": target.token_name}))
 
 func _select_token(token: Token) -> void:
 	if _tokens.has(_selected_token_id):

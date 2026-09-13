@@ -981,7 +981,13 @@
   // Paralyzed, and Unconscious automatically fail any STR/DEX save with no roll at all (RAW:
   // these conditions cause a STR/DEX save failure outright); Restrained imposes disadvantage
   // specifically on DEX saves (not saves generally) -- see hasCondition and friends above.
-  function rollSavingThrow(state, tokenId, ability, dc) {
+  // options: { advantage: bool, disadvantage: bool } -- a situational source a DM declares
+  // (Bless-like effects, cover, a class feature) rather than derived from the token's own
+  // state, combined with the automatic condition-based disadvantage above using attack()'s
+  // own convention: explicit and automatic sources on the same side just both count as one
+  // (RAW doesn't stack multiple advantage or multiple disadvantage), and advantage +
+  // disadvantage together cancel out to a normal roll rather than one silently winning.
+  function rollSavingThrow(state, tokenId, ability, dc, options = {}) {
     const key = String(ability || "").toUpperCase().slice(0, 3);
     if (!ABILITY_KEYS.includes(key)) {
       return { state, message: `Saving throw failed: "${ability}" is not a valid ability.`, success: false };
@@ -1001,13 +1007,18 @@
     const bonus = savingThrowBonus(token, key);
     const exhausted = (token.exhaustion || 0) >= 3;
     const restrainedDex = key === "DEX" && hasCondition(token, "Restrained");
-    const d20Info = rollD20WithMode(exhausted || restrainedDex ? "disadvantage" : null);
+    const hasDisadvantage = Boolean(options.disadvantage) || exhausted || restrainedDex;
+    const hasAdvantage = Boolean(options.advantage);
+    const mode = hasDisadvantage && hasAdvantage ? null : hasDisadvantage ? "disadvantage" : hasAdvantage ? "advantage" : null;
+    const d20Info = rollD20WithMode(mode);
     const roll = d20Info.roll;
     const total = roll + bonus;
     const success = total >= dcNumber;
-    const disadvantageReason = exhausted && restrainedDex ? "exhaustion + restrained disadvantage"
-      : exhausted ? "exhaustion disadvantage" : restrainedDex ? "restrained disadvantage" : null;
-    const rollLabel = d20Info.rolls.length ? `${roll} (${disadvantageReason}: ${d20Info.rolls.join(", ")})` : `${roll}`;
+    const disadvantageReason = mode !== "disadvantage" ? null
+      : exhausted && restrainedDex ? "exhaustion + restrained disadvantage"
+      : exhausted ? "exhaustion disadvantage" : restrainedDex ? "restrained disadvantage" : "disadvantage";
+    const reasonLabel = mode === "advantage" ? "advantage" : disadvantageReason;
+    const rollLabel = d20Info.rolls.length ? `${roll} (${reasonLabel}: ${d20Info.rolls.join(", ")})` : `${roll}`;
     const message = `${token.name} rolls a ${key} save: ${rollLabel} ${bonus >= 0 ? "+" : ""}${bonus} = ${total} vs DC ${dcNumber}. ${success ? "Success" : "Failure"}.`;
     return { state: addLogEntry(state, message), message, success, total };
   }
@@ -1020,8 +1031,9 @@
   // bullet in CLAUDE.md) -- and Poisoned imposes disadvantage on ability checks the same way
   // it does attack rolls. Blinded's "auto-fails a check that requires sight" isn't modeled:
   // whether a given check is sight-dependent is a DM judgment call this engine can't make,
-  // the same "leave it to narration" treatment Charmed/Frightened get.
-  function rollAbilityCheck(state, tokenId, skillOrAbility, dc) {
+  // the same "leave it to narration" treatment Charmed/Frightened get. options: see
+  // rollSavingThrow's own doc comment -- same declared-vs-automatic combination convention.
+  function rollAbilityCheck(state, tokenId, skillOrAbility, dc, options = {}) {
     const token = tokensOnCurrentMap(state).find((item) => item.id === tokenId);
     if (!token) return { state, message: "Ability check failed: token was not found.", success: false };
 
@@ -1035,13 +1047,18 @@
     const label = skill ? skill.name : String(skillOrAbility || "").toUpperCase().slice(0, 3);
     const exhausted = (token.exhaustion || 0) >= 1;
     const poisoned = hasCondition(token, "Poisoned");
-    const d20Info = rollD20WithMode(exhausted || poisoned ? "disadvantage" : null);
+    const hasDisadvantage = Boolean(options.disadvantage) || exhausted || poisoned;
+    const hasAdvantage = Boolean(options.advantage);
+    const mode = hasDisadvantage && hasAdvantage ? null : hasDisadvantage ? "disadvantage" : hasAdvantage ? "advantage" : null;
+    const d20Info = rollD20WithMode(mode);
     const roll = d20Info.roll;
     const total = roll + bonus;
     const success = total >= dcNumber;
-    const disadvantageReason = exhausted && poisoned ? "exhaustion + poisoned disadvantage"
-      : exhausted ? "exhaustion disadvantage" : poisoned ? "poisoned disadvantage" : null;
-    const rollLabel = d20Info.rolls.length ? `${roll} (${disadvantageReason}: ${d20Info.rolls.join(", ")})` : `${roll}`;
+    const disadvantageReason = mode !== "disadvantage" ? null
+      : exhausted && poisoned ? "exhaustion + poisoned disadvantage"
+      : exhausted ? "exhaustion disadvantage" : poisoned ? "poisoned disadvantage" : "disadvantage";
+    const reasonLabel = mode === "advantage" ? "advantage" : disadvantageReason;
+    const rollLabel = d20Info.rolls.length ? `${roll} (${reasonLabel}: ${d20Info.rolls.join(", ")})` : `${roll}`;
     const message = `${token.name} rolls a ${label} check: ${rollLabel} ${bonus >= 0 ? "+" : ""}${bonus} = ${total} vs DC ${dcNumber}. ${success ? "Success" : "Failure"}.`;
     return { state: addLogEntry(state, message), message, success, total };
   }
