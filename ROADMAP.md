@@ -882,8 +882,19 @@ doesn't need re-doing.
   keys still resolve identically (24/24 bones, same clip keys) since
   only the visible mesh/texture changed, not the skeleton. Total cost
   for the full Orc including this fix: 78 credits (1100 -> 1022).
+  **Final confirmation, 2026-09-13 (user-confirmed): "looks good."** One
+  known, minor cosmetic artifact -- a slightly odd-looking arm in close-up
+  -- noted but deliberately not chased further; the user's own call, since
+  this whole Orc was explicitly a first test of the Meshy pipeline itself,
+  not a production asset needing to be pixel-perfect. Worth revisiting only
+  if it actually bothers someone at the table.
 
-Phase 8's first item complete and live-verified. Below is the untouched
+Custom-generated models via Meshy: real, working, and now proven end to
+end for one full monster -- a real pipeline (including its rough edges: a
+failed API mode, a pose that didn't match the prompt, a topology mismatch
+between two parallel steps) documented here for the next one, not just a
+success story. Phase 8's KayKit and Meshy items are both complete and
+live-verified. Below is the untouched
 research from 2026-09-11 for the bigger, still-open questions this phase
 hasn't tackled yet (a unified retargeting pipeline, paid packs, AI
 generation):
