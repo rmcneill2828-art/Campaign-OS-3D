@@ -1126,10 +1126,99 @@ catalogued in `godot/assets/README.md` already was. Worth a targeted search
 only once a specific missing monster (not covered by KayKit or a future
 Mixamo/AI-generated model) actually blocks something real.
 
+## Feature Parity Audit (2D Campaign-OS -> 3D), 2026-09-13
+
+User request: "lets do a complete review of Campaign-OS and 3D to see if we
+have missed any features and effects." Method: `engine/encounter.js`,
+`engine/campaign.js`, and `engine/dmBridge.js` are confirmed byte-identical
+between the two projects (same file sizes, empty `diff`), so every core 5e
+mechanic is already available server-side -- this audit is specifically
+about what the 3D client's UI (and its DM Assistant action vocabulary,
+which routes through the exact same `DMBridge.applyActions` `POST /action`
+calls from `Main.gd` do) actually exposes, cross-referenced function-by-
+function against `ui/app.js` (~4000 lines) and its sibling modules.
+
+**Real gaps found, roughly in the order worth tackling:**
+- **No way to set or roll initiative order at all**, in either the 3D UI or
+  the Claude DM Assistant -- `dmBridge.js`'s shared action vocabulary
+  (`spawn_monster` through `switch_map`, ~24 cases) has no
+  `set_initiative`/`roll_initiative` case; the 2D app sets it via a plain
+  `<input name="initiative">` form field on the token sheet that was never
+  carried over as an action type when the 3D client's HTTP action API was
+  built. Combat currently proceeds in whatever default order tokens spawn
+  in, with no DM control over it at all.
+- **No Advantage/Disadvantage toggle anywhere** in `Main.gd` -- confirmed by
+  reading every `_on_..._pressed()` handler that builds an action: attack
+  (`_send_action({"type": "attack", ...})`, no `advantage`/`disadvantage`
+  key at all), `saving_throw`, `ability_check`, `cast_spell`, and
+  `cast_area_spell` all silently roll "normal" even though `attack()`/
+  `castSpell()`/`castAreaSpell()` all accept those params server-side.
+- **No dedicated UI for `apply_damage` (direct damage without a full attack
+  roll), `drop_concentration`, `spend_hit_die`, or `remove_token`** -- all
+  four are real cases in the shared `DMBridge.applyActions` vocabulary
+  (so already reachable by typing a command into the DM Assistant panel),
+  but none has a quick direct button the way `heal`/`long_rest`/
+  `use_resource` etc. do -- every use costs a real Claude API round-trip
+  instead of an instant click.
+- **No AoE template tool** -- `cast_area_spell` exists and works, but
+  requires manually checking each target's checkbox one at a time; the 2D
+  app lets the DM drag out a cone/circle/line template directly on the map
+  and auto-detects which tokens it covers (`templateCoveredTokenNames()`,
+  built on real point-in-shape geometry already living in `encounter.js`
+  and therefore already available to the 3D server too -- just never
+  wired into a 3D-side drawing tool).
+- **No ruler/measuring tool** (2D app: click-drag distance measurement
+  overlay).
+- **No interactive wall editor** -- walls only come from hardcoded
+  `seedState()` calls (this project's own map-building tools) or DM
+  Assistant `add_wall`/`remove_wall_near` text commands; no click-drag
+  wall drawing/erasing the way the 2D app's `renderWallsOverlay` supports.
+- **No Encounter Difficulty calculator** -- `evaluateEncounterDifficulty()`
+  (XP budget vs. party level, easy/medium/hard/deadly thresholds) is
+  already a shared, pure engine function; the 2D app has a whole panel for
+  it (`renderEncounterDifficulty`), the 3D client calls it nowhere.
+- **No freeform dice roller** (2D app: type "2d6+3", get a rolled result,
+  via the shared `rollFreeform()` -- a real, commonly-needed DM utility
+  for ad-hoc rolls not tied to any token/action).
+- **No Token Library / Map Library / folder-based asset browsing** (2D:
+  `tokenLibrary.js`, `mapLibrary.js`, `folderAssets.js`, plus
+  `renderMapFolderResults`/`renderTokenFolderResults`/
+  `renderMusicFolderResults`) -- every 3D map and creature is hand-built/
+  hardcoded via this project's own headless tools rather than something a
+  DM can browse a folder and drop into a live session.
+- **No Character Creator wizard** and **no End Session / session
+  transcript reporting** -- both are real `dm-bridge/watch.js` features
+  (confirmed already, Phase 7's own notes: "requires `DND_REPO_PATH` env
+  var only for End Session/Create Character features (not used yet in 3D
+  client)") -- `watch.js` itself is copied byte-for-byte and already
+  supports both; the 3D client's own UI just never added a way to trigger
+  either.
+- **No campaign-level save/load** -- the 2D app has a whole `renderCampaign`/
+  `renderCampaignDetail` system for multiple saved campaigns/characters
+  across sessions; the 3D client only ever has the one live
+  `engine-server/state/encounter.json`.
+- **No music/ambience system** -- Campaign-OS's Phase 10 feature
+  (`renderMusicFolderResults`, `crossfadeAmbience`, `renderAmbienceControls`)
+  has no 3D equivalent at all -- this was already tracked below before
+  this audit; folding it in here rather than keeping a separate line.
+
+**Checked and confirmed NOT a gap** (worth recording so this doesn't get
+re-investigated later): the HP bar already has a real green/yellow/red
+"bloodied" gradient (`Token.gd`'s `_update_hp_bar()`, thresholds at 50%/
+25%) -- arguably a better indicator than the 2D app's plain "DEAD"/"DYING"/
+"STABLE" text badges. And the 3D client's skeletal idle/walk/hit/death/
+dying animation system (Phase 3/8) is actually MORE sophisticated than the
+2D app's own combat feedback, which is just text plus one CSS dice-tumble
+keyframe animation -- 3D isn't behind here, it's ahead.
+
+**Architecturally unnecessary for 3D, not real gaps**: the 2D app's grid
+handles / drag-to-align-grid-to-a-background-image system and its map
+background image upload/resize pipeline both only make sense for photo-
+background 2D maps -- hand-built 3D scenes (Prototype Chamber, Entrance
+Hall) have no equivalent need.
+
 ## Also tracked, not yet phased
 
-- **Audio/ambience** (matching the 2D app's Music Folder/Ambience feature) --
-  a nice parity feature, no urgency.
 - **Real multiplayer** (a server/sync service for players on their own
   devices, not just a second monitor) -- explicitly out of scope for now,
   the same "revisit only if actually needed" call the 2D app itself already
