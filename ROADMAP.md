@@ -1217,13 +1217,33 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   which resolves as one save per target -- no single "advantage" applies
   to "everyone in the blast," and the engine doesn't expose per-target
   advantage there anyway.
-- **No dedicated UI for `apply_damage` (direct damage without a full attack
-  roll), `drop_concentration`, `spend_hit_die`, or `remove_token`** -- all
-  four are real cases in the shared `DMBridge.applyActions` vocabulary
-  (so already reachable by typing a command into the DM Assistant panel),
-  but none has a quick direct button the way `heal`/`long_rest`/
-  `use_resource` etc. do -- every use costs a real Claude API round-trip
-  instead of an instant click.
+- [x] **No dedicated UI for `apply_damage`/`drop_concentration`/
+  `spend_hit_die`/`remove_token` -- 2026-09-13, fixed.** Three of the four
+  were already real cases in the shared `DMBridge.applyActions` vocabulary
+  (reachable by typing a command into the DM Assistant, just not a quick
+  button); `remove_token` turned out to not exist as a DM-bridge action at
+  all -- the 2D app has its own "Remove Token" button, but it calls
+  `removeToken()` directly in-browser rather than going through
+  `dmBridge.js`, so that engine glue case genuinely didn't exist yet. Added
+  it (mirroring the others' `findTokenByName` + not-found-message
+  convention), applied to both Campaign-OS and Campaign-OS-3D to keep
+  `engine/dmBridge.js` byte-identical (confirmed with `diff`), and updated
+  `dm-bridge/watch.js`'s prompt in both repos with guidance on when to use
+  it (a token that genuinely shouldn't exist anymore -- a summon expiring,
+  cleaning up a mistaken spawn -- not as a stand-in for "it died," which a
+  dead-but-still-present token already models better). 2 new unit tests in
+  Campaign-OS's own `tests/dmBridge.test.js` (372/372 passing there), 1 new
+  integration test in Campaign-OS-3D's `tests/server.test.js` confirming
+  the real `POST /action` path actually deletes the token (25/25 passing).
+  On the 3D client: four new controls added to the existing "Other Actions"
+  section -- a Damage row (amount + type + Apply), a Drop Concentration
+  button, a Hit Die row (free-text type, since a token's own pool varies by
+  class/level -- same reasoning the existing Recharge Abilities row's
+  free-text name field already uses), and a Remove Token button, all
+  wired to the same `_require_selected_token()`/`_send_action()` pattern
+  every other action here already uses. No confirmation dialog on Remove
+  Token -- matches this client's existing no-confirmation convention for
+  every other action (Full Heal, dropping to 0 HP, etc.).
 - **No AoE template tool** -- `cast_area_spell` exists and works, but
   requires manually checking each target's checkbox one at a time; the 2D
   app lets the DM drag out a cone/circle/line template directly on the map

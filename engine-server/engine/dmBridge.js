@@ -251,6 +251,18 @@
         const result = window.CampaignOS.dropConcentration(state, target.id);
         return { state: result.state, message: result.message, alreadyLogged: true };
       }
+      case "remove_token": {
+        const target = findTokenByName(state, action.target);
+        if (!target) return { state, message: `(DM assistant) could not find "${action.target}" to remove.`, alreadyLogged: false };
+        // removeToken returns the bare next state directly (no {state, message} wrapper,
+        // unlike most of the primitives here) -- it's a pure structural removal, nothing
+        // to roll or report beyond the fact that it happened.
+        return {
+          state: window.CampaignOS.removeToken(state, target.id),
+          message: `${target.name} is removed from the encounter.`,
+          alreadyLogged: false
+        };
+      }
       case "roll_death_save": {
         const target = findTokenByName(state, action.target);
         if (!target) return { state, message: `(DM assistant) could not find "${action.target}" to roll a death save.`, alreadyLogged: false };

@@ -84,6 +84,31 @@ test("POST /action attack resolves through the real engine (hit or miss, HP or m
   }
 });
 
+// remove_token is a brand new dmBridge.js case (Main.gd's new "Remove Token" button, part
+// of the same quick-action-buttons pass as apply_damage/drop_concentration/spend_hit_die --
+// those three already existed as DM-bridge actions, this one didn't). Confirms it actually
+// deletes the token through the real POST /action path, not just that removeToken() itself
+// works (already covered wherever the shared engine's own tests live).
+test("POST /action remove_token deletes the token from state entirely", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const before = await (await fetch(`${baseUrl}/state`)).json();
+    const goblin = before.state.tokens.find((token) => token.name.startsWith("Goblin"));
+
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "remove_token", target: goblin.name })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], new RegExp(`${goblin.name} is removed from the encounter\\.`));
+    assert.ok(!result.state.tokens.some((token) => token.id === goblin.id), "token should no longer exist");
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 // Confirms the advantage/disadvantage fields actually reach rollSavingThrow/
 // rollAbilityCheck through the real POST /action -> DMBridge.applyActions path Main.gd's
 // UI would use (see engine/dmBridge.js's saving_throw/ability_check cases) -- the exact

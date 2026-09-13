@@ -141,6 +141,18 @@ const FULL_HEAL_AMOUNT := 9999
 
 @onready var _other_header: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherHeaderButton
 @onready var _other_body: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody
+## apply_damage/drop_concentration/spend_hit_die/remove_token were all
+## already reachable through the DM Assistant's Claude round-trip (a real
+## API call, not instant) but had no direct button -- see the feature
+## parity audit in ROADMAP.md.
+@onready var _damage_amount_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow/DamageAmountInput
+@onready var _damage_type_option: OptionButton = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow/DamageTypeOption
+@onready var _apply_damage_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow/ApplyDamageButton
+@onready var _drop_concentration_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DropConcentrationButton
+@onready var _hit_dice_type_input: LineEdit = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow/HitDiceTypeInput
+@onready var _hit_dice_count_input: SpinBox = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow/HitDiceCountInput
+@onready var _spend_hit_dice_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow/SpendHitDiceButton
+@onready var _remove_token_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/RemoveTokenButton
 @onready var _death_save_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DeathSaveButton
 @onready var _exhaustion_minus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/ExhaustionRow/ExhaustionMinusButton
 @onready var _exhaustion_plus_button: Button = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/ExhaustionRow/ExhaustionPlusButton
@@ -215,6 +227,8 @@ func _ready() -> void:
 
 	for damage_type in DAMAGE_TYPE_LIST:
 		_spell_damage_type_option.add_item(damage_type)
+	for damage_type in DAMAGE_TYPE_LIST:
+		_damage_type_option.add_item(damage_type)
 	_spell_target_option.add_item(SPELL_TARGET_NONE)
 	for ability in ABILITY_KEYS:
 		_area_save_ability_option.add_item(ability)
@@ -226,6 +240,10 @@ func _ready() -> void:
 	_use_resource_button.pressed.connect(_on_use_resource_pressed)
 	_long_rest_button.pressed.connect(_on_long_rest_pressed)
 	_short_rest_button.pressed.connect(_on_short_rest_pressed)
+	_apply_damage_button.pressed.connect(_on_apply_damage_pressed)
+	_drop_concentration_button.pressed.connect(_on_drop_concentration_pressed)
+	_spend_hit_dice_button.pressed.connect(_on_spend_hit_dice_pressed)
+	_remove_token_button.pressed.connect(_on_remove_token_pressed)
 	_death_save_button.pressed.connect(_on_death_save_pressed)
 	_exhaustion_plus_button.pressed.connect(_on_exhaustion_pressed.bind(1))
 	_exhaustion_minus_button.pressed.connect(_on_exhaustion_pressed.bind(-1))
@@ -678,6 +696,59 @@ func _on_short_rest_pressed() -> void:
 	if not _require_selected_token():
 		return
 	_send_action({"type": "short_rest", "target": _tokens[_selected_token_id].token_name})
+
+## applyDamage takes flat damage with no attack roll -- a trap, a fall, a
+## DM ruling -- distinct from attack()'s own roll-to-hit-then-damage flow.
+## damageType is only sent when a real type is picked (matching cast_spell's
+## own DAMAGE_TYPE_NONE convention) since resistances/vulnerabilities only
+## apply when a type is actually known.
+func _on_apply_damage_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var action := {
+		"type": "apply_damage",
+		"target": _tokens[_selected_token_id].token_name,
+		"amount": int(_damage_amount_input.value)
+	}
+	var damage_type := _damage_type_option.get_item_text(_damage_type_option.selected)
+	if damage_type != DAMAGE_TYPE_NONE:
+		action["damageType"] = damage_type
+	_send_action(action)
+
+## dropConcentration is a no-op server-side (not an error) if the target
+## isn't concentrating on anything -- same "safe to always show" reasoning
+## as the death save button below.
+func _on_drop_concentration_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "drop_concentration", "target": _tokens[_selected_token_id].token_name})
+
+## spend_hit_die's `die` is a free-text die type (e.g. "d10") rather than a
+## dropdown -- a token's own Hit Dice pool varies by class/level, same
+## reasoning the Recharge Abilities row's free-text name field already
+## uses for per-monster data with no fixed list to draw from.
+func _on_spend_hit_dice_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var die := _hit_dice_type_input.text.strip_edges()
+	if die == "":
+		_show_hint("Enter a Hit Dice type first (e.g. d10).")
+		return
+	_send_action({
+		"type": "spend_hit_die",
+		"target": _tokens[_selected_token_id].token_name,
+		"die": die,
+		"count": int(_hit_dice_count_input.value)
+	})
+
+## removeToken deletes the token outright -- no confirmation dialog, matching
+## this client's existing minimal-friction convention for every other
+## action here (Full Heal, dropping to 0 HP, etc. have none either); the DM
+## is trusted the same way at the table.
+func _on_remove_token_pressed() -> void:
+	if not _require_selected_token():
+		return
+	_send_action({"type": "remove_token", "target": _tokens[_selected_token_id].token_name})
 
 ## rollDeathSave is a no-op server-side (not an error) if the target isn't
 ## currently making death saves -- safe to always show this button rather

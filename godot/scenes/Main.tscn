@@ -417,6 +417,53 @@ text = "▸ Other Actions"
 visible = false
 theme_override_constants/separation = 8
 
+[node name="DamageRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
+theme_override_constants/separation = 8
+
+[node name="DamageLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow"]
+text = "Damage"
+
+[node name="DamageAmountInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow"]
+custom_minimum_size = Vector2(70, 0)
+min_value = 1.0
+max_value = 999.0
+value = 5.0
+
+[node name="DamageTypeOption" type="OptionButton" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow"]
+custom_minimum_size = Vector2(110, 0)
+size_flags_horizontal = 3
+
+[node name="ApplyDamageButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/DamageRow"]
+text = "Apply"
+
+[node name="DropConcentrationButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
+text = "Drop Concentration"
+
+[node name="HitDiceRow" type="HBoxContainer" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
+theme_override_constants/separation = 8
+
+[node name="HitDiceLabel" type="Label" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow"]
+text = "Hit Die"
+
+[node name="HitDiceTypeInput" type="LineEdit" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow"]
+custom_minimum_size = Vector2(70, 0)
+size_flags_horizontal = 3
+placeholder_text = "e.g. d10"
+
+[node name="HitDiceCountInput" type="SpinBox" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow"]
+custom_minimum_size = Vector2(60, 0)
+min_value = 1.0
+max_value = 20.0
+value = 1.0
+
+[node name="SpendHitDiceButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody/HitDiceRow"]
+text = "Spend"
+
+[node name="RemoveTokenButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
+text = "Remove Token"
+
+[node name="OtherActionsSeparator" type="HSeparator" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
+
 [node name="DeathSaveButton" type="Button" parent="HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/OtherBody"]
 text = "Roll Death Save"
 
