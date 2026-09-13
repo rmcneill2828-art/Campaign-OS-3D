@@ -446,11 +446,13 @@ func _update_combat_log(log: Array) -> void:
 		var empty_label := Label.new()
 		empty_label.text = "No actions yet."
 		empty_label.add_theme_font_size_override("font_size", 14)
+		empty_label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 		_combat_log_list.add_child(empty_label)
 		return
 	for entry in log:
 		var label := Label.new()
 		label.text = str(entry)
+		label.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.add_theme_font_size_override("font_size", 14)
 		_combat_log_list.add_child(label)

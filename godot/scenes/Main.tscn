@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/CameraRig.gd" id="2"]
@@ -19,6 +19,13 @@ sky = SubResource("Sky_1")
 ambient_light_source = 3
 ambient_light_energy = 0.6
 tonemap_mode = 2
+
+[sub_resource type="StyleBoxFlat" id="CombatLogStyle"]
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
@@ -101,11 +108,13 @@ autowrap_mode = 2
 
 [node name="CombatLogPanel" type="PanelContainer" parent="HUD"]
 anchor_right = 1.0
+anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = 310.0
+offset_top = -180.0
 offset_right = -380.0
 offset_bottom = -16.0
+theme_override_styles/panel = SubResource("CombatLogStyle")
 theme_override_constants/margin_left = 8
 theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
