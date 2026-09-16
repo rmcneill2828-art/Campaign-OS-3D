@@ -1539,7 +1539,26 @@ confirmed against Godot's real runtime bone names instead.
 rig map** -- `MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP`'s bone names
 never had colons in the first place (`Hips`, `LeftUpLeg`, etc.), so
 nothing about the orc's own already-working animation was at risk.
-**Still needs one more live check**: the fix hasn't been re-verified in
-an actual running Godot session yet (only via the headless inspect
-tool) -- confirm the Barbarian actually plays Idle now, not just that
-the bone count matches.
+
+**Update, same session: the bone-name fix alone wasn't enough.** Live
+result after restarting the scene: correctly playing Idle now (bone
+names DO match, 26/28, confirmed), but the whole model collapsed into a
+crumpled heap on the floor instead of standing -- a different, deeper bug
+the bone-name fix couldn't have caught. Root cause: `_process()` copied
+every bone's position AND rotation AND scale from the source skeleton,
+not just rotation. That's harmless between two skeletons with near-
+identical proportions (every pairing before now: hero/monster's own
+model <-> Quaternius, KayKit Skeleton <-> KayKit's own animation
+library -- same rig family or closely matched proportions either way) --
+but this is the FIRST genuinely cross-rig pairing this project has tried
+(a Meshy-rigged model, different proportions entirely, driven by
+Quaternius's UAL1 via `bone_name_map`), and copying the source's bone
+*positions* onto a differently-proportioned target displaces every limb
+to the wrong relative location. Fixed by only copying position/scale for
+a bone with no parent (the root, carrying the animation's own overall
+body movement/bob) -- every other bone now keeps its own rest-pose
+position, driven only by rotation, the standard way skeletal retargeting
+across different-proportioned rigs actually works. **Not yet re-verified
+live** -- this fix hasn't been seen running in Godot yet either; confirm
+the Barbarian actually stands and animates correctly now, not assumed
+fixed just because the reasoning is sound.
