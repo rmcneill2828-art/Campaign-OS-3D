@@ -59,20 +59,47 @@
   above: a free static model downloaded from Meshy's own library (not
   text-to-3D generated), then rigged through Meshy's WEBSITE Rigging tool
   with "Skeleton template: Mixamo" selected -- a choice only the website
-  UI exposes, not the API `orc_warrior.glb` went through, and the reason
-  this file needs its own `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`
-  rather than reusing the Orc's map (see that constant's own doc comment
-  in `Token.gd` for the two conventions' real bone-name differences,
-  confirmed by direct extraction, not assumed). Reuses the plain `"hero"`
-  entry's own Quaternius UAL1 `animation_source` and clip names verbatim
-  -- animation comes free from the existing UAL1 library, not a paid
-  Meshy animate step, which was the actual point of building the
-  bone-name-map mechanism at all (see `ROADMAP.md`'s "Meshy-rig-to-free-
-  animation bone name mapping" entry for the full reasoning, including why
-  Mixamo automation itself was ruled out). **Not committed** -- same
-  gitignore sweep-up as the Orc files above, no license reason established
-  either way (Meshy's own ToS governs this the same unverified way noted
-  for the Orc).
+  UI exposes, not the API `orc_warrior.glb` went through, producing genuine
+  `mixamorig:`-prefixed bone names. **Not committed** -- same gitignore
+  sweep-up as the Orc files above, no license reason established either way
+  (Meshy's own ToS governs this the same unverified way noted for the Orc).
+- **`creatures/animations/mixamo_idle.fbx`, `mixamo_walk.fbx`,
+  `mixamo_death.fbx`, `mixamo_reaction.fbx`, `mixamo_hit_reaction.fbx`** --
+  the Barbarian's actual animation source, real Adobe Mixamo clips
+  (mixamo.com), manually downloaded "without skin" (a handful of files, not
+  a bulk/automated pull -- see `ROADMAP.md`'s own note on why automating
+  Mixamo was ruled out for building a whole creature library, but a few
+  manual downloads for one shared animation set weren't). License: free,
+  no royalties, commercial and non-commercial use both fine, no attribution
+  required (already confirmed in `ROADMAP.md`'s earlier Mixamo research
+  note) -- same "don't redistribute the raw files standalone" restriction
+  every other pack here already follows, so **not committed**, same
+  gitignore sweep-up as everything else in this tree.
+  Tried first: `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`, a
+  rest-pose-relative retargeting scheme bridging the Barbarian's rig onto
+  the existing Quaternius UAL1 library (same file the plain `"hero"` entry
+  above uses). Got legs/spine/face looking correct after several live-
+  tested fixes, but never fully resolved the shoulders even after two more
+  rounds -- real diminishing returns trying to reconcile two genuinely
+  different rigs' rest poses through rotation math alone. Real Mixamo
+  animations sidestep the whole problem: they use the EXACT SAME bone-
+  naming convention Meshy's own "Skeleton template: Mixamo" rig output
+  does, confirmed directly (both real files extracted and compared, not
+  assumed), so this is now the same plain exact-name bone matching the
+  `"hero"` entry's own Quaternius pairing already relies on -- no
+  bone_name_map, no delta math, nothing left to mismatch. The Quaternius-
+  based map/mechanism is left in place (not deleted) as real, working,
+  tested infrastructure for a FUTURE Meshy-rigged model where downloading
+  matching Mixamo clips isn't practical for some reason -- just no longer
+  what the Barbarian itself uses.
+  All 5 downloaded FBX files share the exact same internal clip name
+  (`"mixamo.com"`) -- confirmed directly against the actual files (a
+  well-known, real Mixamo export quirk, not assumed), which is why
+  `Token.gd`'s clip-import helper needed a new `"as"` field (see its own
+  doc comment) to store each under a distinct key rather than have them
+  silently overwrite each other. No dedicated "dying" (kneeling/downed)
+  pose was among what got downloaded -- left unset rather than forcing a
+  short reaction clip to loop awkwardly as a stand-in.
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.

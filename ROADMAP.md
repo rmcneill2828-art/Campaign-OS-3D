@@ -1654,4 +1654,57 @@ motion doesn't mean much applied to a bone that's supposed to carry real
 rotation. Bone count for this map: 24/28 now (down from 26 -- 2 removed
 deliberately, not a new mismatch found).
 
-**Not yet re-verified live.**
+**Update, same session: shoulder exclusion had ZERO effect -- diagnosis
+was wrong, not just incomplete.** The user put the Barbarian directly
+next to Darkhawk for a real side-by-side comparison against a known-
+working reference: Darkhawk's arms sat in a natural raised guard stance;
+the Barbarian's were still swept backward, identically to before the
+shoulder fix, in both Idle and Walk. Real diminishing returns on this
+approach after 5 live-tested rounds (bone names, position, root rotation,
+root position, shoulder exclusion) -- rather than guess a 6th time,
+switched strategy entirely instead of continuing to patch the retargeting
+math.
+
+**Switched to real Mixamo animations instead of retargeting onto
+Quaternius.** Since Meshy's rig already uses genuine `mixamorig:`-
+prefixed bone names (confirmed live earlier this same session, via the
+colon-to-underscore Godot import finding above), real Mixamo animations
+should share that exact convention and need NO retargeting math at all --
+the same plain exact-name bone matching the `"hero"` entry's own
+Quaternius pairing already relies on. User manually downloaded 5 clips
+from mixamo.com "without skin" (Breathing Idle, Standard Walk, Standing
+Death Forward 01, Reaction, Hit Reaction) -- a handful of files, not the
+bulk/automated pull this file's own earlier Mixamo research note already
+ruled out. Confirmed directly (not assumed) by scanning the raw FBX bytes
+for readable strings: real bone names present and identical in style to
+what Meshy's own rig already produced (`mixamorig:Hips`,
+`mixamorig:LeftShoulder`, etc., the full 65-bone standard rig, a superset
+of Meshy's 28), AND a real, concrete gotcha found the same way -- **every
+one of the 5 files shares the exact same internal clip name,
+`"mixamo.com"`**, a well-known Mixamo export quirk. Importing several
+under that literal name into one shared library would have silently
+overwritten each other.
+
+Fixed by extending `Token.gd`'s clip-import helpers
+(`_resolve_or_import()`/`_import_animation_clip()`) with a new optional
+`"as"` field -- looks the clip up in its source file by one name
+(`"clip"`) but stores it in the target library under a different one
+(`"as"`), fully backward compatible (every existing `{clip, source}` entry
+across the Orc/Skeleton families has no `"as"` field, so they fall back to
+the old identical-name behavior unchanged). Rewired `"hero:barbarian"` to
+use the 5 new files as its `animation_source`/clips, with `bone_name_map`
+removed entirely. The Quaternius-retargeting map/mechanism itself is left
+in place (not deleted) as real, tested infrastructure for a future
+Meshy-rigged model where downloading matching Mixamo clips isn't
+practical -- just no longer what the Barbarian uses.
+
+No dedicated "dying" (kneeling/downed) clip existed among what was
+downloaded -- left unset rather than forcing a short reaction clip to
+loop awkwardly as an imperfect stand-in, same call the Orc's own entry
+already made for its own missing kneel pose, just resolved as "nothing"
+here instead of "an imperfect substitute."
+
+**Not yet verified live at all** -- this is a bigger, more structural
+change (new animation source files, a new code path for clip renaming)
+than any single fix in this thread so far, and hasn't been seen running
+in Godot even once yet.

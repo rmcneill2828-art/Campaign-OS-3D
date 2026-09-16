@@ -156,22 +156,52 @@ const MODEL_CONFIG := {
 	## instead of the generic superhero_male fallback every hero shared until
 	## now. Model: a free static download from Meshy's library, rigged
 	## through Meshy's WEBSITE Rigging tool with "Skeleton template: Mixamo"
-	## selected -- genuine mixamorig:-prefixed bone names, a different
-	## convention than orc_warrior.glb's own API-rigged skeleton (see
-	## MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP's own doc comment
-	## above for why two different maps exist). animation_source/clip names
-	## reuse the plain "hero" entry's own Quaternius UAL1 source verbatim --
-	## same file, same clips, only the model and its bone_name_map differ.
+	## selected -- genuine mixamorig:-prefixed bone names.
+	##
+	## animation_source is real Adobe Mixamo animations (mixamo.com, manually
+	## downloaded "without skin" -- a handful of clips, not a bulk/automated
+	## pull, see ROADMAP.md's own note on why automating Mixamo was ruled out
+	## for a whole creature library but a few manual downloads weren't), NOT
+	## Quaternius/bone_name_map -- MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_
+	## BONE_MAP's own rest-pose-relative retargeting got legs/spine/face
+	## looking right (confirmed live) but never fully resolved the shoulders
+	## even after two more live-tested fixes, diminishing returns on trying
+	## to bridge two genuinely different rigs' rotations. Real Mixamo
+	## animations use the exact same bone-naming convention Meshy's own
+	## "Skeleton template: Mixamo" output does (confirmed directly: both use
+	## real mixamorig:-prefixed names, and Godot's colon-to-underscore import
+	## behavior -- already confirmed live for this same character -- applies
+	## identically to both), so this is plain exact-name bone matching, same
+	## reliable mechanism the plain "hero" entry above already uses against
+	## Quaternius -- no bone_name_map, no delta math, nothing left to
+	## mismatch between two different rigs' rest poses.
+	##
+	## Every one of the 5 downloaded FBX files shares the exact same internal
+	## clip name ("mixamo.com") -- a well-known Mixamo export quirk,
+	## confirmed directly against these actual files, not assumed -- which is
+	## why every non-idle field below needs the newly-added "as" key
+	## (_import_animation_clip()'s own doc comment) to avoid them all
+	## overwriting each other under the same target-library key. No dedicated
+	## "dying" (kneeling/downed) clip exists among what was downloaded -- left
+	## unset rather than forcing a short reaction clip to loop awkwardly as an
+	## imperfect stand-in; a dying Barbarian just has no animation change
+	## specific to that state for now (a real, accepted gap, not a bug --
+	## _resolve_or_import("") already returns "" gracefully, and
+	## _play_source_animation() already no-ops on an empty key).
 	## label_height reuses "hero"'s own 2.0 as a starting default (this
 	## specific model's real proportions haven't been measured live) --
 	## revisit once actually seen in Godot, same as every other
 	## not-yet-live-verified number in this project's own history.
 	"hero:barbarian": {
 		"path": "res://assets/creatures/hero/barbarian.glb", "label_height": 2.0,
-		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
-		"bone_name_map": MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP,
-		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
-		"hits": ["Hit_Chest", "Hit_Head"]
+		"animation_source": "res://assets/creatures/animations/mixamo_idle.fbx",
+		"idle": "mixamo.com",
+		"walk": {"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_walk.fbx", "as": "Barbarian_Walk"},
+		"death": {"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_death.fbx", "as": "Barbarian_Death"},
+		"hits": [
+			{"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_reaction.fbx", "as": "Barbarian_Reaction"},
+			{"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_hit_reaction.fbx", "as": "Barbarian_HitReaction"}
+		]
 	},
 	"monster": {
 		"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9,
@@ -558,10 +588,13 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 ## a `{"clip": <name>, "source": <path>}` Dictionary meaning that clip
 ## actually lives in a different file and needs importing first (see
 ## MODEL_CONFIG's own doc comment for why the Orc family needs this for
-## every field). Returns "" if the clip can't be found/imported at all --
-## every caller already treats an empty key as "this family has no
-## animation for this state," the same graceful-degradation convention
-## _play_source_animation()'s own no-op-on-empty-key already relies on.
+## every field). An optional `"as"` field renames the clip on import -- see
+## _import_animation_clip()'s own doc comment for why the Mixamo family
+## below needs this where the Orc never did. Returns "" if the clip can't be
+## found/imported at all -- every caller already treats an empty key as
+## "this family has no animation for this state," the same graceful-
+## degradation convention _play_source_animation()'s own no-op-on-empty-key
+## already relies on.
 func _resolve_or_import(value) -> String:
 	if value is String:
 		return _resolve_animation_name(_anim_source_player, value)
@@ -570,27 +603,42 @@ func _resolve_or_import(value) -> String:
 		var source_path: String = value.get("source", "")
 		if clip_name == "" or source_path == "" or not ResourceLoader.exists(source_path):
 			return ""
+		var target_key: String = value.get("as", clip_name)
 		var source_scene := load(source_path) as PackedScene
 		var source_instance := source_scene.instantiate() as Node3D
 		var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
 		var imported := ""
 		if not source_players.is_empty():
-			imported = _import_animation_clip(_anim_source_player, source_players[0] as AnimationPlayer, clip_name)
+			imported = _import_animation_clip(_anim_source_player, source_players[0] as AnimationPlayer, clip_name, target_key)
 		source_instance.queue_free() # never added to the tree -- just a temporary clip source
 		return imported
 	return ""
 
 ## Copies one named clip's Animation resource from `source_player` (a
 ## temporary, never-added-to-the-tree instance -- see its caller above) into
-## `target_player`'s own default animation library, so a single
-## AnimationPlayer can play a clip that actually lives in a completely
-## different imported file. Returns the clip's own bare name (now playable
+## `target_player`'s own default animation library under `target_key`, so a
+## single AnimationPlayer can play a clip that actually lives in a
+## completely different imported file. Returns `target_key` (now playable
 ## directly on `target_player`) once imported, or "" if `clip_name` isn't
 ## found in `source_player` at all. Reuses (mutates in place), not replaces,
 ## `target_player`'s existing default library if it already has one -- a
-## fresh glTF-imported AnimationPlayer already owns its own default library
-## full of its native clips, and replacing it outright would lose all of them.
-func _import_animation_clip(target_player: AnimationPlayer, source_player: AnimationPlayer, clip_name: String) -> String:
+## fresh glTF/FBX-imported AnimationPlayer already owns its own default
+## library full of its native clips, and replacing it outright would lose
+## all of them.
+##
+## `clip_name` (what to look up in the SOURCE) and `target_key` (what to
+## store it as) are deliberately separate parameters, not one shared value
+## the way this function originally worked -- the Orc's own Meshy-generated
+## clips never needed the distinction (each file's one clip already had a
+## unique name, "Armature|Idle|baselayer" vs "Armature|Slow_Orc_Walk_inplace|
+## baselayer" etc.), but Mixamo's own FBX exports are well known to name
+## EVERY downloaded clip's internal AnimStack the same generic "mixamo.com"
+## regardless of which specific animation was actually downloaded (confirmed
+## directly against all 5 real files this project downloaded, not assumed
+## from Mixamo's general reputation for this) -- importing several of them
+## into one shared library under that same literal name would silently
+## overwrite each other, only the last-processed one surviving.
+func _import_animation_clip(target_player: AnimationPlayer, source_player: AnimationPlayer, clip_name: String, target_key: String) -> String:
 	var resolved_source_key := _resolve_animation_name(source_player, clip_name)
 	if resolved_source_key == "":
 		return ""
@@ -601,10 +649,10 @@ func _import_animation_clip(target_player: AnimationPlayer, source_player: Anima
 	else:
 		library = AnimationLibrary.new()
 		target_player.add_animation_library("", library)
-	if library.has_animation(clip_name):
-		library.remove_animation(clip_name)
-	library.add_animation(clip_name, animation)
-	return clip_name
+	if library.has_animation(target_key):
+		library.remove_animation(target_key)
+	library.add_animation(target_key, animation)
+	return target_key
 
 ## A one-shot reaction clip (hit or death) finishing playback hands control
 ## back to idle -- EXCEPT death, which should stay frozen on its final pose,
