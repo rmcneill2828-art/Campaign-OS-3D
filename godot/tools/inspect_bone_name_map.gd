@@ -1,0 +1,78 @@
+extends SceneTree
+## Verifies a MODEL_CONFIG `bone_name_map` actually resolves against a real
+## character model + animation-source pair, the same "measure the real thing"
+## discipline inspect_kaykit_skeleton.gd/inspect_meshy_orc.gd already apply --
+## checks Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP directly (not a copy of it),
+## so this can never silently drift from what Token.gd actually ships.
+##
+## Edit CHARACTER_MODEL/ANIMATION_SOURCE/BONE_NAME_MAP below to check the
+## NEXT Meshy-rigged model before wiring it into a new MODEL_CONFIG entry --
+## Meshy's rig bone names are only confirmed Mixamo-style for the one biped
+## rig this project has generated so far (orc_warrior.glb); a future model
+## (a different creature, a quadruped rig, a different Meshy account/model
+## version) could come back with different names, so re-check rather than
+## assume the existing map still applies.
+
+const CHARACTER_MODEL := "res://assets/creatures/monster/orc_warrior.glb"
+const ANIMATION_SOURCE := "res://assets/creatures/animations/mannequin_animations.glb"
+const BONE_NAME_MAP := Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP
+
+func _init() -> void:
+	if not ResourceLoader.exists(CHARACTER_MODEL):
+		print("MISSING character model: %s" % CHARACTER_MODEL)
+		quit(1)
+		return
+	if not ResourceLoader.exists(ANIMATION_SOURCE):
+		print("MISSING animation source: %s" % ANIMATION_SOURCE)
+		quit(1)
+		return
+
+	var character_scene := load(CHARACTER_MODEL) as PackedScene
+	var character_instance := character_scene.instantiate() as Node3D
+	get_root().add_child(character_instance)
+	var character_skeletons := character_instance.find_children("*", "Skeleton3D", true, false)
+	if character_skeletons.is_empty():
+		print("%s has no Skeleton3D at all" % CHARACTER_MODEL)
+		quit(1)
+		return
+	var character_skeleton := character_skeletons[0] as Skeleton3D
+
+	var source_scene := load(ANIMATION_SOURCE) as PackedScene
+	var source_instance := source_scene.instantiate() as Node3D
+	get_root().add_child(source_instance)
+	var source_skeletons := source_instance.find_children("*", "Skeleton3D", true, false)
+	if source_skeletons.is_empty():
+		print("%s has no Skeleton3D at all" % ANIMATION_SOURCE)
+		quit(1)
+		return
+	var source_skeleton := source_skeletons[0] as Skeleton3D
+
+	print("%s: %d bones. %s: %d bones. bone_name_map: %d entries.\n" % [
+		CHARACTER_MODEL.get_file(), character_skeleton.get_bone_count(),
+		ANIMATION_SOURCE.get_file(), source_skeleton.get_bone_count(),
+		BONE_NAME_MAP.size()
+	])
+
+	# Mirrors Token.gd's _setup_animation() bone-matching loop exactly -- this
+	# tool is only useful if it checks the SAME logic the real code runs, not
+	# an approximation of it.
+	var matched_via_map := 0
+	var matched_via_exact_name := 0
+	var unmatched: Array[String] = []
+	for char_idx in range(character_skeleton.get_bone_count()):
+		var bone_name := character_skeleton.get_bone_name(char_idx)
+		var mapped_name: String = BONE_NAME_MAP.get(bone_name, bone_name)
+		var source_idx := source_skeleton.find_bone(mapped_name)
+		if source_idx == -1:
+			unmatched.append(bone_name)
+		elif BONE_NAME_MAP.has(bone_name):
+			matched_via_map += 1
+		else:
+			matched_via_exact_name += 1
+
+	var total := character_skeleton.get_bone_count()
+	var matched := matched_via_map + matched_via_exact_name
+	print("Matched: %d/%d (%d via bone_name_map, %d via exact name)" % [matched, total, matched_via_map, matched_via_exact_name])
+	print("Unmatched (stay in bind pose, no animation drives them): %s" % (", ".join(unmatched) if not unmatched.is_empty() else "(none)"))
+
+	quit()

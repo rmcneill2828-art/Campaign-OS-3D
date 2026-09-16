@@ -40,6 +40,43 @@ class_name Token
 ## entry below needs this for literally every field -- Meshy's per-clip
 ## animation API hands back one full skinned model per requested clip, not
 ## one shared library file the way Quaternius/KayKit ship theirs.
+##
+## An entry may also carry an optional `bone_name_map` (Dictionary, character
+## bone name -> animation-source bone name) for a model/animation-source pair
+## whose skeletons don't share bone names at all -- confirmed to actually be
+## the case between a Meshy auto-rig and every free pack here (Meshy's rig
+## uses Mixamo-style names like "LeftUpLeg"; Quaternius uses "thigh_l",
+## KayKit uses "upperleg.l" -- zero names in common, checked directly by
+## extracting both skeletons' real bone lists, not assumed). Without a map,
+## _setup_animation()'s bone-matching loop requires an EXACT name match
+## (every existing entry above relies on this -- Quaternius's own pack
+## sharing names with itself, KayKit's own pack sharing names with itself),
+## which is why a Meshy-rigged model paired with a free-pack animation source
+## needs this field to animate at all; omitting it (every entry above) keeps
+## today's exact-match behavior byte-for-byte unchanged.
+##
+## MESHY_TO_QUATERNIUS_UAL1_BONE_MAP below is the first one, built from a
+## real, already-generated Meshy rig (orc_warrior.glb) against Quaternius's
+## UAL1 skeleton (mannequin_animations.glb) -- 22 of its 24 bones map
+## cleanly (verified: every target name confirmed to actually exist in
+## UAL1's skeleton, no duplicate targets, no typo'd source keys); the 2 left
+## out (head_end, headfront) are Meshy-specific small attachment/helper
+## bones with no Quaternius equivalent, not part of the walk/idle/attack
+## silhouette, so leaving them unmapped just means they stay in their bind
+## pose -- harmless. See godot/tools/inspect_bone_name_map.gd for how this
+## was checked, and to re-check against a differently-rigged Meshy model
+## before assuming its bone names match (a biped rig should, per Meshy's own
+## rig type option, but this hasn't been confirmed across more than the one
+## real rigged model this project has generated so far).
+const MESHY_TO_QUATERNIUS_UAL1_BONE_MAP := {
+	"Hips": "pelvis",
+	"Spine": "spine_01", "Spine01": "spine_02", "Spine02": "spine_03",
+	"neck": "neck_01", "Head": "Head",
+	"LeftShoulder": "clavicle_l", "LeftArm": "upperarm_l", "LeftForeArm": "lowerarm_l", "LeftHand": "hand_l",
+	"RightShoulder": "clavicle_r", "RightArm": "upperarm_r", "RightForeArm": "lowerarm_r", "RightHand": "hand_r",
+	"LeftUpLeg": "thigh_l", "LeftLeg": "calf_l", "LeftFoot": "foot_l", "LeftToeBase": "ball_l",
+	"RightUpLeg": "thigh_r", "RightLeg": "calf_r", "RightFoot": "foot_r", "RightToeBase": "ball_r"
+}
 const MODEL_CONFIG := {
 	"hero": {
 		"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0,
@@ -359,9 +396,18 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 	_anim_source_skeleton = source_skeletons[0] as Skeleton3D
 	_anim_source_player = source_players[0] as AnimationPlayer
 
+	# bone_name_map (see MODEL_CONFIG's own doc comment) translates the
+	# character's bone name before searching the animation source, for a pair
+	# whose skeletons don't share bone names at all (Meshy's rig vs. a free
+	# pack's own animation library). Every existing family below has no
+	# bone_name_map entry, so .get() falls through to bone_name unchanged --
+	# this is a pure addition, exact-match behavior is byte-for-byte the same
+	# as before for every family that doesn't opt in.
+	var bone_name_map: Dictionary = config.get("bone_name_map", {})
 	for char_idx in range(_character_skeleton.get_bone_count()):
 		var bone_name := _character_skeleton.get_bone_name(char_idx)
-		var source_idx := _anim_source_skeleton.find_bone(bone_name)
+		var source_bone_name: String = bone_name_map.get(bone_name, bone_name)
+		var source_idx := _anim_source_skeleton.find_bone(source_bone_name)
 		if source_idx != -1:
 			_bone_map[char_idx] = source_idx
 

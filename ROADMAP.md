@@ -1094,6 +1094,14 @@ files standalone" restriction every other pack here already follows. Worth a
 real evaluation pass on its own before assuming the current per-family
 bone-copy approach is the long-term answer.
 
+**Update, 2026-09-16: evaluated, not the path taken.** Automating Mixamo
+for a whole creature library turned out to be real account risk, not just
+"another integration" -- Adobe's own terms explicitly prohibit bulk/
+scripted automation. See "Meshy-rig-to-free-animation bone name mapping"
+further down this file for what got built instead: rig via Meshy once per
+model, then animate free forever via a bone-name translation table onto
+Quaternius's existing free animation library, no Mixamo involved at all.
+
 **Synty Studios "POLYGON" series -- the actual paid/professional path**, and
 the most direct answer to this whole project's original "professional game
 graphics" question. A large, consistent, widely-recognized stylized
@@ -1335,3 +1343,69 @@ HUD action wiring actually doing the right thing when triggered, not just
 "the scene loads") is still open -- the existing smoke tests only catch a
 load/parse/`_ready()` failure, not a wiring regression in already-loading
 code.
+
+## Meshy-rig-to-free-animation bone name mapping -- 2026-09-16, built, needs live verification
+
+Resolves this file's own earlier "Mixamo (Adobe, free) -- worth
+investigating" research note above (2026-09-11), but lands somewhere
+different than that note assumed: the user wants to build a large library
+of Monster Manual creatures from Meshy's free static-model downloads, and
+at that scale Meshy's own per-model rig+animate cost adds up fast (the Orc
+alone cost 78 credits, most of it the 6 individual animation clips, not
+the 5-credit rig step) -- so the goal became "rig via Meshy once per
+model, animate for free forever after" rather than routing every model
+through Mixamo. Automating Mixamo itself for bulk use was ruled out
+separately: Adobe's own Generative AI User Guidelines explicitly prohibit
+"unauthorized automated or scripting processes (such as bulk or automated
+uploading of content through a script)," which is exactly what building a
+whole creature library through it would be -- real account risk, not
+hypothetical.
+
+Checked (not assumed) whether a Meshy-rigged model's skeleton could
+directly drive Quaternius's or KayKit's existing free animation libraries
+the same way `Token.gd`'s `_setup_animation()` already does between
+same-family models -- extracted real bone-joint names straight out of the
+already-generated `orc_warrior.glb` (Meshy's rig) and
+`mannequin_animations.glb` (Quaternius UAL1) via a small standalone
+Node.js glTF parser (no Blender/Godot needed to read a skin's joint
+names). Result: **zero bone names in common** -- Meshy's rig uses
+Mixamo-style names (`Hips`, `LeftUpLeg`, `LeftForeArm`), Quaternius uses
+Unreal-style (`pelvis`, `thigh_l`, `lowerarm_l`), KayKit uses
+Blender-style (`hips`, `upperleg.l`, `lowerarm.l`) -- so the existing
+exact-name-match bone copy would silently animate nothing at all for a
+Meshy-rigged model paired with either free pack.
+
+But every one of Meshy's 24 rig bones has a clean, unambiguous Quaternius
+UAL1 equivalent by function (confirmed programmatically against both
+real bone lists, not eyeballed: 22/24 map correctly, no typo'd source
+keys, no two Meshy bones mapping to the same Quaternius target) -- only
+`head_end`/`headfront` (small Meshy-specific attachment bones, not part
+of the walk/idle/attack silhouette) have no Quaternius equivalent and stay
+unmapped. Added `Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP` and a new
+optional `bone_name_map` field on any `MODEL_CONFIG` entry:
+`_setup_animation()`'s bone-matching loop now translates the character's
+bone name through this map (when present) before searching the animation
+source's skeleton, falling through to the bone name unchanged when a
+family has no map at all -- every existing entry (hero/monster/skeleton/
+orc) is untouched, byte-for-byte the same exact-match behavior as before.
+No new `MODEL_CONFIG` entry was wired in yet -- this is the reusable
+mechanism, ready for whichever Monster Manual creature the user rigs via
+Meshy next (5-ish credits, one-time, per model) instead of paying for
+Meshy's own animate step or touching Mixamo at all.
+
+New tool: `godot/tools/inspect_bone_name_map.gd`, matching
+`inspect_kaykit_skeleton.gd`/`inspect_meshy_orc.gd`'s existing "verify a
+rig actually matches, don't assume" convention -- checks
+`Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP` directly (not a copy), so it
+can't drift from what `Token.gd` actually ships. **Needs a real Godot
+session to run** (this environment has none) before trusting the
+map/mechanism live -- the underlying bone-name DATA was verified directly
+against the real files (not guessed), but the new GDScript logic itself
+(the `bone_name_map` lookup added to `_setup_animation()`, and the tool
+that checks it) has not been executed in a real Godot process. Also
+worth noting: Meshy's rig bone names are only confirmed for the one biped
+rig this project has actually generated (`orc_warrior.glb`) -- a
+different creature or a quadruped rig could come back with different
+names, so re-run `inspect_bone_name_map.gd` against each new Meshy rig
+before assuming this exact map still applies, rather than wiring it in
+blind.
