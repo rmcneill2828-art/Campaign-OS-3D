@@ -153,18 +153,58 @@ function mergeNewSeedMaps(state) {
   return { ...state, maps: mergedMaps };
 }
 
+function backupFilePath(stateFile) {
+  return `${stateFile}.bak`;
+}
+
+// Only a missing file (first run, or a fresh /reset-worthy setup) is "no state yet" --
+// anything else (corrupt JSON, a permission error, a disk read failure) is real data
+// that a silent reseed would have quietly thrown away. Falls back to the last-known-good
+// backup saveState() keeps updated; only gives up (and throws, refusing to start with
+// fabricated data standing in for a real save) once that backup is unusable too.
 function loadState(stateFile) {
   try {
     const raw = fs.readFileSync(stateFile, "utf8");
     return mergeNewSeedMaps(JSON.parse(raw));
   } catch (err) {
-    return seedState();
+    if (err.code === "ENOENT") {
+      return seedState();
+    }
+    const backupFile = backupFilePath(stateFile);
+    try {
+      const raw = fs.readFileSync(backupFile, "utf8");
+      const recovered = mergeNewSeedMaps(JSON.parse(raw));
+      console.error(`Warning: ${stateFile} failed to load (${err.message}). Recovered from backup ${backupFile} instead.`);
+      return recovered;
+    } catch (backupErr) {
+      throw new Error(
+        `Refusing to start: ${stateFile} failed to load (${err.message}) and its backup ${backupFile} is also unavailable (${backupErr.message}). Fix or restore the state file manually -- it will not be silently reseeded.`
+      );
+    }
   }
 }
 
+// Writes go to a temp file and rename() into place -- rename is atomic on the same
+// volume on both POSIX and NTFS, so a crash or power loss mid-write can never leave
+// stateFile holding a partially-written JSON body. The previous good copy is preserved
+// as stateFile.bak first (best-effort -- a failed backup copy shouldn't block saving
+// the actual state) so loadState() has something to recover from if a later write's
+// content is itself bad for some other reason.
 function saveState(stateFile, state) {
-  fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  const dir = path.dirname(stateFile);
+  fs.mkdirSync(dir, { recursive: true });
+
+  if (fs.existsSync(stateFile)) {
+    try {
+      fs.copyFileSync(stateFile, backupFilePath(stateFile));
+    } catch (err) {
+      console.error(`Warning: failed to update backup ${backupFilePath(stateFile)}: ${err.message}`);
+    }
+  }
+
+  const tmpFile = path.join(dir, `.${path.basename(stateFile)}.${process.pid}.tmp`);
+  fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2));
+  fs.renameSync(tmpFile, stateFile);
 }
 
 // Phase 5: computed (not persisted, except revealedTiles -- see below) line-of-sight
@@ -435,4 +475,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, seedState };
+module.exports = { createServer, seedState, loadState, saveState };
