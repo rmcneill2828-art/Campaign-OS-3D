@@ -357,6 +357,25 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   const bridgeRequestPath = path.join(bridgeDir, "request.json");
   const bridgeResponsePath = path.join(bridgeDir, "response.json");
 
+  // request.json/response.json are a single shared mailbox -- fixed filenames
+  // dm-bridge/watch.js (verbatim-copied from the 2D app, never hand-edited) reads and
+  // writes. A second /dm-command arriving while one is still in flight would overwrite
+  // the first's request.json before watch.js ever reads it, or have its own response
+  // raced by the first's. This lock serializes the whole write-request -> await-response
+  // -> apply-and-save cycle so only one command is ever in flight against those shared
+  // files at a time; later callers wait their turn instead of racing. `.then(fn, fn)`
+  // (not just `.then(fn)`) is what makes the lock advance even after a prior command
+  // errored or timed out -- otherwise one bad command would wedge every command queued
+  // behind it forever.
+  let dmBridgeLock = Promise.resolve();
+  let dmBridgeQueueDepth = 0;
+  const DM_BRIDGE_MAX_QUEUE_DEPTH = 5;
+  function withDmBridgeLock(fn) {
+    const result = dmBridgeLock.then(fn, fn);
+    dmBridgeLock = result.then(() => {}, () => {});
+    return result;
+  }
+
   const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       return sendJson(res, 204, {});
@@ -414,43 +433,64 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
         return sendJson(res, 400, { error: "\"command\" must be a non-empty string." });
       }
 
-      const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const request = {
-        id,
-        command,
-        // Campaign lore injection (ui/app.js's dmBridgeContext) isn't wired up on the
-        // 3D side yet -- no campaign-context UI exists in Godot to source it from.
-        // watch.js's buildPrompt() already treats a null context as "none provided",
-        // so this is a real, working default, not a stub standing in for missing work.
-        context: (body.context && typeof body.context.text === "string") ? body.context : null,
-        state: buildBridgeStateSnapshot(state),
-        createdAt: new Date().toISOString()
-      };
-
-      try {
-        fs.mkdirSync(bridgeDir, { recursive: true });
-        fs.writeFileSync(bridgeRequestPath, JSON.stringify(request, null, 2));
-      } catch (err) {
-        return sendJson(res, 500, { error: `Could not write to the DM bridge folder: ${err.message}` });
-      }
-
-      const response = await waitForBridgeResponse(bridgeResponsePath, id, DM_BRIDGE_TIMEOUT_MS);
-      if (!response) {
-        return sendJson(res, 504, {
-          error: `No response after ${Math.round(DM_BRIDGE_TIMEOUT_MS / 1000)}s -- make sure "node dm-bridge/watch.js" is running, then try again.`
+      if (dmBridgeQueueDepth >= DM_BRIDGE_MAX_QUEUE_DEPTH) {
+        return sendJson(res, 429, {
+          error: `DM bridge is busy -- ${dmBridgeQueueDepth} commands already queued ahead of this one. Try again shortly.`
         });
       }
+      const queuedAhead = dmBridgeQueueDepth; // 0 == runs immediately, no one ahead
+      dmBridgeQueueDepth++;
 
-      const result = DMBridge.applyActions(state, Array.isArray(response.actions) ? response.actions : []);
-      state = result.state;
-      if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
-      saveState(stateFile, state);
-      return sendJson(res, 200, {
-        state,
-        message: typeof response.message === "string" ? response.message : "",
-        actionMessages: result.messages,
-        visibility: computeVisibility(state)
-      });
+      let outcome;
+      try {
+        outcome = await withDmBridgeLock(async () => {
+          const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          const request = {
+            id,
+            command,
+            // Campaign lore injection (ui/app.js's dmBridgeContext) isn't wired up on the
+            // 3D side yet -- no campaign-context UI exists in Godot to source it from.
+            // watch.js's buildPrompt() already treats a null context as "none provided",
+            // so this is a real, working default, not a stub standing in for missing work.
+            context: (body.context && typeof body.context.text === "string") ? body.context : null,
+            state: buildBridgeStateSnapshot(state),
+            createdAt: new Date().toISOString()
+          };
+
+          try {
+            fs.mkdirSync(bridgeDir, { recursive: true });
+            fs.writeFileSync(bridgeRequestPath, JSON.stringify(request, null, 2));
+          } catch (err) {
+            return { status: 500, body: { error: `Could not write to the DM bridge folder: ${err.message}` } };
+          }
+
+          const response = await waitForBridgeResponse(bridgeResponsePath, id, DM_BRIDGE_TIMEOUT_MS);
+          if (!response) {
+            return {
+              status: 504,
+              body: { error: `No response after ${Math.round(DM_BRIDGE_TIMEOUT_MS / 1000)}s -- make sure "node dm-bridge/watch.js" is running, then try again.` }
+            };
+          }
+
+          const result = DMBridge.applyActions(state, Array.isArray(response.actions) ? response.actions : []);
+          state = result.state;
+          if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
+          saveState(stateFile, state);
+          return {
+            status: 200,
+            body: {
+              state,
+              message: typeof response.message === "string" ? response.message : "",
+              actionMessages: result.messages,
+              visibility: computeVisibility(state),
+              queuedAhead
+            }
+          };
+        });
+      } finally {
+        dmBridgeQueueDepth--;
+      }
+      return sendJson(res, outcome.status, outcome.body);
     }
 
     if (req.method === "POST" && req.url === "/reset") {
