@@ -70,11 +70,14 @@ class_name Token
 ## through Meshy's website Rigging tool with "Skeleton template: Mixamo"
 ## explicitly selected (a dropdown the API path doesn't expose) -- genuine
 ## `mixamorig:`-prefixed names matching real Adobe Mixamo output exactly
-## ("mixamorig:Hips", "mixamorig:Spine1"/"Spine2", capitalized "Neck"). 26 of
-## its 28 bones map cleanly; only `mixamorig:HeadTop_End` and the same stray
-## `headfront` are left out. This is the path an ordinary website download +
-## manual rig (not the API) actually produces, so it's the one to expect for
-## most future models.
+## ("mixamorig:Hips", "mixamorig:Spine1"/"Spine2", capitalized "Neck"). 24 of
+## its 28 bones are mapped (down from an original 26 -- see this constant's
+## own doc comment for why `LeftShoulder`/`RightShoulder` were deliberately
+## removed after live testing, not a bone-name mismatch this time); the
+## remaining 4 left out are `mixamorig:HeadTop_End`, the stray `headfront`,
+## and now `LeftShoulder`/`RightShoulder`. This is the path an ordinary
+## website download + manual rig (not the API) actually produces, so it's
+## the one to expect for most future models.
 ## Both verified the same way: every target name confirmed to actually exist
 ## in `mannequin_animations.glb`'s real skeleton, no duplicate targets, no
 ## typo'd source keys -- see godot/tools/inspect_bone_name_map.gd. Don't
@@ -113,12 +116,30 @@ const MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP := {
 ## underscores) -- not something the raw file itself or a script reading it
 ## directly would ever reveal, only Godot's own import pipeline. Don't
 ## "fix" this back to colons without re-confirming live first.
+##
+## mixamorig_LeftShoulder/RightShoulder are DELIBERATELY left OUT (no entry
+## here at all) -- confirmed live, not guessed: with every other joint fixed
+## (see the rest-pose-relative retargeting fix in _process()), the arm chain
+## itself (upper arm through hand) animated correctly on its own, but the
+## shoulder bone specifically kept pulling the whole arm backward, in both
+## Idle and Walk. Most likely cause: Quaternius's "clavicle_l"/"clavicle_r"
+## isn't really the same functional joint as Meshy's "LeftShoulder"/
+## "RightShoulder" -- a clavicle bone in many rigs barely rotates at all
+## (mostly a fixed shoulder-width spacer), while Meshy's own rig may use the
+## shoulder bone as a more active joint, so even a correct rest-relative
+## delta computed from Quaternius's own near-static clavicle motion doesn't
+## mean much applied to a bone Meshy's rig expects to actually move. Same
+## fix strategy already proven for the root bone: leave it out of the map
+## entirely so _process()'s bone_map loop never touches it, staying at its
+## own rest pose permanently while the arm chain below it (which already
+## works) continues to be driven normally -- the character's own natural
+## shoulder-width rest angle, not an animated one.
 const MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP := {
 	"mixamorig_Hips": "pelvis",
 	"mixamorig_Spine": "spine_01", "mixamorig_Spine1": "spine_02", "mixamorig_Spine2": "spine_03",
 	"mixamorig_Neck": "neck_01", "mixamorig_Head": "Head",
-	"mixamorig_LeftShoulder": "clavicle_l", "mixamorig_LeftArm": "upperarm_l", "mixamorig_LeftForeArm": "lowerarm_l", "mixamorig_LeftHand": "hand_l",
-	"mixamorig_RightShoulder": "clavicle_r", "mixamorig_RightArm": "upperarm_r", "mixamorig_RightForeArm": "lowerarm_r", "mixamorig_RightHand": "hand_r",
+	"mixamorig_LeftArm": "upperarm_l", "mixamorig_LeftForeArm": "lowerarm_l", "mixamorig_LeftHand": "hand_l",
+	"mixamorig_RightArm": "upperarm_r", "mixamorig_RightForeArm": "lowerarm_r", "mixamorig_RightHand": "hand_r",
 	"mixamorig_LeftUpLeg": "thigh_l", "mixamorig_LeftLeg": "calf_l", "mixamorig_LeftFoot": "foot_l", "mixamorig_LeftToeBase": "ball_l", "mixamorig_LeftToe_End": "ball_leaf_l",
 	"mixamorig_RightUpLeg": "thigh_r", "mixamorig_RightLeg": "calf_r", "mixamorig_RightFoot": "foot_r", "mixamorig_RightToeBase": "ball_r", "mixamorig_RightToe_End": "ball_leaf_r",
 	"mixamorig_LeftHandMiddle4": "middle_04_leaf_l", "mixamorig_RightHandMiddle4": "middle_04_leaf_r"

@@ -1629,4 +1629,29 @@ now cancels out instead of compounding into a visible twist. Root bone
 handling is untouched (still skipped entirely, per the fix above) --
 this only changes how every OTHER bone's rotation is computed.
 
+**Update, same session: rest-pose-relative retargeting fixed feet and
+face -- confirmed live, with a real diagnosis, not another guess.** The
+user checked directly in Godot again: legs/feet/spine/face all correct
+now. One remaining, precisely-localized issue -- both shoulders pulling
+the whole arm backward, in both Idle and Walk (so not animation-
+specific). The arm chain itself (upper arm through hand) was explicitly
+confirmed already correct on its own.
+
+Fixed the same way the root bone issue was: removed
+`mixamorig_LeftShoulder`/`mixamorig_RightShoulder` from
+`MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP` entirely, so
+`_process()`'s bone-map loop never touches them -- they stay at their own
+natural rest angle permanently, while the arm chain below (already
+confirmed working) continues to be driven normally. Best available
+explanation for why the shoulder specifically needed this and the rest
+of the arm didn't: Quaternius's `clavicle_l`/`clavicle_r` most likely
+isn't the same *functional* joint as Meshy's `LeftShoulder`/
+`RightShoulder` -- a clavicle bone in many rigs barely rotates at all
+(a near-static shoulder-width spacer), while Meshy's own rig may expect
+its shoulder bone to actually move, so even a mathematically correct
+rest-relative delta computed from Quaternius's own near-static clavicle
+motion doesn't mean much applied to a bone that's supposed to carry real
+rotation. Bone count for this map: 24/28 now (down from 26 -- 2 removed
+deliberately, not a new mismatch found).
+
 **Not yet re-verified live.**
