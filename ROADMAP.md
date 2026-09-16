@@ -1441,3 +1441,34 @@ because it held twice. The warrior model itself hasn't been copied into
 the Godot project or wired into a `MODEL_CONFIG` entry yet -- still
 sitting at the user's own downloaded-models folder, pending a decision on
 which hero/monster slot it should fill.
+
+**Update, 2026-09-16 (same day): wired in as "Barbarian," the first
+per-name HERO entry.** Copied the rigged model into
+`godot/assets/creatures/hero/barbarian.glb` (same flattened-copy
+convention every other model here follows) and added `"hero:barbarian"`
+to `MODEL_CONFIG`, using `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`
+and reusing the plain `"hero"` entry's own Quaternius UAL1
+animation_source/clip names verbatim (same file, same Idle/Walk/Death01/
+Crouch_Idle/Hit_Chest/Hit_Head clips -- only the model and its
+bone_name_map differ). Re-confirmed the copied file's bone names still
+match the map post-copy (26/28, same as the original download) before
+wiring it in.
+
+`_rebuild_model()`'s per-name lookup was monster-only until now (every
+hero rendered as the same `superhero_male` regardless of name, a known
+gap since Phase 2) -- extended the exact same `"<type>:<stat-block-key>"`
+two-tier pattern to heroes too, now that a real per-name hero model
+existed to justify it, rather than building the hero half speculatively
+ahead of need. A hero token needs to actually be NAMED "Barbarian"
+(case-insensitive, optional trailing spawn number, same
+`_stat_block_key()` rule monsters already use) to pick this model up --
+Darkhawk/Wren and any other hero name still fall through to the generic
+`superhero_male` entry unaffected.
+
+`label_height` reuses the generic `"hero"` entry's own `2.0` as a
+starting default -- this specific model's real proportions haven't been
+measured live, same "needs live tuning" caveat as everything else in this
+update. **Still entirely unverified in a real Godot session** (this
+environment has none) -- the bone-name data and the file copy are
+confirmed correct; the actual visual result (grounding, scale, animation
+playback, label position) has not been seen.

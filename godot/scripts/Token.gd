@@ -108,6 +108,28 @@ const MODEL_CONFIG := {
 		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
 		"hits": ["Hit_Chest", "Hit_Head"]
 	},
+	## First per-name HERO entry (mirrors "monster:skeleton"/"monster:orc"
+	## below) -- a hero token literally named "Barbarian" now gets this model
+	## instead of the generic superhero_male fallback every hero shared until
+	## now. Model: a free static download from Meshy's library, rigged
+	## through Meshy's WEBSITE Rigging tool with "Skeleton template: Mixamo"
+	## selected -- genuine mixamorig:-prefixed bone names, a different
+	## convention than orc_warrior.glb's own API-rigged skeleton (see
+	## MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP's own doc comment
+	## above for why two different maps exist). animation_source/clip names
+	## reuse the plain "hero" entry's own Quaternius UAL1 source verbatim --
+	## same file, same clips, only the model and its bone_name_map differ.
+	## label_height reuses "hero"'s own 2.0 as a starting default (this
+	## specific model's real proportions haven't been measured live) --
+	## revisit once actually seen in Godot, same as every other
+	## not-yet-live-verified number in this project's own history.
+	"hero:barbarian": {
+		"path": "res://assets/creatures/hero/barbarian.glb", "label_height": 2.0,
+		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
+		"bone_name_map": MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP,
+		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
+		"hits": ["Hit_Chest", "Hit_Head"]
+	},
 	"monster": {
 		"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9,
 		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
@@ -341,12 +363,16 @@ func _rebuild_model() -> void:
 	_dying_animation_key = ""
 	_hit_animation_keys = []
 
-	# A monster's real per-name entry (e.g. "monster:skeleton") wins over the
-	# generic "monster" fallback if one exists -- see MODEL_CONFIG's own doc
-	# comment for why this two-tier lookup exists at all.
+	# A token's real per-name entry (e.g. "monster:skeleton", "hero:barbarian")
+	# wins over its type's generic fallback if one exists -- see MODEL_CONFIG's
+	# own doc comment for why this two-tier lookup exists at all. Originally
+	# monster-only (every hero rendered as the same superhero_male regardless
+	# of name); extended to heroes the same way once a real per-name hero
+	# model existed to look up, rather than building the hero half of this
+	# ahead of ever needing it.
 	var config_key := token_type
-	if token_type == "monster":
-		var specific_key := "monster:" + _stat_block_key(token_name)
+	if token_type == "monster" or token_type == "hero":
+		var specific_key := token_type + ":" + _stat_block_key(token_name)
 		if MODEL_CONFIG.has(specific_key):
 			config_key = specific_key
 	var config: Dictionary = MODEL_CONFIG.get(config_key, {})
@@ -376,9 +402,14 @@ func _rebuild_model() -> void:
 ## lowercasing recovers the actual stat-block identity a specific
 ## MODEL_CONFIG entry should key off, the same name-matching convention
 ## dm-bridge/watch.js's own MONSTER_LIST already uses for narration-driven
-## spawning. A name with no trailing number (a hand-placed token, "addToken"
-## instead of "spawn") just lowercases as-is -- no match in MODEL_CONFIG
-## simply falls through to the generic "monster" entry, same as always.
+## spawning. A name with no trailing number (a hand-placed token, either
+## "addToken" instead of "spawn", or any hero -- heroes are always
+## hand-placed, never spawned) just lowercases as-is -- no match in
+## MODEL_CONFIG simply falls through to the type's generic entry, same as
+## always. Shared between monster and hero lookups (see _rebuild_model())
+## since the underlying rule -- "strip a trailing spawn-count number if
+## present, lowercase the rest" -- doesn't actually depend on which type of
+## token it's being applied to.
 func _stat_block_key(name: String) -> String:
 	var regex := RegEx.new()
 	regex.compile("^(.*?)\\s+\\d+$")

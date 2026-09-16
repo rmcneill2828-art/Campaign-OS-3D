@@ -54,6 +54,25 @@
   cross-file import form. **Not committed** -- same gitignore sweep-up as
   the KayKit files above, no license reason either (this is the user's own
   generated content) but swept into the same ignored tree by convenience.
+- **`creatures/hero/barbarian.glb`** -- the first per-name HERO model
+  (`MODEL_CONFIG`'s `"hero:barbarian"`), a different pipeline than the Orc
+  above: a free static model downloaded from Meshy's own library (not
+  text-to-3D generated), then rigged through Meshy's WEBSITE Rigging tool
+  with "Skeleton template: Mixamo" selected -- a choice only the website
+  UI exposes, not the API `orc_warrior.glb` went through, and the reason
+  this file needs its own `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`
+  rather than reusing the Orc's map (see that constant's own doc comment
+  in `Token.gd` for the two conventions' real bone-name differences,
+  confirmed by direct extraction, not assumed). Reuses the plain `"hero"`
+  entry's own Quaternius UAL1 `animation_source` and clip names verbatim
+  -- animation comes free from the existing UAL1 library, not a paid
+  Meshy animate step, which was the actual point of building the
+  bone-name-map mechanism at all (see `ROADMAP.md`'s "Meshy-rig-to-free-
+  animation bone name mapping" entry for the full reasoning, including why
+  Mixamo automation itself was ruled out). **Not committed** -- same
+  gitignore sweep-up as the Orc files above, no license reason established
+  either way (Meshy's own ToS governs this the same unverified way noted
+  for the Orc).
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.
