@@ -9,6 +9,13 @@
 #
 # Usage: scripts/sync-engine.sh [path-to-Campaign-OS-checkout]
 # Defaults to ../../Campaign-OS (i.e. a sibling checkout next to this project).
+#
+# No Git Bash on this machine? sync-engine.ps1 in this same folder does the same
+# thing. Either way, dm-bridge/watch.js has no sync script at all (it's small and
+# rarely touched) -- hand-diff it against Campaign-OS's own copy when it changes.
+# .github/workflows/test.yml's engine-sync-check job is the automated backstop for
+# all of the above -- it fails CI the moment any of these drift from Campaign-OS's
+# real copies, whether or not someone remembered to run a sync script.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

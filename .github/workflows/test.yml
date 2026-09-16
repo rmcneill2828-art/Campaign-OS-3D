@@ -44,3 +44,41 @@ jobs:
 
       - name: smoke_test_entrance_hall.gd (Entrance Hall map resolves and loads with the expected node count)
         run: godot --headless --path godot --script res://tools/smoke_test_entrance_hall.gd
+
+  # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
+  # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
+  # header comment) -- kept in sync by hand, with no shared module/package to enforce
+  # it. This job is the automated guard the manual convention alone can't provide: it
+  # checks out the real, canonical Campaign-OS repo alongside this one and fails loudly
+  # the moment any shared file actually drifts, rather than relying on someone
+  # remembering to diff them.
+  engine-sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Campaign-OS-3D
+        uses: actions/checkout@v4
+        with:
+          path: campaign-os-3d
+      - name: Check out Campaign-OS (canonical engine source)
+        uses: actions/checkout@v4
+        with:
+          repository: rmcneill2828-art/Campaign-OS
+          path: campaign-os-2d
+      - name: Diff shared files against their canonical Campaign-OS copies
+        run: |
+          set -euo pipefail
+          status=0
+          check() {
+            local canonical="campaign-os-2d/$1"
+            local copy="campaign-os-3d/$2"
+            if ! diff -q "$canonical" "$copy" > /dev/null 2>&1; then
+              echo "::error file=$2::$2 has drifted from the canonical Campaign-OS copy ($1). Re-run engine-server/scripts/sync-engine.sh (or sync-engine.ps1) -- or hand-sync dm-bridge/watch.js, which has no sync script -- and review the diff before committing; the 3D client may rely on behavior that just shifted."
+              status=1
+            fi
+          }
+          check engine/encounter.js engine-server/engine/encounter.js
+          check engine/dmBridge.js engine-server/engine/dmBridge.js
+          check engine/campaign.js engine-server/engine/campaign.js
+          check engine/characterCreator.js engine-server/engine/characterCreator.js
+          check dm-bridge/watch.js dm-bridge/watch.js
+          exit $status
