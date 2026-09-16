@@ -1558,7 +1558,31 @@ to the wrong relative location. Fixed by only copying position/scale for
 a bone with no parent (the root, carrying the animation's own overall
 body movement/bob) -- every other bone now keeps its own rest-pose
 position, driven only by rotation, the standard way skeletal retargeting
-across different-proportioned rigs actually works. **Not yet re-verified
-live** -- this fix hasn't been seen running in Godot yet either; confirm
-the Barbarian actually stands and animates correctly now, not assumed
-fixed just because the reasoning is sound.
+across different-proportioned rigs actually works.
+
+**Update, same session: the position fix worked, but revealed a third,
+narrower bug.** Live result: crumpled heap gone, body anatomically
+correct -- but now lying fully prone on the floor, tipped over as one
+rigid unit rather than standing. Root cause: still copying the ROOT
+bone's rotation from source to target, and `_ground_model()`'s own doc
+comment (right below `_process()` in this same file) already documented
+the relevant fact -- this project's rigs carry a baked root-bone rotation
+that varies per model (a Z-up/Y-up export-tool artifact), confirmed
+independently once already for `_ground_model()`'s own bug, not
+re-discovered here. Copying the source root's rotation onto a target
+root with a different baked convention doesn't animate the body, it
+tips the entire hierarchy over as one unit -- everything below the root
+stayed internally consistent (child rotations are parent-relative, which
+is exactly why the body wasn't ALSO crumpled this time), only the whole
+thing's absolute orientation was wrong. Fixed by leaving the root bone's
+own rotation alone entirely (whatever this specific model's own rest
+pose already has, upright) while still copying every child bone's
+relative rotation -- position copies only for the root, rotation copies
+only for everyone else, a clean split rather than "copy everything for
+the root."
+
+**Not yet re-verified live** -- three fixes deep in the same debugging
+thread now (bone names, then position, then root rotation), each only
+found by actually seeing the previous fix's real result in Godot, not
+by reasoning alone. Confirm the Barbarian actually stands upright and
+animates correctly before assuming this is the last one.
