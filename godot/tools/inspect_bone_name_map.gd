@@ -80,4 +80,17 @@ func _init() -> void:
 	print("Matched: %d/%d (%d via bone_name_map, %d via exact name)" % [matched, total, matched_via_map, matched_via_exact_name])
 	print("Unmatched (stay in bind pose, no animation drives them): %s" % (", ".join(unmatched) if not unmatched.is_empty() else "(none)"))
 
+	# Real bones matching doesn't help if the clip name Token.gd's own config
+	# expects ("mixamo.com", guessed from a raw string found in the FBX file's
+	# bytes, not confirmed as the actual AnimStack/Take name Godot's importer
+	# surfaces) doesn't actually resolve against what's really in this file's
+	# AnimationPlayer -- print the real list so that doesn't have to be
+	# guessed at either.
+	var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
+	if source_players.is_empty():
+		print("\n%s has NO AnimationPlayer at all" % ANIMATION_SOURCE.get_file())
+	else:
+		var source_player := source_players[0] as AnimationPlayer
+		print("\n%s AnimationPlayer's real clip list: %s" % [ANIMATION_SOURCE.get_file(), source_player.get_animation_list()])
+
 	quit()
