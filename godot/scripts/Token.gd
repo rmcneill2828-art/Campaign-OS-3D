@@ -652,7 +652,27 @@ func _process(_delta: float) -> void:
 		if _character_skeleton.get_bone_parent(char_idx) == -1:
 			continue
 		var source_idx: int = _bone_map[char_idx]
-		_character_skeleton.set_bone_pose_rotation(char_idx, _anim_source_skeleton.get_bone_pose_rotation(source_idx))
+		# Rest-pose-RELATIVE rotation, not a raw absolute copy -- confirmed live as
+		# the actual next problem after the three root fixes above: with the body
+		# correctly standing, both feet and the face still came back visibly
+		# twisted, at every joint, not one isolated bone. A raw copy only produces
+		# a correct pose if the source and target skeletons share the exact same
+		# REST orientation per bone -- true within one rig family (why this was
+		# never a problem for hero/monster<->Quaternius or skeleton<->KayKit) but
+		# not guaranteed at all across genuinely different rigs (Meshy's Mixamo-
+		# template output vs. Quaternius's own), and any per-bone mismatch
+		# compounds down a joint chain -- worst at its far end (toes, the
+		# face/neck), which is exactly where this showed up, not at the torso.
+		# Fix: extract how far the SOURCE bone has rotated away from its OWN rest
+		# pose, then apply that same rotation on top of the TARGET's own rest pose
+		# instead of the source's raw absolute value -- a mismatched baseline
+		# orientation between the two skeletons cancels out instead of compounding
+		# into a visible twist.
+		var source_rest_rotation: Quaternion = _anim_source_skeleton.get_bone_rest(source_idx).basis.get_rotation_quaternion()
+		var source_pose_rotation: Quaternion = _anim_source_skeleton.get_bone_pose_rotation(source_idx)
+		var rotation_delta: Quaternion = source_rest_rotation.inverse() * source_pose_rotation
+		var target_rest_rotation: Quaternion = _character_skeleton.get_bone_rest(char_idx).basis.get_rotation_quaternion()
+		_character_skeleton.set_bone_pose_rotation(char_idx, target_rest_rotation * rotation_delta)
 
 ## Shifts `instance` up/down so the lowest point of its actual rendered
 ## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's

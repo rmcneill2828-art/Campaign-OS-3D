@@ -1601,5 +1601,32 @@ Fourth fix in the same live-debugging thread (bone names -> position ->
 root rotation -> root position), each only found by actually seeing the
 previous fix's real result in Godot, not by reasoning alone -- explicitly
 noted in this fix's own code comment as close to the practical limit for
-guessing at something this visual without direct Godot access. **Not yet
-re-verified live.**
+guessing at something this visual without direct Godot access.
+
+**Update, same session: standing/grounded confirmed correct, but real
+diagnosis this time instead of another screenshot-guess** -- the user
+checked directly in the Godot editor, orbiting/zooming the live camera
+per this project's own controls, rather than another round of "here's a
+screenshot, guess again." Both feet visibly twisted, and the face too --
+not one isolated bone, every joint.
+
+This pointed at something more fundamental than any of the four fixes
+above: `_process()` was still copying each non-root bone's rotation as a
+raw ABSOLUTE value from source to target, which only produces a correct
+pose if both skeletons share the exact same REST orientation per bone.
+True within one rig family (why hero/monster<->Quaternius and
+skeleton<->KayKit never had this problem) but never actually guaranteed
+across genuinely different rigs -- and any per-bone rest-orientation
+mismatch compounds down a joint chain, worst at its far end (toes,
+the neck/face), exactly where this showed up, not at the torso.
+
+Fixed with the real retargeting technique this needed all along: extract
+how far the SOURCE bone has rotated away from ITS OWN rest pose
+(`source_rest.inverse() * source_pose`), then apply that same delta on
+top of the TARGET's own rest pose instead of the source's raw absolute
+rotation. A mismatched baseline orientation between the two skeletons
+now cancels out instead of compounding into a visible twist. Root bone
+handling is untouched (still skipped entirely, per the fix above) --
+this only changes how every OTHER bone's rotation is computed.
+
+**Not yet re-verified live.**
