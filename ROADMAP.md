@@ -1722,6 +1722,26 @@ don't trust a raw file string as the Godot-resolved name for ANYTHING
 (bones, clips, likely more) without checking live.
 
 Fixed by correcting every `"mixamo.com"` reference in `"hero:barbarian"`
-to `"mixamo_com"`. **Not yet re-verified live** -- the bone-matching half
-of this change is now confirmed correct; whether the Barbarian actually
-animates correctly once the clip name resolves hasn't been seen yet.
+to `"mixamo_com"`.
+
+**Update, same session: verified live -- the mechanism works completely.**
+The Barbarian now stands correctly, animates cleanly, no twisting, no
+crumpling, no backward-pulled arms -- confirmed by the user via a direct
+side-by-side against Darkhawk. This closes out the whole retargeting saga
+started by the earlier bone-name/position/rotation fixes: the actual,
+final answer was abandoning cross-rig retargeting in favor of real
+Mixamo animations, exactly as the strategy switch above intended.
+
+One remaining issue was pure content choice, not technical: "Breathing
+Idle" (the actual Mixamo clip originally downloaded for `idle`) turned
+out to look like "a Zombie pose" once seen animating -- arms thrust
+forward, clenched hands, not a relaxed standing stance. Swapped for a
+different Mixamo clip (plain "Idle") -- a pure file replacement at the
+same path (`mixamo_idle.fbx`), no code or config change needed at all,
+confirming the underlying mechanism (clip-name resolution, bone
+matching, animation playback) is robust to swapping which specific
+Mixamo animation is used. `walk`/`death`/`hits` still use the original
+4 downloaded clips (Standard Walk, Standing Death Forward 01, Reaction,
+Hit Reaction) -- not yet individually confirmed live the way idle now
+is, worth a look if any of them turn out to have the same
+"technically-plays-but-looks-wrong" problem "Breathing Idle" did.
