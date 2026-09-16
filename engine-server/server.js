@@ -46,6 +46,46 @@ const DM_BRIDGE_POLL_MS = 1000;
 const MAX_BODY_BYTES = 256 * 1024;
 const BODY_READ_TIMEOUT_MS = 10000;
 
+// Schema version history for the persisted encounter.json format itself (NOT the
+// shared engine's own in-memory state shape, which mergeNewSeedMaps below already
+// handles separately via "merge in any newly-added seed map by name"). Bump
+// SCHEMA_VERSION and append a migration whenever a future change actually restructures
+// what's on disk (renaming/removing a top-level field, changing a value's shape) --
+// something no persisted file has needed yet, so there is exactly one, no-op entry:
+//
+//   0 (unversioned) -- every save this project has ever produced before this existed.
+//   1 (current)      -- adds the schemaVersion field itself; no data changed shape.
+//
+// Each MIGRATIONS[i] upgrades a state from version i to i+1; migrateState() applies
+// every needed step in order and stamps the result. A file claiming a NEWER version
+// than this server knows about is a real problem (this server genuinely can't
+// correctly interpret it) -- migrateState() throws rather than guess, the same
+// "surface it, don't silently paper over it" rule loadState()'s own corruption
+// handling already follows, and reuses that exact recovery path (try the backup,
+// then refuse to start) since the thrown error propagates out of the same try block.
+const SCHEMA_VERSION = 1;
+const MIGRATIONS = [
+  (state) => state // 0 -> 1: pure stamp, no prior on-disk shape to transform.
+];
+
+function migrateState(state) {
+  let version = typeof state.schemaVersion === "number" ? state.schemaVersion : 0;
+  if (version > SCHEMA_VERSION) {
+    throw new Error(
+      `State file is schemaVersion ${version}, newer than this server understands (${SCHEMA_VERSION}). Refusing to reinterpret it -- run a newer server, or restore an older save.`
+    );
+  }
+  while (version < SCHEMA_VERSION) {
+    const migrate = MIGRATIONS[version];
+    if (!migrate) {
+      throw new Error(`No migration registered from schemaVersion ${version} to ${version + 1}.`);
+    }
+    state = migrate(state);
+    version += 1;
+  }
+  return { ...state, schemaVersion: SCHEMA_VERSION };
+}
+
 // A fresh board to play with on first run (or after /reset). This is a convenience
 // starting point for the 3D prototype, not campaign data -- real campaign import
 // (engine/campaign.js, already copied alongside encounter.js/dmBridge.js) is a later
@@ -138,7 +178,7 @@ function seedState() {
   state = CampaignOS.addWall(state, entranceHallMap, 0, 4, 0, 8); // room's west wall
   state = CampaignOS.addWall(state, entranceHallMap, 4, 4, 4, 8); // room's east wall
 
-  return state;
+  return { ...state, schemaVersion: SCHEMA_VERSION };
 }
 
 // A saved session's stateFile is a full snapshot from whatever seedState()
@@ -177,7 +217,7 @@ function backupFilePath(stateFile) {
 function loadState(stateFile) {
   try {
     const raw = fs.readFileSync(stateFile, "utf8");
-    return mergeNewSeedMaps(JSON.parse(raw));
+    return mergeNewSeedMaps(migrateState(JSON.parse(raw)));
   } catch (err) {
     if (err.code === "ENOENT") {
       return seedState();
@@ -185,7 +225,7 @@ function loadState(stateFile) {
     const backupFile = backupFilePath(stateFile);
     try {
       const raw = fs.readFileSync(backupFile, "utf8");
-      const recovered = mergeNewSeedMaps(JSON.parse(raw));
+      const recovered = mergeNewSeedMaps(migrateState(JSON.parse(raw)));
       console.error(`Warning: ${stateFile} failed to load (${err.message}). Recovered from backup ${backupFile} instead.`);
       return recovered;
     } catch (backupErr) {
@@ -597,4 +637,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { createServer, seedState, loadState, saveState };
+module.exports = { createServer, seedState, loadState, saveState, migrateState, SCHEMA_VERSION };
