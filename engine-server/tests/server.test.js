@@ -109,6 +109,41 @@ test("POST /action remove_token deletes the token from state entirely", async ()
   }
 });
 
+// add_token's counterpart to remove_token above -- closes a real gap this 3D client had with
+// no workaround at all: no UI button, no bridge action, no way to create a new hero/NPC token
+// in a live session short of hand-editing engine-server/state/encounter.json. Confirms the
+// real POST /action path actually creates a usable token (not just that addToken() itself
+// works, already covered wherever the shared engine's own tests live) with real ability
+// scores, not silently defaulting to the +0 saving-throw/check bug Phase 3 already found and
+// fixed once for the seeded Darkhawk/Wren.
+test("POST /action add_token creates a real hero token with real ability scores", async () => {
+  const { server, baseUrl } = await startTestServer();
+  try {
+    const res = await fetch(`${baseUrl}/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "add_token", name: "Barbarian", tokenType: "hero", hp: 45, maxHp: 45, ac: 15,
+        abilityScores: { STR: 18, DEX: 12, CON: 16, INT: 8, WIS: 10, CHA: 10 }
+      })
+    });
+    assert.equal(res.status, 200);
+    const result = await res.json();
+    assert.match(result.messages[0], /Barbarian joins the encounter\./);
+    const token = result.state.tokens.find((t) => t.name === "Barbarian");
+    assert.ok(token, "the new token should actually exist in state");
+    assert.equal(token.type, "hero");
+    assert.equal(token.ac, 15);
+    assert.deepEqual(token.abilityScores, { STR: 18, DEX: 12, CON: 16, INT: 8, WIS: 10, CHA: 10 });
+
+    // Persisted, same durability guarantee every other mutating endpoint already has.
+    const reloaded = await (await fetch(`${baseUrl}/state`)).json();
+    assert.ok(reloaded.state.tokens.some((t) => t.name === "Barbarian"));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 // Confirms the advantage/disadvantage fields actually reach rollSavingThrow/
 // rollAbilityCheck through the real POST /action -> DMBridge.applyActions path Main.gd's
 // UI would use (see engine/dmBridge.js's saving_throw/ability_check cases) -- the exact

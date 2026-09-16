@@ -101,6 +101,7 @@ const SYSTEM_PROMPT = [
   '{"type": "spend_hit_die", "target": "<exact token name>", "die": "<exact Hit Dice type from that token\'s list below, e.g. d10>", "count": <optional integer, default 1>}',
   '{"type": "drop_concentration", "target": "<exact token name>"}',
   '{"type": "remove_token", "target": "<exact token name>"}',
+  '{"type": "add_token", "name": "<token name>", "tokenType": "<optional \'hero\' (default) or \'monster\'>", "hp": <optional integer, default 10>, "maxHp": <optional integer, defaults to hp>, "ac": <optional integer, default 12>, "abilityScores": <optional {"STR":<int>,"DEX":<int>,"CON":<int>,"INT":<int>,"WIS":<int>,"CHA":<int>}>}',
   '{"type": "roll_death_save", "target": "<exact token name>"}',
   '{"type": "long_rest", "target": "<exact token name>"}',
   '{"type": "short_rest", "target": "<exact token name>"}',
@@ -283,6 +284,13 @@ const SYSTEM_PROMPT = [
   "outright (a summoned creature expiring, cleaning up a mistaken spawn). Narration alone",
   "implying a token died is different -- use apply_damage/attack instead so it stays on the",
   "map, visibly dead, which is usually what that actually means.",
+  "",
+  "When the DM's command introduces a new named hero/ally/NPC that isn't in the current state",
+  "and isn't a listed SRD monster, issue add_token for it (tokenType \"hero\" unless it's",
+  "clearly a monster-type creature) rather than just narrating their presence -- otherwise",
+  "nothing they do afterward (an attack naming them, a saving throw) can resolve, since",
+  "findTokenByName has nothing to find. For a real SRD monster, use spawn_monster instead --",
+  "it gets an accurate stat block add_token's own generic defaults can't provide.",
   "",
   "Death saves are also mostly automatic. A token dropping from above 0 to exactly 0 HP (from",
   "attack, apply_damage, or cast_spell) starts them on its own -- you don't set anything up.",
@@ -467,6 +475,13 @@ function isValidAction(action) {
     case "long_rest":
     case "short_rest":
       return typeof action.target === "string";
+    case "add_token":
+      return typeof action.name === "string" && action.name.trim().length > 0
+        && (action.tokenType === undefined || action.tokenType === "hero" || action.tokenType === "monster")
+        && (action.hp === undefined || Number.isFinite(action.hp))
+        && (action.maxHp === undefined || Number.isFinite(action.maxHp))
+        && (action.ac === undefined || Number.isFinite(action.ac))
+        && (action.abilityScores === undefined || (typeof action.abilityScores === "object" && action.abilityScores !== null));
     case "add_exhaustion":
       return typeof action.target === "string" && (action.amount === undefined || Number.isFinite(action.amount));
     case "use_legendary_action":

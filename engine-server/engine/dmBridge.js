@@ -263,6 +263,29 @@
           alreadyLogged: false
         };
       }
+      // add_token's counterpart to remove_token above -- the DM-bridge glue ui/app.js's own
+      // "Add Token" button never needed (it calls addToken() directly in-browser, same
+      // unbridged-DM-only-action pattern Restore Resource still uses), but narration/an
+      // external API caller has no such direct engine access. Deliberately generic
+      // (tokenType hero OR monster, matching addToken()'s own default) rather than
+      // hero-only -- for a REAL SRD monster, spawn_monster remains the right action (it
+      // gets an accurate stat block); this is for a custom hero, a unique NPC, or a
+      // monster not in the SRD list, where addToken()'s own generic defaults (10 HP, AC 12,
+      // etc.) are the best available. abilityScores is passed through so a hero created
+      // this way doesn't silently show a flat +0 on every saving throw/ability check/attack
+      // roll -- exactly the bug Phase 3 found and fixed for the seeded Darkhawk/Wren, not
+      // something to reintroduce here for every future hero created live.
+      case "add_token": {
+        const result = window.CampaignOS.addToken(state, {
+          name: action.name,
+          type: action.tokenType === "monster" ? "monster" : "hero",
+          hp: action.hp,
+          maxHp: action.maxHp,
+          ac: action.ac,
+          abilityScores: action.abilityScores
+        });
+        return { state: result.state, message: `${result.token.name} joins the encounter.`, alreadyLogged: false };
+      }
       case "roll_death_save": {
         const target = findTokenByName(state, action.target);
         if (!target) return { state, message: `(DM assistant) could not find "${action.target}" to roll a death save.`, alreadyLogged: false };

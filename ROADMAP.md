@@ -1472,3 +1472,37 @@ update. **Still entirely unverified in a real Godot session** (this
 environment has none) -- the bone-name data and the file copy are
 confirmed correct; the actual visual result (grounding, scale, animation
 playback, label position) has not been seen.
+
+## `add_token` DM-bridge action -- 2026-09-16
+
+Found trying to actually use the new Barbarian hero above: **there was no
+way to create a hero token in this client at all.** Confirmed by checking
+`dmBridge.js`'s full action list directly (28 cases, no `add_token`/
+`add_hero`) rather than assumed -- `spawn_monster` only covers the fixed
+SRD monster list, and no "Add Hero" button exists anywhere in `Main.gd`.
+The only two heroes that have ever existed (Darkhawk, Wren) are hardcoded
+into `engine-server/server.js`'s own `seedState()`.
+
+This is a shared-engine gap, not 3D-specific, so the real fix lives in
+`engine/dmBridge.js`/`dm-bridge/watch.js` -- see Campaign-OS's own
+`ROADMAP.md` for the full `add_token` entry (generic `tokenType` "hero"
+or "monster", `abilityScores` passed through so a new hero doesn't
+silently show a flat +0 on every roll, matching the same fix Phase 3
+already made once for the seeded heroes). Synced into this project the
+usual way (`engine-server/scripts/sync-engine.sh` for `dmBridge.js`, a
+plain copy for `watch.js` -- confirmed byte-identical via direct `diff`
+against Campaign-OS afterward, same discipline as every other shared-file
+change). One new integration test in `engine-server/tests/server.test.js`
+confirms the real `POST /action` path actually creates a usable, real
+token with real ability scores (49/49 tests passing).
+
+**What this unlocks right now, with zero further Godot code**: typing a
+command into the existing DM Assistant panel (e.g. "add a hero named
+Barbarian") already works end-to-end through `POST /dm-command` -- Claude
+resolves it to a real `add_token` action, same as any other DM Assistant
+command. **Not yet built**: a dedicated "Add Hero" button/form in
+`Main.gd`'s own UI, which wouldn't depend on Claude correctly
+interpreting a free-text request each time. Worth adding if the DM
+Assistant path proves unreliable or too slow for something this
+frequent -- not done yet since the underlying capability (the actual
+blocker) is what mattered most to fix first.
