@@ -34,6 +34,18 @@ const DEFAULT_DM_BRIDGE_DIR = path.join(__dirname, "..", "dm-bridge");
 const DM_BRIDGE_TIMEOUT_MS = 120000; // matches ui/app.js's own 2-minute give-up
 const DM_BRIDGE_POLL_MS = 1000;
 
+// The largest real client-sent body today is a /dm-command's optional
+// {title, text} context -- itself capped at 6000 chars by the 2D app's own
+// dmBridgeContextMaxChars (ui/app.js), not currently even wired up from the 3D
+// client yet. 256 KB is generously above any real payload but small enough that
+// a body-size attack against this loopback-only server can't turn into a
+// meaningful memory-exhaustion problem. BODY_READ_TIMEOUT_MS guards only the
+// "receiving the request body" phase -- unrelated to /dm-command's own up-to-2-
+// minute wait for a Claude response, which only starts once the body has
+// already fully arrived and been parsed.
+const MAX_BODY_BYTES = 256 * 1024;
+const BODY_READ_TIMEOUT_MS = 10000;
+
 // A fresh board to play with on first run (or after /reset). This is a convenience
 // starting point for the 3D prototype, not campaign data -- real campaign import
 // (engine/campaign.js, already copied alongside encounter.js/dmBridge.js) is a later
@@ -316,36 +328,104 @@ async function waitForBridgeResponse(responsePath, id, timeoutMs) {
   return null;
 }
 
+// Godot's HTTPRequest isn't a browser and doesn't enforce/send CORS at all, so none
+// of this affects the actual game client either way -- it's here for the browser-
+// based callers this API also supports (a plain browser tab / curl / a future
+// web-based front end). A bare "*" would let ANY website a user happens to have
+// open in the same browser fire a blind cross-origin POST /action against this
+// loopback server while it's running -- CORS is what stops the browser from doing
+// that for a JSON-content-typed fetch() (it preflights, and the browser only sends
+// the real request if that preflight is allowed). Allow-listing 127.0.0.1/localhost
+// specifically (any port -- a local dev front end can run on anything) keeps every
+// legitimate local origin working while closing that off to the wider web.
+function isAllowedLocalOrigin(origin) {
+  if (!origin) return false;
+  let url;
+  try {
+    url = new URL(origin);
+  } catch (err) {
+    return false;
+  }
+  return (url.protocol === "http:" || url.protocol === "https:") &&
+    (url.hostname === "127.0.0.1" || url.hostname === "localhost");
+}
+
+function applyCorsHeaders(req, res) {
+  const origin = req.headers.origin;
+  if (!isAllowedLocalOrigin(origin)) return;
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+}
+
 function sendJson(res, status, body) {
   const json = JSON.stringify(body);
+  // A plain writeHead(status, headers) call here MERGES with anything already set
+  // via res.setHeader() (applyCorsHeaders, called once up front for every request) --
+  // it doesn't need to (and shouldn't) repeat the CORS headers itself.
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Content-Length": Buffer.byteLength(json),
-    // Permissive CORS: Godot's HTTPRequest isn't a browser and doesn't enforce CORS
-    // anyway, but this keeps the door open for testing the API from a plain browser
-    // tab / curl / a future web-based front end without revisiting this file.
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+    "Content-Length": Buffer.byteLength(json)
   });
   res.end(json);
+}
+
+class BodyError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
 }
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let data = "";
+    let bytes = 0;
+    let oversized = false;
+    let settled = false;
+
+    const finish = (isResolve, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (isResolve) resolve(value);
+      else reject(value);
+    };
+
+    // Only the timeout destroys the socket -- the client is stalled/misbehaving, so
+    // there's no well-formed response to send it anyway, and dropping the connection
+    // frees the server from waiting on it further.
+    const timer = setTimeout(() => {
+      req.destroy();
+      finish(false, new BodyError(408, "Request body took too long to arrive."));
+    }, BODY_READ_TIMEOUT_MS);
+
     req.on("data", (chunk) => {
+      bytes += chunk.length;
+      if (bytes > MAX_BODY_BYTES) {
+        // Stop buffering (this is what actually bounds memory use -- `data` never
+        // grows past the limit) but deliberately DON'T destroy the socket here: an
+        // abrupt close mid-upload is what a client sees as a raw connection reset,
+        // not a clean HTTP error. Draining the rest of the (now-discarded) body and
+        // responding normally on 'end' is what lets sendJson's 413 actually reach
+        // the caller as a real response instead of a socket error.
+        oversized = true;
+        return;
+      }
       data += chunk;
     });
     req.on("end", () => {
-      if (!data) return resolve({});
+      if (oversized) {
+        return finish(false, new BodyError(413, `Request body exceeds the ${MAX_BODY_BYTES}-byte limit.`));
+      }
+      if (!data) return finish(true, {});
       try {
-        resolve(JSON.parse(data));
+        finish(true, JSON.parse(data));
       } catch (err) {
-        reject(err);
+        finish(false, new BodyError(400, "Malformed JSON body."));
       }
     });
-    req.on("error", reject);
+    req.on("error", (err) => finish(false, err));
   });
 }
 
@@ -377,6 +457,8 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   }
 
   const server = http.createServer(async (req, res) => {
+    applyCorsHeaders(req, res);
+
     if (req.method === "OPTIONS") {
       return sendJson(res, 204, {});
     }
@@ -395,7 +477,7 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
       try {
         action = await readJsonBody(req);
       } catch (err) {
-        return sendJson(res, 400, { error: "Malformed JSON body." });
+        return sendJson(res, err.status || 400, { error: err.message || "Malformed JSON body." });
       }
       if (!action || typeof action.type !== "string") {
         return sendJson(res, 400, { error: "Action must be an object with a string \"type\"." });
@@ -426,7 +508,7 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
       try {
         body = await readJsonBody(req);
       } catch (err) {
-        return sendJson(res, 400, { error: "Malformed JSON body." });
+        return sendJson(res, err.status || 400, { error: err.message || "Malformed JSON body." });
       }
       const command = typeof body.command === "string" ? body.command.trim() : "";
       if (!command) {
