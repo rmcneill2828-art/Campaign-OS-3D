@@ -1745,3 +1745,34 @@ Mixamo animation is used. `walk`/`death`/`hits` still use the original
 Hit Reaction) -- not yet individually confirmed live the way idle now
 is, worth a look if any of them turn out to have the same
 "technically-plays-but-looks-wrong" problem "Breathing Idle" did.
+
+**Update, same session: the swap to plain "Idle" regressed -- "his whole
+body is twisted," a real structural problem, not another pose-choice
+issue.** Checked the new file's raw bytes directly (bone names, export
+metadata) before guessing -- structurally identical to "Breathing Idle"
+(same rig, same "MotionOnlyScene" motion-only export), so the difference
+had to be in the actual animation curve data, not the file/rig itself.
+
+Reconsidered the mechanism instead of the file: `_process()` had frozen
+the root/hip bone ENTIRELY since the earlier Quaternius cross-rig work,
+where that was the right call (the two rigs' rest conventions genuinely
+conflicted). But the Barbarian isn't cross-rig anymore -- source and
+target are both real Mixamo rigs now. A frozen hip with the spine still
+receiving its FULL rotation delta only looks fine if the clip's own
+weight-shift is subtle enough not to expose it (true of the minimal
+"Breathing Idle," not true of a more expressive "Idle" whose natural
+stance likely choreographs the hip and spine rotating together) -- the
+spine's motion assumes a hip that moves with it.
+
+Re-enabled root motion using the SAME rest-pose-relative delta technique
+already proven for every other bone (both rotation and position), but
+as an OPT-IN per family (`"animate_root": true`, new
+`_animate_root` state, defaulting false) rather than a global change --
+`_process()` is shared by every token, and hero/monster/skeleton/orc all
+have a frozen root that's been working fine all session; changing that
+globally to fix the Barbarian risked regressing four things that weren't
+broken. Only `"hero:barbarian"` opts in.
+
+**Not yet verified live** -- a real, reasoned fix based on reconsidering
+which assumption stopped applying (cross-rig -> same-rig), not another
+blind guess, but still unseen running.

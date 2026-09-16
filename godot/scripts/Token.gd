@@ -203,6 +203,7 @@ const MODEL_CONFIG := {
 	"hero:barbarian": {
 		"path": "res://assets/creatures/hero/barbarian.glb", "label_height": 2.0,
 		"animation_source": "res://assets/creatures/animations/mixamo_idle.fbx",
+		"animate_root": true,
 		"idle": "mixamo_com",
 		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_walk.fbx", "as": "Barbarian_Walk"},
 		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_death.fbx", "as": "Barbarian_Death"},
@@ -327,6 +328,12 @@ var _character_skeleton: Skeleton3D
 var _anim_source_skeleton: Skeleton3D
 var _anim_source_player: AnimationPlayer
 var _bone_map := {} # character bone index -> animation-source bone index
+# See MODEL_CONFIG's "hero:barbarian" doc comment and _process()'s own comment
+# for why this exists and defaults false -- true only opts a family INTO
+# animating its root bone (rest-pose-relative, not a raw copy), never the
+# default, so every already-working family (hero/monster/skeleton/orc, all
+# proven fine with a frozen root all session) is completely unaffected.
+var _animate_root := false
 var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
 var _walk_animation_key := ""
 var _death_animation_key := ""
@@ -438,6 +445,7 @@ func _rebuild_model() -> void:
 	_anim_source_skeleton = null
 	_anim_source_player = null
 	_bone_map.clear()
+	_animate_root = false
 	_idle_animation_key = ""
 	_walk_animation_key = ""
 	_death_animation_key = ""
@@ -531,6 +539,7 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 		return
 	_anim_source_skeleton = source_skeletons[0] as Skeleton3D
 	_anim_source_player = source_players[0] as AnimationPlayer
+	_animate_root = bool(config.get("animate_root", false))
 
 	# bone_name_map (see MODEL_CONFIG's own doc comment) translates the
 	# character's bone name before searching the animation source, for a pair
@@ -689,67 +698,65 @@ func _play_source_animation(anim_key: String) -> void:
 	if anim_key != "" and _anim_source_player and _anim_source_player.current_animation != anim_key:
 		_anim_source_player.play(anim_key)
 
+## History worth keeping, not just current behavior -- this function went
+## through 5 live-tested iterations bridging Meshy's rig onto Quaternius's
+## UAL1 (genuinely different rigs) before that approach was abandoned
+## entirely in favor of real Mixamo animations for the Barbarian (see
+## MODEL_CONFIG's own "hero:barbarian" doc comment): (1) copying every
+## bone's raw POSITION crumpled the body -- fixed by restricting position to
+## the root only; (2) copying the root's raw ROTATION too tipped the whole
+## body over -- _ground_model()'s own doc comment explains why (a baked
+## per-model root rotation convention); (3) even root-only POSITION sank the
+## body into the floor (the two rigs' roots sit at different heights within
+## their own skeletons); (4) freezing the root entirely (neither position
+## nor rotation) fixed standing/grounding; (5) raw absolute ROTATION for
+## every OTHER bone still produced visible twisting at every joint (worst at
+## chain ends -- toes, the face) -- fixed with a rest-pose-RELATIVE delta
+## (extract how far the source bone rotated away from ITS OWN rest pose,
+## apply that same delta onto the target's OWN rest pose) instead of a raw
+## copy, which is what's still used below for every bone.
+##
+## The root bone specifically stays frozen (_animate_root false, the default
+## for every family) UNLESS a family's own MODEL_CONFIG entry opts in --
+## freezing it was the right call bridging two genuinely different rigs
+## (Meshy vs. Quaternius), but once source and target are the SAME real
+## rig family (the Barbarian's own Mixamo-to-Mixamo animations), keeping it
+## frozen caused a NEW, different problem: an Idle clip whose natural
+## weight-shift choreographs the hip and spine rotating together showed up
+## as a visibly twisted waist, because the spine's full rotation delta was
+## still being applied against a hip that wasn't moving with it. Re-enabling
+## root motion (via the exact same rest-relative delta technique, for both
+## rotation and position) fixed it -- confirmed live. Opt-in per family
+## rather than a global change specifically so hero/monster/skeleton/orc
+## (all proven fine with a frozen root all session) are completely
+## unaffected.
 func _process(_delta: float) -> void:
 	if not (_character_skeleton and _anim_source_skeleton):
 		return
 	for char_idx in _bone_map:
-		# The ROOT bone (no parent) is left ENTIRELY alone -- not position, not
-		# rotation -- three live-tested iterations in a row each found a new way
-		# copying the source skeleton's root transform breaks a DIFFERENTLY-BUILT
-		# target rig, not just a differently-proportioned one:
-		#   1. Copying root POSITION displaced every bone (a crumpled heap) when
-		#      copied for every bone, not just the root -- fixed by restricting
-		#      position copying to the root only.
-		#   2. Copying the now-root-only POSITION still worked, but copying the
-		#      root's ROTATION too tipped the whole body over as one rigid unit --
-		#      _ground_model()'s own doc comment already explains why: this
-		#      project's rigs carry a baked root rotation that varies per model (a
-		#      Z-up/Y-up export-tool artifact), so the source root's rotation isn't
-		#      meaningful applied to a target root with a different convention.
-		#      Fixed by leaving the root's rotation alone, copying rotation only
-		#      for every OTHER (non-root) bone, whose rotations are parent-relative
-		#      and so stay correct regardless of the root's own absolute frame.
-		#   3. Even just root POSITION alone still sank the body into the floor --
-		#      Quaternius's root sits at a different height in ITS OWN skeleton
-		#      than Meshy's root does in Meshy's differently-proportioned one, and
-		#      _ground_model()'s one-time bind-pose grounding has no way to know
-		#      that an ongoing per-frame root position copy will later move it.
-		#      Fixed here: stop copying root position too.
-		# Net effect: the root bone stays exactly where _ground_model() (and this
-		# specific model's own rest pose) put it, permanently -- every non-root
-		# bone's relative rotation is what actually conveys the animation. This
-		# trades away any root-motion bob/sway the source clip might have, a
-		# reasonable cost for "actually stands in the right place," and something
-		# to revisit with a proper rest-pose-relative delta (comparing the source
-		# root's CURRENT pose against its OWN rest pose, then applying that delta
-		# onto the target's own rest pose, instead of the source's raw absolute
-		# transform) if root motion is ever worth the added complexity -- not
-		# attempted now, three blind iterations without live Godot access already
-		# being the practical limit for guessing at something this visual.
-		if _character_skeleton.get_bone_parent(char_idx) == -1:
-			continue
 		var source_idx: int = _bone_map[char_idx]
-		# Rest-pose-RELATIVE rotation, not a raw absolute copy -- confirmed live as
-		# the actual next problem after the three root fixes above: with the body
-		# correctly standing, both feet and the face still came back visibly
-		# twisted, at every joint, not one isolated bone. A raw copy only produces
-		# a correct pose if the source and target skeletons share the exact same
-		# REST orientation per bone -- true within one rig family (why this was
-		# never a problem for hero/monster<->Quaternius or skeleton<->KayKit) but
-		# not guaranteed at all across genuinely different rigs (Meshy's Mixamo-
-		# template output vs. Quaternius's own), and any per-bone mismatch
-		# compounds down a joint chain -- worst at its far end (toes, the
-		# face/neck), which is exactly where this showed up, not at the torso.
-		# Fix: extract how far the SOURCE bone has rotated away from its OWN rest
-		# pose, then apply that same rotation on top of the TARGET's own rest pose
-		# instead of the source's raw absolute value -- a mismatched baseline
-		# orientation between the two skeletons cancels out instead of compounding
-		# into a visible twist.
-		var source_rest_rotation: Quaternion = _anim_source_skeleton.get_bone_rest(source_idx).basis.get_rotation_quaternion()
+		var is_root := _character_skeleton.get_bone_parent(char_idx) == -1
+		if is_root and not _animate_root:
+			continue
+
+		var source_rest: Transform3D = _anim_source_skeleton.get_bone_rest(source_idx)
+		var target_rest: Transform3D = _character_skeleton.get_bone_rest(char_idx)
+
+		var source_rest_rotation: Quaternion = source_rest.basis.get_rotation_quaternion()
 		var source_pose_rotation: Quaternion = _anim_source_skeleton.get_bone_pose_rotation(source_idx)
 		var rotation_delta: Quaternion = source_rest_rotation.inverse() * source_pose_rotation
-		var target_rest_rotation: Quaternion = _character_skeleton.get_bone_rest(char_idx).basis.get_rotation_quaternion()
+		var target_rest_rotation: Quaternion = target_rest.basis.get_rotation_quaternion()
 		_character_skeleton.set_bone_pose_rotation(char_idx, target_rest_rotation * rotation_delta)
+
+		if is_root:
+			# Position is ONLY ever touched for the root -- every other bone's
+			# local position is its own fixed rest-pose bone length/offset from
+			# its parent (copying it for every bone is what crumpled the body in
+			# iteration 1 above). Rest-pose-relative here too, for the same
+			# reason rotation is -- the source's own root height doesn't
+			# necessarily match the target's.
+			var position_delta: Vector3 = _anim_source_skeleton.get_bone_pose_position(source_idx) - source_rest.origin
+			_character_skeleton.set_bone_pose_position(char_idx, target_rest.origin + position_delta)
 
 ## Shifts `instance` up/down so the lowest point of its actual rendered
 ## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's
