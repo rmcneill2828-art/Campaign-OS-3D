@@ -1581,8 +1581,25 @@ relative rotation -- position copies only for the root, rotation copies
 only for everyone else, a clean split rather than "copy everything for
 the root."
 
-**Not yet re-verified live** -- three fixes deep in the same debugging
-thread now (bone names, then position, then root rotation), each only
-found by actually seeing the previous fix's real result in Godot, not
-by reasoning alone. Confirm the Barbarian actually stands upright and
-animates correctly before assuming this is the last one.
+**Update, same session: orientation fixed, but sunk into the floor up to
+the waist.** Root cause: still copying the root bone's POSITION every
+frame -- Quaternius's root sits at a different height within ITS OWN
+skeleton than Meshy's root does in Meshy's differently-proportioned one,
+so the ongoing per-frame copy kept dragging the body down below where
+`_ground_model()`'s one-time bind-pose grounding had placed it (that
+function has no way to know a later system will keep moving the root
+after it runs once at setup). Fixed by leaving the root bone completely
+untouched now -- neither position nor rotation copied for it at all,
+only every other bone's rotation. Trades away whatever root-motion
+bob/sway Quaternius's Idle clip might carry for actually standing in the
+right place; a rest-pose-relative delta (source root's current pose
+minus its own rest pose, applied onto the target's own rest pose rather
+than its raw absolute transform) would be the more correct fix if root
+motion is ever worth the complexity, not attempted now.
+
+Fourth fix in the same live-debugging thread (bone names -> position ->
+root rotation -> root position), each only found by actually seeing the
+previous fix's real result in Godot, not by reasoning alone -- explicitly
+noted in this fix's own code comment as close to the practical limit for
+guessing at something this visual without direct Godot access. **Not yet
+re-verified live.**

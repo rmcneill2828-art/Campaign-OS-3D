@@ -616,37 +616,43 @@ func _process(_delta: float) -> void:
 	if not (_character_skeleton and _anim_source_skeleton):
 		return
 	for char_idx in _bone_map:
+		# The ROOT bone (no parent) is left ENTIRELY alone -- not position, not
+		# rotation -- three live-tested iterations in a row each found a new way
+		# copying the source skeleton's root transform breaks a DIFFERENTLY-BUILT
+		# target rig, not just a differently-proportioned one:
+		#   1. Copying root POSITION displaced every bone (a crumpled heap) when
+		#      copied for every bone, not just the root -- fixed by restricting
+		#      position copying to the root only.
+		#   2. Copying the now-root-only POSITION still worked, but copying the
+		#      root's ROTATION too tipped the whole body over as one rigid unit --
+		#      _ground_model()'s own doc comment already explains why: this
+		#      project's rigs carry a baked root rotation that varies per model (a
+		#      Z-up/Y-up export-tool artifact), so the source root's rotation isn't
+		#      meaningful applied to a target root with a different convention.
+		#      Fixed by leaving the root's rotation alone, copying rotation only
+		#      for every OTHER (non-root) bone, whose rotations are parent-relative
+		#      and so stay correct regardless of the root's own absolute frame.
+		#   3. Even just root POSITION alone still sank the body into the floor --
+		#      Quaternius's root sits at a different height in ITS OWN skeleton
+		#      than Meshy's root does in Meshy's differently-proportioned one, and
+		#      _ground_model()'s one-time bind-pose grounding has no way to know
+		#      that an ongoing per-frame root position copy will later move it.
+		#      Fixed here: stop copying root position too.
+		# Net effect: the root bone stays exactly where _ground_model() (and this
+		# specific model's own rest pose) put it, permanently -- every non-root
+		# bone's relative rotation is what actually conveys the animation. This
+		# trades away any root-motion bob/sway the source clip might have, a
+		# reasonable cost for "actually stands in the right place," and something
+		# to revisit with a proper rest-pose-relative delta (comparing the source
+		# root's CURRENT pose against its OWN rest pose, then applying that delta
+		# onto the target's own rest pose, instead of the source's raw absolute
+		# transform) if root motion is ever worth the added complexity -- not
+		# attempted now, three blind iterations without live Godot access already
+		# being the practical limit for guessing at something this visual.
+		if _character_skeleton.get_bone_parent(char_idx) == -1:
+			continue
 		var source_idx: int = _bone_map[char_idx]
-		var is_root := _character_skeleton.get_bone_parent(char_idx) == -1
-		# Position is only copied for a ROOT bone (no parent) -- that's what carries
-		# the animation's own overall body movement/bob. Every OTHER bone's local
-		# position is really just its own fixed rest-pose bone length/offset from
-		# its parent; copying the SOURCE skeleton's position onto a DIFFERENTLY-
-		# PROPORTIONED target bone displaces it to the wrong relative location.
-		# Harmless (near-identical proportions) for a same-family pair (hero/
-		# monster's own model <-> Quaternius, skeleton <-> KayKit's own animation
-		# library) -- confirmed live to actually break the first genuinely
-		# cross-rig pair this project has tried (a Meshy-rigged model driven by
-		# Quaternius's UAL1, via bone_name_map): the Barbarian collapsed into a
-		# crumpled heap the first time this copied position for every bone.
-		if is_root:
-			_character_skeleton.set_bone_pose_position(char_idx, _anim_source_skeleton.get_bone_pose_position(source_idx))
-		# Rotation is copied for every bone EXCEPT the root. _ground_model()'s own
-		# doc comment already documents that this project's rigs carry a baked
-		# root-bone rotation that varies per model (a Z-up/Y-up export-tool
-		# artifact) -- copying the SOURCE root's rotation onto a target root with a
-		# DIFFERENT baked convention doesn't animate the body, it tips the entire
-		# rigid hierarchy over as one unit (confirmed live: the crumpled-heap fix
-		# above produced an anatomically correct but fully prone body next, exactly
-		# what a wrong root rotation looks like -- everything below the root stays
-		# internally consistent since child rotations are parent-relative, only the
-		# whole thing's absolute orientation is wrong). Leaving the root's own
-		# rotation alone (whatever this specific model's rest pose already has,
-		# upright) while still copying every child bone's relative rotation is what
-		# actually conveys the animation's limb movement without also inheriting a
-		# foreign skeleton's own root convention.
-		if not is_root:
-			_character_skeleton.set_bone_pose_rotation(char_idx, _anim_source_skeleton.get_bone_pose_rotation(source_idx))
+		_character_skeleton.set_bone_pose_rotation(char_idx, _anim_source_skeleton.get_bone_pose_rotation(source_idx))
 
 ## Shifts `instance` up/down so the lowest point of its actual rendered
 ## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's
