@@ -18,9 +18,9 @@ extends SceneTree
 ## change) isn't guaranteed to match either -- re-run this tool against it
 ## rather than assuming.
 
-const CHARACTER_MODEL := "res://assets/creatures/monster/orc_warrior.glb"
+const CHARACTER_MODEL := "res://assets/creatures/hero/barbarian.glb"
 const ANIMATION_SOURCE := "res://assets/creatures/animations/mannequin_animations.glb"
-const BONE_NAME_MAP := Token.MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP
+const BONE_NAME_MAP := Token.MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP
 
 func _init() -> void:
 	if not ResourceLoader.exists(CHARACTER_MODEL):

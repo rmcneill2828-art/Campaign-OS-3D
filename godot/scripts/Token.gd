@@ -82,6 +82,18 @@ class_name Token
 ## creature, a quadruped, a different "Skeleton template" choice) without
 ## re-running that check -- this project has already been burned once this
 ## same phase by assuming one rigged model's bone names would generalize.
+##
+## A real gotcha already hit once, not hypothetical: `MESHY_MIXAMO_TEMPLATE_
+## TO_QUATERNIUS_UAL1_BONE_MAP`'s keys were originally written with a colon
+## ("mixamorig:Hips"), matching the raw glTF file's own bone names exactly
+## (confirmed by extracting them directly) -- but the FIRST live Godot run
+## (`inspect_bone_name_map.gd`, not assumed) came back 0/28 matched. Cause:
+## Godot's glTF importer replaces ":" with "_" when it turns each joint into
+## a Skeleton3D bone, something only visible by actually running it in Godot,
+## never by reading the source file. Keys below use "mixamorig_" for exactly
+## that reason -- if a future rig's own real prefix ever needs checking
+## again, check the LIVE Godot bone names via the inspect tool, not the raw
+## file.
 const MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP := {
 	"Hips": "pelvis",
 	"Spine": "spine_01", "Spine01": "spine_02", "Spine02": "spine_03",
@@ -91,15 +103,25 @@ const MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP := {
 	"LeftUpLeg": "thigh_l", "LeftLeg": "calf_l", "LeftFoot": "foot_l", "LeftToeBase": "ball_l",
 	"RightUpLeg": "thigh_r", "RightLeg": "calf_r", "RightFoot": "foot_r", "RightToeBase": "ball_r"
 }
+## Keys use "mixamorig_" (underscore), NOT "mixamorig:" (colon) -- the raw
+## glTF file's own bone names really do use a colon (confirmed by direct
+## extraction, see this constant's own doc comment above), but Godot's glTF
+## importer replaces ":" with "_" when it turns each joint into a Skeleton3D
+## bone entry, a real, confirmed-live behavior (godot/tools/
+## inspect_bone_name_map.gd run against a real Godot 4.7.2 install reported
+## 0/28 matched with colon-keyed names, then 26/28 once corrected to
+## underscores) -- not something the raw file itself or a script reading it
+## directly would ever reveal, only Godot's own import pipeline. Don't
+## "fix" this back to colons without re-confirming live first.
 const MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP := {
-	"mixamorig:Hips": "pelvis",
-	"mixamorig:Spine": "spine_01", "mixamorig:Spine1": "spine_02", "mixamorig:Spine2": "spine_03",
-	"mixamorig:Neck": "neck_01", "mixamorig:Head": "Head",
-	"mixamorig:LeftShoulder": "clavicle_l", "mixamorig:LeftArm": "upperarm_l", "mixamorig:LeftForeArm": "lowerarm_l", "mixamorig:LeftHand": "hand_l",
-	"mixamorig:RightShoulder": "clavicle_r", "mixamorig:RightArm": "upperarm_r", "mixamorig:RightForeArm": "lowerarm_r", "mixamorig:RightHand": "hand_r",
-	"mixamorig:LeftUpLeg": "thigh_l", "mixamorig:LeftLeg": "calf_l", "mixamorig:LeftFoot": "foot_l", "mixamorig:LeftToeBase": "ball_l", "mixamorig:LeftToe_End": "ball_leaf_l",
-	"mixamorig:RightUpLeg": "thigh_r", "mixamorig:RightLeg": "calf_r", "mixamorig:RightFoot": "foot_r", "mixamorig:RightToeBase": "ball_r", "mixamorig:RightToe_End": "ball_leaf_r",
-	"mixamorig:LeftHandMiddle4": "middle_04_leaf_l", "mixamorig:RightHandMiddle4": "middle_04_leaf_r"
+	"mixamorig_Hips": "pelvis",
+	"mixamorig_Spine": "spine_01", "mixamorig_Spine1": "spine_02", "mixamorig_Spine2": "spine_03",
+	"mixamorig_Neck": "neck_01", "mixamorig_Head": "Head",
+	"mixamorig_LeftShoulder": "clavicle_l", "mixamorig_LeftArm": "upperarm_l", "mixamorig_LeftForeArm": "lowerarm_l", "mixamorig_LeftHand": "hand_l",
+	"mixamorig_RightShoulder": "clavicle_r", "mixamorig_RightArm": "upperarm_r", "mixamorig_RightForeArm": "lowerarm_r", "mixamorig_RightHand": "hand_r",
+	"mixamorig_LeftUpLeg": "thigh_l", "mixamorig_LeftLeg": "calf_l", "mixamorig_LeftFoot": "foot_l", "mixamorig_LeftToeBase": "ball_l", "mixamorig_LeftToe_End": "ball_leaf_l",
+	"mixamorig_RightUpLeg": "thigh_r", "mixamorig_RightLeg": "calf_r", "mixamorig_RightFoot": "foot_r", "mixamorig_RightToeBase": "ball_r", "mixamorig_RightToe_End": "ball_leaf_r",
+	"mixamorig_LeftHandMiddle4": "middle_04_leaf_l", "mixamorig_RightHandMiddle4": "middle_04_leaf_r"
 }
 const MODEL_CONFIG := {
 	"hero": {

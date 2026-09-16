@@ -1506,3 +1506,40 @@ interpreting a free-text request each time. Worth adding if the DM
 Assistant path proves unreliable or too slow for something this
 frequent -- not done yet since the underlying capability (the actual
 blocker) is what mattered most to fix first.
+
+## First real live verification: Barbarian appeared, but frozen in bind pose -- 2026-09-16, found and fixed
+
+The user actually created a Barbarian hero via the DM Assistant and saw
+it live in Godot for the first time this phase -- correctly grounded,
+correctly scaled, standing right next to Darkhawk, but frozen in a T-pose
+instead of playing Idle. First real live confirmation that the model/
+rig/token-creation pipeline built this session actually works end to
+end, and the first real bug only a live Godot run could have caught.
+
+Root cause, found with `godot/tools/inspect_bone_name_map.gd` (pointed at
+`barbarian.glb` + `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`) run
+against the user's real Godot 4.7.2 install, not guessed: **Godot's glTF
+importer replaces ":" with "_" when it turns each joint into a Skeleton3D
+bone.** The map's keys were written from the raw file's own real bone
+names (`mixamorig:Hips`, confirmed by direct extraction earlier this
+session) -- correct for the FILE, wrong for what Godot actually names the
+bone at runtime (`mixamorig_Hips`). First run: 0/28 matched, every bone
+stuck in bind pose. This is exactly the kind of thing this project's own
+established discipline (`_ground_model()`'s AABB-measurement comment,
+`GridManager.gd`'s piece-placement comments) already warns about --
+trusting a source file's own claimed data over what Godot actually does
+with it at runtime -- but this specific case (bone names, not mesh
+bounds/transforms) hadn't come up before.
+
+Fixed by correcting `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`'s
+keys to the underscore form; re-ran the same tool and confirmed 26/28
+matched, same coverage originally verified against the raw file, now
+confirmed against Godot's real runtime bone names instead.
+**Note this only affects the Mixamo-template map, not the orc's own API-
+rig map** -- `MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP`'s bone names
+never had colons in the first place (`Hips`, `LeftUpLeg`, etc.), so
+nothing about the orc's own already-working animation was at risk.
+**Still needs one more live check**: the fix hasn't been re-verified in
+an actual running Godot session yet (only via the headless inspect
+tool) -- confirm the Barbarian actually plays Idle now, not just that
+the bone count matches.
