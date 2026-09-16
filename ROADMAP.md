@@ -1704,7 +1704,24 @@ loop awkwardly as an imperfect stand-in, same call the Orc's own entry
 already made for its own missing kneel pose, just resolved as "nothing"
 here instead of "an imperfect substitute."
 
-**Not yet verified live at all** -- this is a bigger, more structural
-change (new animation source files, a new code path for clip renaming)
-than any single fix in this thread so far, and hasn't been seen running
-in Godot even once yet.
+**Update, same session: verified live -- bones matched (27/28), but the
+Barbarian came back frozen in a T-pose again.** Extended
+`inspect_bone_name_map.gd` to also print the animation source's real
+`AnimationPlayer.get_animation_list()` rather than guess a second time,
+and confirmed directly: the real, Godot-resolved clip name is
+`"mixamo_com"`, not `"mixamo.com"`. The raw FBX bytes really do contain
+the literal string `"mixamo.com"` (confirmed earlier this session by
+scanning them directly) -- but that's metadata (a credit/description
+field), not the actual AnimStack/Take name Godot's FBX importer surfaces
+as a playable clip key. Godot's FBX importer sanitizes `"."` out of
+animation names the same general way its glTF importer sanitizes `":"`
+out of bone names -- a second instance of the exact same class of gotcha
+found earlier this session for bone names, not a coincidence, and a
+useful pattern to remember for the next FBX import this project does:
+don't trust a raw file string as the Godot-resolved name for ANYTHING
+(bones, clips, likely more) without checking live.
+
+Fixed by correcting every `"mixamo.com"` reference in `"hero:barbarian"`
+to `"mixamo_com"`. **Not yet re-verified live** -- the bone-matching half
+of this change is now confirmed correct; whether the Barbarian actually
+animates correctly once the clip name resolves hasn't been seen yet.

@@ -192,15 +192,23 @@ const MODEL_CONFIG := {
 	## specific model's real proportions haven't been measured live) --
 	## revisit once actually seen in Godot, same as every other
 	## not-yet-live-verified number in this project's own history.
+	## Clip name is "mixamo_com", NOT "mixamo.com" -- confirmed live via
+	## inspect_bone_name_map.gd's AnimationPlayer.get_animation_list() output
+	## against the real imported file, not assumed from the raw FBX bytes
+	## (which really do contain the literal string "mixamo.com" -- that's
+	## metadata, not the AnimStack/Take name Godot's FBX importer actually
+	## surfaces). Godot's FBX importer sanitizes "." out of animation names
+	## the same general way its glTF importer sanitizes ":" out of bone names
+	## -- a second instance of the same class of gotcha, not a coincidence.
 	"hero:barbarian": {
 		"path": "res://assets/creatures/hero/barbarian.glb", "label_height": 2.0,
 		"animation_source": "res://assets/creatures/animations/mixamo_idle.fbx",
-		"idle": "mixamo.com",
-		"walk": {"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_walk.fbx", "as": "Barbarian_Walk"},
-		"death": {"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_death.fbx", "as": "Barbarian_Death"},
+		"idle": "mixamo_com",
+		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_walk.fbx", "as": "Barbarian_Walk"},
+		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_death.fbx", "as": "Barbarian_Death"},
 		"hits": [
-			{"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_reaction.fbx", "as": "Barbarian_Reaction"},
-			{"clip": "mixamo.com", "source": "res://assets/creatures/animations/mixamo_hit_reaction.fbx", "as": "Barbarian_HitReaction"}
+			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_reaction.fbx", "as": "Barbarian_Reaction"},
+			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_hit_reaction.fbx", "as": "Barbarian_HitReaction"}
 		]
 	},
 	"monster": {
