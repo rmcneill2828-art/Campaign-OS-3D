@@ -1395,17 +1395,49 @@ Meshy's own animate step or touching Mixamo at all.
 
 New tool: `godot/tools/inspect_bone_name_map.gd`, matching
 `inspect_kaykit_skeleton.gd`/`inspect_meshy_orc.gd`'s existing "verify a
-rig actually matches, don't assume" convention -- checks
-`Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP` directly (not a copy), so it
-can't drift from what `Token.gd` actually ships. **Needs a real Godot
-session to run** (this environment has none) before trusting the
-map/mechanism live -- the underlying bone-name DATA was verified directly
-against the real files (not guessed), but the new GDScript logic itself
-(the `bone_name_map` lookup added to `_setup_animation()`, and the tool
-that checks it) has not been executed in a real Godot process. Also
-worth noting: Meshy's rig bone names are only confirmed for the one biped
-rig this project has actually generated (`orc_warrior.glb`) -- a
-different creature or a quadruped rig could come back with different
-names, so re-run `inspect_bone_name_map.gd` against each new Meshy rig
-before assuming this exact map still applies, rather than wiring it in
-blind.
+rig actually matches, don't assume" convention -- checks Token's own map
+constants directly (not a copy), so it can't drift from what `Token.gd`
+actually ships. **Needs a real Godot session to run** (this environment
+has none) before trusting the map/mechanism live -- the underlying
+bone-name DATA was verified directly against the real files (not
+guessed), but the new GDScript logic itself (the `bone_name_map` lookup
+added to `_setup_animation()`, and the tool that checks it) has not been
+executed in a real Godot process.
+
+**Update, 2026-09-16 (same day): a second, genuinely different Meshy rig
+convention confirmed already** -- the very next model the user rigged
+(a downloaded free static "Warrior" model, through Meshy's WEBSITE
+Rigging tool rather than the API) came back with completely different
+bone names: real `mixamorig:`-prefixed names (`mixamorig:Hips`,
+`mixamorig:Spine1`/`Spine2`, capitalized `Neck`) matching genuine Adobe
+Mixamo output exactly, not the API path's prefix-stripped
+`Spine01`/`Spine02`/lowercase-`neck` variant. Root cause, from the actual
+evidence available rather than guessed: the website's Rigging tool shows
+an explicit **"Skeleton template: Mixamo"** dropdown that the
+Composio-connected `MESHY_CREATE_RIGGING_TASK` API doesn't expose at all
+-- not, as first suspected, a difference between a from-scratch-generated
+model (the orc) and an already-existing uploaded one (the warrior); the
+API's own schema simply has no template-choice parameter, so it always
+falls back to one fixed internal convention regardless of what's being
+rigged.
+
+Renamed the original constant to `Token.MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP`
+(no longer ambiguous now that a second convention exists) and added
+`Token.MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP` alongside it --
+built and verified the same programmatic way as the first (real bone
+names extracted from the actual downloaded `.glb`, not guessed): 26 of
+its 28 bones map cleanly to Quaternius UAL1, zero bad mappings, zero
+duplicate targets, zero typo'd keys; only `mixamorig:HeadTop_End` and a
+stray unprefixed `headfront` bone (present on both Meshy rigs, still
+unexplained) are left unmapped. `inspect_bone_name_map.gd` now points at
+`MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP` by default and documents both.
+
+Since the website (not the API) is the path actually being used for every
+future creature in this library, the Mixamo-template convention is
+expected to be the common case going forward -- but per this same
+update's own lesson, that expectation still needs re-checking against the
+next model via `inspect_bone_name_map.gd`, not assumed to hold just
+because it held twice. The warrior model itself hasn't been copied into
+the Godot project or wired into a `MODEL_CONFIG` entry yet -- still
+sitting at the user's own downloaded-models folder, pending a decision on
+which hero/monster slot it should fill.

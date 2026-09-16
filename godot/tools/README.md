@@ -64,18 +64,24 @@ checking without a live `node server.js` or opening the editor GUI.
 
 - **`inspect_bone_name_map.gd`** -- verifies a `MODEL_CONFIG` `bone_name_map`
   (Token.gd) actually resolves against a real character model + animation-
-  source pair, checking `Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP` directly
-  (not a copy) so it can't silently drift from what Token.gd ships. Built
-  after confirming a Meshy-rigged model and Quaternius's UAL1 animation
-  library share ZERO bone names at all (Meshy: Mixamo-style `LeftUpLeg`;
-  Quaternius: `thigh_l`) -- `_setup_animation()`'s bone-matching loop needs
-  an exact name match otherwise, so pairing a Meshy rig with a free pack's
-  animations needed a translation table, not just wiring the two files
-  together. A template for checking the NEXT Meshy-rigged model before
-  reusing the existing map -- edit `CHARACTER_MODEL`/`ANIMATION_SOURCE`/
-  `BONE_NAME_MAP` -- since Meshy's bone names are only confirmed for the one
-  rig this project has actually generated so far (`orc_warrior.glb`), not
-  guaranteed to hold for a different creature or rig type.
+  source pair, checking Token's own map constants directly (not a copy) so
+  it can't silently drift from what Token.gd ships. Built after confirming a
+  Meshy-rigged model and Quaternius's UAL1 animation library share ZERO bone
+  names at all (Meshy: Mixamo-style `LeftUpLeg`; Quaternius: `thigh_l`) --
+  `_setup_animation()`'s bone-matching loop needs an exact name match
+  otherwise, so pairing a Meshy rig with a free pack's animations needed a
+  translation table, not just wiring the two files together.
+  **Two different Meshy rig conventions confirmed already, not one**: the
+  Composio-connected rigging API (`orc_warrior.glb`) produces Mixamo-STYLE
+  names with no `mixamorig:` prefix (`MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP`);
+  Meshy's website Rigging tool with "Skeleton template: Mixamo" selected --
+  a choice the API doesn't expose -- produces genuine `mixamorig:`-prefixed
+  names matching real Adobe Mixamo output
+  (`MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`). A template for
+  checking the NEXT Meshy-rigged model before reusing either -- edit
+  `CHARACTER_MODEL`/`ANIMATION_SOURCE`/`BONE_NAME_MAP` -- since a model
+  rigged a third way (a different template choice, a quadruped) isn't
+  guaranteed to match either existing map.
 
 - **`inspect_higgsfield_test.gd`** / **`fix_higgsfield_vertex_colors.gd`**
   (Phase 8) -- a matched pair for Higgsfield's "3D Jutsu" catalog imports.

@@ -2,20 +2,25 @@ extends SceneTree
 ## Verifies a MODEL_CONFIG `bone_name_map` actually resolves against a real
 ## character model + animation-source pair, the same "measure the real thing"
 ## discipline inspect_kaykit_skeleton.gd/inspect_meshy_orc.gd already apply --
-## checks Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP directly (not a copy of it),
-## so this can never silently drift from what Token.gd actually ships.
+## checks Token's own map constants directly (not a copy of them), so this
+## can never silently drift from what Token.gd actually ships.
 ##
 ## Edit CHARACTER_MODEL/ANIMATION_SOURCE/BONE_NAME_MAP below to check the
-## NEXT Meshy-rigged model before wiring it into a new MODEL_CONFIG entry --
-## Meshy's rig bone names are only confirmed Mixamo-style for the one biped
-## rig this project has generated so far (orc_warrior.glb); a future model
-## (a different creature, a quadruped rig, a different Meshy account/model
-## version) could come back with different names, so re-check rather than
-## assume the existing map still applies.
+## NEXT Meshy-rigged model before wiring it into a new MODEL_CONFIG entry.
+## TWO Meshy bone-naming conventions are confirmed so far, not
+## interchangeable -- see Token.gd's own MODEL_CONFIG doc comment for the
+## full story: MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP is what the
+## Composio-connected rigging API produces (orc_warrior.glb);
+## MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP is what the website's
+## Rigging tool produces with "Skeleton template: Mixamo" selected -- a
+## choice the API doesn't even expose. A model rigged a THIRD way (a
+## different template choice, a quadruped, a future Meshy account/pipeline
+## change) isn't guaranteed to match either -- re-run this tool against it
+## rather than assuming.
 
 const CHARACTER_MODEL := "res://assets/creatures/monster/orc_warrior.glb"
 const ANIMATION_SOURCE := "res://assets/creatures/animations/mannequin_animations.glb"
-const BONE_NAME_MAP := Token.MESHY_TO_QUATERNIUS_UAL1_BONE_MAP
+const BONE_NAME_MAP := Token.MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP
 
 func _init() -> void:
 	if not ResourceLoader.exists(CHARACTER_MODEL):

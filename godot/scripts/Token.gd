@@ -55,20 +55,34 @@ class_name Token
 ## needs this field to animate at all; omitting it (every entry above) keeps
 ## today's exact-match behavior byte-for-byte unchanged.
 ##
-## MESHY_TO_QUATERNIUS_UAL1_BONE_MAP below is the first one, built from a
-## real, already-generated Meshy rig (orc_warrior.glb) against Quaternius's
-## UAL1 skeleton (mannequin_animations.glb) -- 22 of its 24 bones map
-## cleanly (verified: every target name confirmed to actually exist in
-## UAL1's skeleton, no duplicate targets, no typo'd source keys); the 2 left
-## out (head_end, headfront) are Meshy-specific small attachment/helper
-## bones with no Quaternius equivalent, not part of the walk/idle/attack
-## silhouette, so leaving them unmapped just means they stay in their bind
-## pose -- harmless. See godot/tools/inspect_bone_name_map.gd for how this
-## was checked, and to re-check against a differently-rigged Meshy model
-## before assuming its bone names match (a biped rig should, per Meshy's own
-## rig type option, but this hasn't been confirmed across more than the one
-## real rigged model this project has generated so far).
-const MESHY_TO_QUATERNIUS_UAL1_BONE_MAP := {
+## TWO separate Meshy bone-naming conventions have shown up already, not one
+## -- checked directly rather than assumed to still hold from the first
+## rigged model, and good thing: they're genuinely different.
+## `MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP` is from `orc_warrior.glb`,
+## rigged via the Composio-connected `MESHY_CREATE_RIGGING_TASK` API (no
+## skeleton-template choice exposed there) -- Mixamo-STYLE names but no
+## `mixamorig:` prefix, "Spine01"/"Spine02", lowercase "neck". 22 of its 24
+## bones map cleanly; the 2 left out (`head_end`, `headfront`) are small
+## Meshy-specific attachment bones with no Quaternius equivalent, not part
+## of the walk/idle/attack silhouette -- harmless to leave unmapped, they
+## just stay in their bind pose.
+## `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP` is from a model rigged
+## through Meshy's website Rigging tool with "Skeleton template: Mixamo"
+## explicitly selected (a dropdown the API path doesn't expose) -- genuine
+## `mixamorig:`-prefixed names matching real Adobe Mixamo output exactly
+## ("mixamorig:Hips", "mixamorig:Spine1"/"Spine2", capitalized "Neck"). 26 of
+## its 28 bones map cleanly; only `mixamorig:HeadTop_End` and the same stray
+## `headfront` are left out. This is the path an ordinary website download +
+## manual rig (not the API) actually produces, so it's the one to expect for
+## most future models.
+## Both verified the same way: every target name confirmed to actually exist
+## in `mannequin_animations.glb`'s real skeleton, no duplicate targets, no
+## typo'd source keys -- see godot/tools/inspect_bone_name_map.gd. Don't
+## assume either map still applies to a DIFFERENT future rig (a different
+## creature, a quadruped, a different "Skeleton template" choice) without
+## re-running that check -- this project has already been burned once this
+## same phase by assuming one rigged model's bone names would generalize.
+const MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP := {
 	"Hips": "pelvis",
 	"Spine": "spine_01", "Spine01": "spine_02", "Spine02": "spine_03",
 	"neck": "neck_01", "Head": "Head",
@@ -76,6 +90,16 @@ const MESHY_TO_QUATERNIUS_UAL1_BONE_MAP := {
 	"RightShoulder": "clavicle_r", "RightArm": "upperarm_r", "RightForeArm": "lowerarm_r", "RightHand": "hand_r",
 	"LeftUpLeg": "thigh_l", "LeftLeg": "calf_l", "LeftFoot": "foot_l", "LeftToeBase": "ball_l",
 	"RightUpLeg": "thigh_r", "RightLeg": "calf_r", "RightFoot": "foot_r", "RightToeBase": "ball_r"
+}
+const MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP := {
+	"mixamorig:Hips": "pelvis",
+	"mixamorig:Spine": "spine_01", "mixamorig:Spine1": "spine_02", "mixamorig:Spine2": "spine_03",
+	"mixamorig:Neck": "neck_01", "mixamorig:Head": "Head",
+	"mixamorig:LeftShoulder": "clavicle_l", "mixamorig:LeftArm": "upperarm_l", "mixamorig:LeftForeArm": "lowerarm_l", "mixamorig:LeftHand": "hand_l",
+	"mixamorig:RightShoulder": "clavicle_r", "mixamorig:RightArm": "upperarm_r", "mixamorig:RightForeArm": "lowerarm_r", "mixamorig:RightHand": "hand_r",
+	"mixamorig:LeftUpLeg": "thigh_l", "mixamorig:LeftLeg": "calf_l", "mixamorig:LeftFoot": "foot_l", "mixamorig:LeftToeBase": "ball_l", "mixamorig:LeftToe_End": "ball_leaf_l",
+	"mixamorig:RightUpLeg": "thigh_r", "mixamorig:RightLeg": "calf_r", "mixamorig:RightFoot": "foot_r", "mixamorig:RightToeBase": "ball_r", "mixamorig:RightToe_End": "ball_leaf_r",
+	"mixamorig:LeftHandMiddle4": "middle_04_leaf_l", "mixamorig:RightHandMiddle4": "middle_04_leaf_r"
 }
 const MODEL_CONFIG := {
 	"hero": {
