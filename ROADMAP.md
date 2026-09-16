@@ -1310,3 +1310,28 @@ Hall) have no equivalent need.
 - **Performance** (one hidden AnimationPlayer + Skeleton3D per token, full
   board rebuild on any map-size change) -- fine at current token/map counts;
   no need to optimize preemptively.
+
+## CI -- 2026-09-16, built, not yet verified against a real run
+
+`.github/workflows/test.yml`: a `node-tests` job (`npm test` in
+`engine-server/`, matching Campaign-OS's own `test.yml` convention) plus a
+`godot-smoke-tests` job running against `barichello/godot-ci:4.7.2` (a
+Docker image pinning the exact same headless `godot` binary version this
+project is developed/verified against) -- primes the project's global
+class cache first (`godot --headless --editor --path godot --quit`, the
+same fix `godot/tools/README.md`'s own "fifth gotcha" documents, without
+which `smoke_test_entrance_hall.gd`'s `MapScenes` reference would fail to
+resolve), then runs the three existing `godot/tools/smoke_test_*.gd`
+scripts unchanged.
+**Not actually verified end to end**: this repo has no `git remote`
+configured yet, so nothing has triggered a real GitHub Actions run against
+this workflow -- it's built directly from the smoke tests' own documented
+invocation convention and a Docker Hub tag check (`barichello/godot-ci`
+publishes a matching `4.7.2` tag), not confirmed by watching it pass.
+Verify on the first real push to a GitHub remote, and treat a first-run
+failure as the workflow needing a fix, not the smoke tests themselves.
+Real interaction coverage (token selection, movement, player-view fog,
+HUD action wiring actually doing the right thing when triggered, not just
+"the scene loads") is still open -- the existing smoke tests only catch a
+load/parse/`_ready()` failure, not a wiring regression in already-loading
+code.

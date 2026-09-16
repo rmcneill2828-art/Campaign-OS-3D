@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine-server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+
+  # barichello/godot-ci ships a real headless `godot` binary on PATH, pinned to the
+  # exact 4.7.2 this project is developed/verified against (see README.md) so a CI
+  # pass means the same thing a local run does.
+  godot-smoke-tests:
+    runs-on: ubuntu-latest
+    container: barichello/godot-ci:4.7.2
+    steps:
+      - uses: actions/checkout@v4
+
+      # A bare `--headless --script` run can't see a project's own `class_name`
+      # declarations (e.g. MapScenes) until the editor has scanned and cached them
+      # once -- see godot/tools/README.md's "fifth gotcha." Without this, every
+      # smoke test below would fail with "Identifier not declared" even though
+      # nothing is actually wrong.
+      - name: Prime Godot's global class cache
+        run: godot --headless --editor --path godot --quit
+
+      - name: smoke_test_main.gd (Main.tscn loads and _ready()s clean)
+        run: godot --headless --path godot --script res://tools/smoke_test_main.gd
+
+      - name: smoke_test_player_view.gd (PlayerView.tscn loads and _ready()s clean)
+        run: godot --headless --path godot --script res://tools/smoke_test_player_view.gd
+
+      - name: smoke_test_entrance_hall.gd (Entrance Hall map resolves and loads with the expected node count)
+        run: godot --headless --path godot --script res://tools/smoke_test_entrance_hall.gd

@@ -133,5 +133,7 @@ against the 2D app, still open:
 - Only a handful of monster types (hero, generic monster, skeleton, orc) have a
   real per-name 3D model; everything else falls back to a generic placeholder --
   see `godot/assets/README.md`.
-- No automated Godot-side test coverage (the Node integration suite covers
-  `engine-server`, but nothing runs the `.gd` scripts in CI).
+- Godot-side CI only runs the existing headless smoke tests (do the scenes
+  load and `_ready()` clean); no automated interaction coverage yet for
+  things like token selection, movement, player-view fog, or HUD action
+  wiring actually doing the right thing when clicked.
