@@ -19,8 +19,8 @@ extends SceneTree
 ## rather than assuming.
 
 const CHARACTER_MODEL := "res://assets/creatures/hero/barbarian.glb"
-const ANIMATION_SOURCE := "res://assets/creatures/animations/mannequin_animations.glb"
-const BONE_NAME_MAP := Token.MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP
+const ANIMATION_SOURCE := "res://assets/creatures/animations/mixamo_idle.fbx"
+const BONE_NAME_MAP := {} # exact-name matching expected now -- see Token.gd's "hero:barbarian" entry
 
 func _init() -> void:
 	if not ResourceLoader.exists(CHARACTER_MODEL):
