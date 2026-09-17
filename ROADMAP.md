@@ -1776,3 +1776,71 @@ broken. Only `"hero:barbarian"` opts in.
 **Not yet verified live** -- a real, reasoned fix based on reconsidering
 which assumption stopped applying (cross-rig -> same-rig), not another
 blind guess, but still unseen running.
+
+## Abandoned the retargeting approach entirely -- routed through Mixamo's own Auto-Rigger instead, 2026-09-17
+
+Live result after the root-motion fix above: still twisted, no better.
+User called it directly: **"i think this is where we rethink the
+plan."** Seven live-tested iterations deep into bridging Meshy's rig
+onto free animation libraries (bone names, position, root rotation, root
+position, shoulder exclusion, switching to real Mixamo animations, then
+root motion again) without a clean result was a real signal the
+technique itself -- runtime bone-transform copying between two
+independently-authored skeletons, however careful the math -- has more
+edge cases than worth chasing blindly, not that one more fix would land
+it.
+
+Offered three real options rather than another guess: (1) swap to
+KayKit's own pre-rigged Barbarian hero model (proven zero-retargeting
+pattern, different art style), (2) pay Meshy to animate this exact
+model directly like the Orc (guaranteed correct, reintroduces the
+per-model cost problem this whole detour was meant to avoid), (3) keep
+iterating on the current approach. User picked a fourth path not on the
+list: **download the plain unrigged Meshy model and let Mixamo's own
+Auto-Rigger rig it directly**, rather than Meshy's own rigger. This
+sidesteps the entire retargeting problem at its root -- if Mixamo builds
+both the skeleton AND every animation applied to it, there's nothing
+left to reconcile between two different systems' rest poses, the exact
+class of problem every prior fix in this file was fighting.
+
+**Real, non-obvious problem hit getting there**: Mixamo's auto-rigger
+kept failing with "Sorry, unable to map your existing skeleton" on a
+model confirmed (by scanning the raw FBX bytes directly, not assumed) to
+have ZERO bone/skeleton data at all -- a well-known, misleading Mixamo
+error message that fires for unrelated failures too (confirmed against
+multiple community reports, including one titled literally "the
+auto-rigger can't map my existing skeleton but my model has no
+skeleton"). Actual cause, per those same reports: file size/complexity,
+recommended under ~15-30MB. The export was 45MB with a full PBR material
+setup (separate base color/metallic/normal/roughness maps). Tested as a
+genuine process of elimination, one variable at a time: remeshing to 10K
+faces alone changed nothing meaningful (textures dominate FBX file size
+for a PBR character, not geometry -- an unintuitive but correct result,
+not a fluke), while dropping to a plain base-color-only texture got the
+export to 12MB and past the auto-rigger on the very next attempt.
+Polygon count was never the actual lever; material complexity was.
+
+Once rigged, every animation was previewed live against the actual
+character in Mixamo's own web viewer before downloading -- catching
+problems (like "Breathing Idle" looking wrong) before they ever reach
+Godot, not after. Rewired `"hero:barbarian"` entirely: `barbarian.fbx`
+(the "with skin" download -- mesh + skeleton + its own baked Idle clip)
+is now both `path` and `animation_source`, with 5 more "without skin"
+clips (`barbarian_walk/death/dying/hit1/hit2.fbx`) providing
+walk/death/dying/2 hit reactions. No `bone_name_map` at all -- genuine
+Mixamo-built rig on both sides, exact-name matching, same mechanism the
+plain `"hero"` entry already uses against Quaternius. `animate_root:
+true` kept, since there's no known reason root motion should be unsafe
+between two Mixamo-built skeletons the way it was between Meshy's and
+Quaternius's.
+
+Both earlier attempts (Quaternius retargeting, then real-Mixamo-onto-
+Meshy's-rig) are kept in this file's own history above, not deleted --
+the actual lesson generalizes past this one character: when a custom
+model needs both a rig AND animations, get BOTH from the same system
+that's actually good at retargeting (Mixamo itself) rather than trying
+to reconcile a rig from one pipeline with animations from another inside
+this project's own runtime code, however carefully that code is written.
+
+**Not yet verified live** -- files are copied and `MODEL_CONFIG` is
+rewired, but this hasn't been seen running in Godot yet.

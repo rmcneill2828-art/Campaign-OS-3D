@@ -154,62 +154,84 @@ const MODEL_CONFIG := {
 	## First per-name HERO entry (mirrors "monster:skeleton"/"monster:orc"
 	## below) -- a hero token literally named "Barbarian" now gets this model
 	## instead of the generic superhero_male fallback every hero shared until
-	## now. Model: a free static download from Meshy's library, rigged
-	## through Meshy's WEBSITE Rigging tool with "Skeleton template: Mixamo"
-	## selected -- genuine mixamorig:-prefixed bone names.
+	## now.
 	##
-	## animation_source is real Adobe Mixamo animations (mixamo.com, manually
-	## downloaded "without skin" -- a handful of clips, not a bulk/automated
-	## pull, see ROADMAP.md's own note on why automating Mixamo was ruled out
-	## for a whole creature library but a few manual downloads weren't), NOT
-	## Quaternius/bone_name_map -- MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_
-	## BONE_MAP's own rest-pose-relative retargeting got legs/spine/face
-	## looking right (confirmed live) but never fully resolved the shoulders
-	## even after two more live-tested fixes, diminishing returns on trying
-	## to bridge two genuinely different rigs' rotations. Real Mixamo
-	## animations use the exact same bone-naming convention Meshy's own
-	## "Skeleton template: Mixamo" output does (confirmed directly: both use
-	## real mixamorig:-prefixed names, and Godot's colon-to-underscore import
-	## behavior -- already confirmed live for this same character -- applies
-	## identically to both), so this is plain exact-name bone matching, same
-	## reliable mechanism the plain "hero" entry above already uses against
-	## Quaternius -- no bone_name_map, no delta math, nothing left to
-	## mismatch between two different rigs' rest poses.
+	## Third pipeline for this one model, not the first two -- both earlier
+	## attempts are kept as real history, not deleted, because the actual
+	## lesson (see ROADMAP.md's full account) generalizes beyond this one
+	## character:
+	##   1. Meshy's own website Rigging tool ("Skeleton template: Mixamo") +
+	##      MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP's rest-pose-
+	##      relative retargeting onto Quaternius's UAL1 -- got legs/spine/face
+	##      looking right after several live-tested fixes, but never fully
+	##      resolved the shoulders, and a later Idle-clip swap re-broke
+	##      things a different way (a frozen root fighting a clip whose own
+	##      weight-shift choreographs hip+spine together). Real diminishing
+	##      returns bridging two genuinely DIFFERENT rigs' rest poses through
+	##      rotation math alone, however carefully done.
+	##   2. Same Meshy-rigged model, but driven by real mixamo.com animations
+	##      instead of Quaternius -- exact-name bone matching worked (no more
+	##      delta math needed for BONE names), but the model itself was still
+	##      Meshy's own rig, built by a different pipeline than the one that
+	##      made the animations, so pose problems kept resurfacing.
+	##   3. **What's actually used now**: uploaded the plain unrigged static
+	##      Meshy download to Mixamo's OWN Auto-Rigger directly (not Meshy's
+	##      rigger at all), so Mixamo builds the skeleton AND owns every
+	##      animation applied to it -- the character and its animations now
+	##      come from the exact same system, not two different ones being
+	##      reconciled after the fact. Real, non-obvious problem hit getting
+	##      here: Mixamo's auto-rigger kept failing with "unable to map your
+	##      existing skeleton" on a genuinely UNRIGGED mesh (confirmed
+	##      directly -- zero bone/skeleton strings in the raw file) -- a
+	##      known-misleading Mixamo error message for a completely different
+	##      real cause, confirmed against community reports: the model's
+	##      45MB, full-PBR (separate metallic/normal/roughness maps) export
+	##      was too complex. Dropping to a plain base-color texture (no other
+	##      channels) got it to 12MB and past the auto-rigger immediately --
+	##      polygon count turned out NOT to be the actual lever (remeshing to
+	##      10K faces alone changed nothing, confirmed live).
 	##
-	## Every one of the 5 downloaded FBX files shares the exact same internal
-	## clip name ("mixamo.com") -- a well-known Mixamo export quirk,
-	## confirmed directly against these actual files, not assumed -- which is
-	## why every non-idle field below needs the newly-added "as" key
-	## (_import_animation_clip()'s own doc comment) to avoid them all
-	## overwriting each other under the same target-library key. No dedicated
-	## "dying" (kneeling/downed) clip exists among what was downloaded -- left
-	## unset rather than forcing a short reaction clip to loop awkwardly as an
-	## imperfect stand-in; a dying Barbarian just has no animation change
-	## specific to that state for now (a real, accepted gap, not a bug --
-	## _resolve_or_import("") already returns "" gracefully, and
-	## _play_source_animation() already no-ops on an empty key).
+	## `barbarian.fbx` (both `path` and `animation_source` -- a single file
+	## has mesh + skeleton + its own baked Idle clip, the with-skin download)
+	## and every `barbarian_*.fbx` animation file are genuine Mixamo output,
+	## same bone-naming convention throughout -- no bone_name_map needed,
+	## exact-name matching, same reliable mechanism the plain "hero" entry
+	## above already uses against Quaternius.
+	##
+	## `animate_root: true` -- unlike the two abandoned attempts above, this
+	## is no longer bridging two different rigs, so there's no known reason
+	## root motion should be unsafe here; left on since it's what actually
+	## fixed the earlier "twisted waist" problem once source and target
+	## became genuinely the same rig family.
+	##
+	## Every downloaded FBX still shares the same internal clip name
+	## ("mixamo.com", sanitized to "mixamo_com" by Godot's FBX importer --
+	## confirmed live, not the raw file's own string -- see
+	## _import_animation_clip()'s own doc comment), so every non-idle field
+	## below still needs the "as" key to avoid a shared-library collision.
+	## `death` uses the downloaded "Dying" clip (Mixamo's own name for a
+	## collapse-and-stay-down animation, matching this project's OWN
+	## "permanently dead, frozen on last frame" concept) and `dying` uses
+	## "Kneeling Down" (a held pose, matching this project's OWN "actively
+	## rolling death saves, looped" concept) -- deliberately NOT named to
+	## match each other, since Mixamo's clip-naming vocabulary and this
+	## project's state-naming vocabulary aren't the same thing and shouldn't
+	## be assumed to line up.
 	## label_height reuses "hero"'s own 2.0 as a starting default (this
 	## specific model's real proportions haven't been measured live) --
 	## revisit once actually seen in Godot, same as every other
 	## not-yet-live-verified number in this project's own history.
-	## Clip name is "mixamo_com", NOT "mixamo.com" -- confirmed live via
-	## inspect_bone_name_map.gd's AnimationPlayer.get_animation_list() output
-	## against the real imported file, not assumed from the raw FBX bytes
-	## (which really do contain the literal string "mixamo.com" -- that's
-	## metadata, not the AnimStack/Take name Godot's FBX importer actually
-	## surfaces). Godot's FBX importer sanitizes "." out of animation names
-	## the same general way its glTF importer sanitizes ":" out of bone names
-	## -- a second instance of the same class of gotcha, not a coincidence.
 	"hero:barbarian": {
-		"path": "res://assets/creatures/hero/barbarian.glb", "label_height": 2.0,
-		"animation_source": "res://assets/creatures/animations/mixamo_idle.fbx",
+		"path": "res://assets/creatures/hero/barbarian.fbx", "label_height": 2.0,
+		"animation_source": "res://assets/creatures/hero/barbarian.fbx",
 		"animate_root": true,
 		"idle": "mixamo_com",
-		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_walk.fbx", "as": "Barbarian_Walk"},
-		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_death.fbx", "as": "Barbarian_Death"},
+		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_walk.fbx", "as": "Barbarian_Walk"},
+		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_death.fbx", "as": "Barbarian_Death"},
+		"dying": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_dying.fbx", "as": "Barbarian_Dying"},
 		"hits": [
-			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_reaction.fbx", "as": "Barbarian_Reaction"},
-			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/mixamo_hit_reaction.fbx", "as": "Barbarian_HitReaction"}
+			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_hit1.fbx", "as": "Barbarian_Hit1"},
+			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_hit2.fbx", "as": "Barbarian_Hit2"}
 		]
 	},
 	"monster": {

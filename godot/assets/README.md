@@ -54,52 +54,71 @@
   cross-file import form. **Not committed** -- same gitignore sweep-up as
   the KayKit files above, no license reason either (this is the user's own
   generated content) but swept into the same ignored tree by convenience.
-- **`creatures/hero/barbarian.glb`** -- the first per-name HERO model
+- **`creatures/hero/barbarian.fbx`** -- the first per-name HERO model
   (`MODEL_CONFIG`'s `"hero:barbarian"`), a different pipeline than the Orc
-  above: a free static model downloaded from Meshy's own library (not
-  text-to-3D generated), then rigged through Meshy's WEBSITE Rigging tool
-  with "Skeleton template: Mixamo" selected -- a choice only the website
-  UI exposes, not the API `orc_warrior.glb` went through, producing genuine
-  `mixamorig:`-prefixed bone names. **Not committed** -- same gitignore
-  sweep-up as the Orc files above, no license reason established either way
-  (Meshy's own ToS governs this the same unverified way noted for the Orc).
-- **`creatures/animations/mixamo_idle.fbx`, `mixamo_walk.fbx`,
-  `mixamo_death.fbx`, `mixamo_reaction.fbx`, `mixamo_hit_reaction.fbx`** --
-  the Barbarian's actual animation source, real Adobe Mixamo clips
-  (mixamo.com), manually downloaded "without skin" (a handful of files, not
-  a bulk/automated pull -- see `ROADMAP.md`'s own note on why automating
-  Mixamo was ruled out for building a whole creature library, but a few
-  manual downloads for one shared animation set weren't). License: free,
-  no royalties, commercial and non-commercial use both fine, no attribution
-  required (already confirmed in `ROADMAP.md`'s earlier Mixamo research
-  note) -- same "don't redistribute the raw files standalone" restriction
-  every other pack here already follows, so **not committed**, same
-  gitignore sweep-up as everything else in this tree.
-  Tried first: `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`, a
-  rest-pose-relative retargeting scheme bridging the Barbarian's rig onto
-  the existing Quaternius UAL1 library (same file the plain `"hero"` entry
-  above uses). Got legs/spine/face looking correct after several live-
-  tested fixes, but never fully resolved the shoulders even after two more
-  rounds -- real diminishing returns trying to reconcile two genuinely
-  different rigs' rest poses through rotation math alone. Real Mixamo
-  animations sidestep the whole problem: they use the EXACT SAME bone-
-  naming convention Meshy's own "Skeleton template: Mixamo" rig output
-  does, confirmed directly (both real files extracted and compared, not
-  assumed), so this is now the same plain exact-name bone matching the
-  `"hero"` entry's own Quaternius pairing already relies on -- no
-  bone_name_map, no delta math, nothing left to mismatch. The Quaternius-
-  based map/mechanism is left in place (not deleted) as real, working,
-  tested infrastructure for a FUTURE Meshy-rigged model where downloading
-  matching Mixamo clips isn't practical for some reason -- just no longer
-  what the Barbarian itself uses.
-  All 5 downloaded FBX files share the exact same internal clip name
-  (`"mixamo.com"`) -- confirmed directly against the actual files (a
-  well-known, real Mixamo export quirk, not assumed), which is why
-  `Token.gd`'s clip-import helper needed a new `"as"` field (see its own
-  doc comment) to store each under a distinct key rather than have them
-  silently overwrite each other. No dedicated "dying" (kneeling/downed)
-  pose was among what got downloaded -- left unset rather than forcing a
-  short reaction clip to loop awkwardly as a stand-in.
+  above, and the THIRD pipeline tried for this one character specifically
+  (see `ROADMAP.md`'s full account of the first two, both abandoned after
+  real live-tested attempts, not guessed away): a free static model
+  downloaded from Meshy's own library, then rigged through **Mixamo's own
+  Auto-Rigger** directly (not Meshy's rigging tool at all) -- uploaded the
+  plain unrigged mesh straight to mixamo.com, which builds the skeleton
+  AND every animation applied to it, so the character and its animations
+  now come from the same system rather than two different ones being
+  reconciled in Godot after the fact. Real, non-obvious problem hit
+  getting the upload to work at all: Mixamo's auto-rigger kept failing
+  with "unable to map your existing skeleton" on a genuinely unrigged mesh
+  (confirmed directly -- zero bone/skeleton strings in the raw file, not
+  assumed) -- a known-misleading Mixamo error for an unrelated real cause,
+  confirmed against community reports: a 45MB, full-PBR (separate
+  metallic/normal/roughness maps) export was too complex for the
+  auto-rigger. Dropping to a plain base-color-only texture got it to 12MB
+  and past the auto-rigger immediately; reducing polygon count alone
+  (remeshing to 10K faces) changed nothing, confirmed live -- texture/
+  material complexity was the actual lever, not geometry. This file is the
+  "with skin" download (mesh + skeleton + its own baked Idle clip, used as
+  both `path` and `animation_source`). **Not committed** -- same gitignore
+  sweep-up as the Orc files above, no license reason established either
+  way (Meshy's own ToS governs the base model's licensing the same
+  unverified way noted for the Orc; the Mixamo side is the one already
+  confirmed free/commercial-fine below).
+- **`creatures/animations/barbarian_walk.fbx`, `barbarian_death.fbx`,
+  `barbarian_dying.fbx`, `barbarian_hit1.fbx`, `barbarian_hit2.fbx`** --
+  the Barbarian's other animations, real Adobe Mixamo clips (mixamo.com,
+  downloaded "without skin" once already rigged), previewed live against
+  the actual rigged character in Mixamo's own web viewer before
+  downloading -- not just picked by name (an earlier download of
+  "Breathing Idle" looked fine by name but turned out to look "like a
+  Zombie pose" once actually seen animating, see `ROADMAP.md`). License:
+  free, no royalties, commercial and non-commercial use both fine, no
+  attribution required (already confirmed in `ROADMAP.md`'s earlier Mixamo
+  research note) -- same "don't redistribute the raw files standalone"
+  restriction every other pack here already follows, so **not committed**.
+  `barbarian_death.fbx` is sourced from Mixamo's own "Dying" clip (a
+  collapse-and-stay-down animation matching this project's own
+  "permanently dead, frozen on last frame" concept) and `barbarian_dying.
+  fbx` from Mixamo's "Kneeling Down" (a held pose matching this project's
+  OWN "actively rolling death saves, looped" concept) -- filenames are
+  deliberately by PROJECT purpose, not by Mixamo's own clip name, since
+  the two vocabularies aren't the same thing and don't line up 1:1.
+  All of these FBX files share the exact same internal clip name
+  (`"mixamo.com"`, sanitized by Godot's FBX importer to `"mixamo_com"` --
+  confirmed live, not assumed from the raw file) -- confirmed directly
+  against the actual files (a well-known, real Mixamo export quirk), which
+  is why `Token.gd`'s clip-import helper needed a new `"as"` field (see
+  its own doc comment) to store each under a distinct key rather than have
+  them silently overwrite each other.
+  **Two earlier pipelines for this same character were tried and
+  abandoned first** (kept as real history in `ROADMAP.md`, not deleted):
+  Meshy's own website rigger + a hand-written rest-pose-relative
+  retargeting scheme onto Quaternius's UAL1 library got legs/spine/face
+  looking right after several live-tested fixes but never fully resolved
+  the shoulders; a second attempt driving that same Meshy-rigged model
+  with real Mixamo animations fixed the bone-NAME mismatch but kept
+  hitting new pose problems since the character and its animations still
+  came from two different rigging systems. Routing everything through
+  Mixamo's own Auto-Rigger from the start sidesteps the whole class of
+  problem -- no bone_name_map, no delta math, nothing left to reconcile
+  between two different systems' rest poses.
 - **`Environment/kenney-dungeon/`** -- an exact duplicate of `dungeon-kit`
   above (same "Mini Dungeon (2.0)" pack, re-downloaded under a different
   folder name). Zero new content -- gitignored, safe to delete whenever.

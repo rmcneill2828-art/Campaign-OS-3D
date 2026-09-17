@@ -18,8 +18,8 @@ extends SceneTree
 ## change) isn't guaranteed to match either -- re-run this tool against it
 ## rather than assuming.
 
-const CHARACTER_MODEL := "res://assets/creatures/hero/barbarian.glb"
-const ANIMATION_SOURCE := "res://assets/creatures/animations/mixamo_idle.fbx"
+const CHARACTER_MODEL := "res://assets/creatures/hero/barbarian.fbx"
+const ANIMATION_SOURCE := "res://assets/creatures/animations/barbarian_walk.fbx"
 const BONE_NAME_MAP := {} # exact-name matching expected now -- see Token.gd's "hero:barbarian" entry
 
 func _init() -> void:
