@@ -5,334 +5,52 @@ class_name Token
 ## membership; Main.gd owns all selection/movement decisions and talks to the
 ## server.
 ##
-## Model loading is intentionally NOT preload() -- the real creature models
-## (Quaternius, Phase 2) are licensed for use but NOT committed to this git repo
-## (see godot/assets/README.md: their license permits using them in a game,
-## but not redistributing the raw asset files themselves, which committing them
-## to a repo would risk). A fresh clone without those files re-downloaded must
+## Model loading is intentionally NOT preload() -- real creature models are
+## licensed for use but NOT committed to this git repo (see godot/assets/
+## README.md: their license permits using them in a game, but not
+## redistributing the raw asset files themselves, which committing them to a
+## repo would risk). A fresh clone without those files re-downloaded must
 ## still open and run -- just with the plain colored-capsule placeholder Phase 0
 ## shipped with -- rather than fail to load the scene at all. `load()` +
 ## `ResourceLoader.exists()` achieves that; `preload()` would not.
 
 ## PROJECT DECISION (2026-09-17, see ROADMAP.md's own entry for the full
-## reasoning): every NEW creature/hero entry from here on is a STATIC model
-## -- no `animation_source`, no `bone_name_map`, no `animate_root`/
-## `loop_dying`, none of the rigging/retargeting machinery this file
-## documents in such detail below. Animation is deliberately deferred to a
-## future version, after a stable/playable/presentable VTT exists on static
-## models first -- a call made only after the Barbarian's own three-pipeline
-## saga showed what animating even ONE humanoid actually costs, with a real
-## campaign needing dozens of creatures and the full SRD bestiary running to
-## hundreds. This needed no code change to support -- `_setup_animation()`
-## already treats a missing `animation_source` as fully valid (exactly how
-## the original Phase 0 placeholder capsules worked before any animation
-## existed here at all), and `_ground_model()` grounds any mesh shape
-## correctly regardless, including one with its own built-in display base. A
-## new entry needs only `path` (and `label_height`). Existing animated
-## entries (hero, monster, monster:skeleton, monster:orc, hero:barbarian)
-## are unaffected -- this governs new work, not what's already built.
+## reasoning): every token is now a STATIC model -- no skeletal animation,
+## no `animation_source`, no bone-name-map/retargeting machinery. Animation
+## is deliberately deferred to a future version, after a stable/playable/
+## presentable VTT exists on static models first -- a call made only after
+## the Barbarian's own three-pipeline animation saga showed what animating
+## even ONE humanoid actually costs, with a real campaign needing dozens of
+## creatures and the full SRD bestiary running to hundreds.
 ##
-## Lookup key -> a full "model family" config: which model to instance, where
-## its name/HP label floats (label_height, meters above its own feet --
-## whatever vertical offset the model actually needs to stand on the floor is
-## figured out at runtime regardless, see _ground_model()), which shared
-## animation-source file drives its skeleton (see _setup_animation()), and
-## the bare clip names (post Godot-import, see IDLE/WALK's own comment below)
-## for idle/walk/death/dying/hit reactions within it -- ALL OPTIONAL as of
-## the project decision above; omit animation_source/idle/walk/etc entirely
-## for a plain static model.
+## The FULL working animation system this project already built (rest-pose-
+## relative bone retargeting, Meshy/Mixamo bone-name maps, per-clip import
+## across separate animation-source files, death/dying/hit-reaction state
+## machine) is preserved, not deleted -- see
+## _archive/animation-system-2026-09-17/Token.gd.txt at the repo root (one
+## directory above godot/, so Godot's own project scanner never sees it --
+## a second `class_name Token` inside the scanned project would conflict
+## with this file). Reintroducing animation for a future version means
+## restoring that file's logic, not rebuilding it from scratch. The
+## MODEL_CONFIG entries that used to reference it (hero, monster,
+## monster:skeleton, monster:orc, hero:barbarian) were removed entirely per
+## this decision, not just their animation fields -- every token falls back
+## to the plain placeholder capsule until a static replacement model is
+## sourced for each one.
+##
+## Lookup key -> a "model family" config: which model to instance, and
+## where its name/HP label floats (label_height, meters above its own feet
+## -- whatever vertical offset the model actually needs to stand on the
+## floor is figured out at runtime regardless, see _ground_model()). A
+## model with its own built-in display base (e.g. a 3D-printed-miniature-
+## style asset) is fine -- _ground_model() grounds any mesh shape correctly
+## regardless of whether the lowest point is a foot or a sculpted base.
 ##
 ## Keys are either a bare token type ("hero", "monster" -- the fallback used
 ## when no more specific entry matches) or "monster:<stat-block name>"
 ## (lowercased, e.g. "monster:skeleton") for a real per-monster-name model --
-## see _stat_block_key() and _rebuild_model()'s own lookup order. Phase 8's
-## first per-name entry (skeleton) is what proved this two-tier lookup was
-## worth having at all; before it, every monster silently rendered as the
-## Imp regardless of which SRD stat block it actually was (a known,
-## documented gap since Phase 2).
-##
-## Any of idle/walk/death/dying, or one entry of hits, may be EITHER a plain
-## clip name (String, resolved against animation_source -- the simple case
-## every Quaternius/KayKit entry below uses) OR a `{"clip": <name>, "source":
-## <path>}` Dictionary, meaning that one clip actually lives in a DIFFERENT
-## file entirely and needs importing into animation_source's own player
-## first (see _setup_animation()'s _resolve_or_import() helper). The Orc
-## entry below needs this for literally every field -- Meshy's per-clip
-## animation API hands back one full skinned model per requested clip, not
-## one shared library file the way Quaternius/KayKit ship theirs.
-##
-## An entry may also carry an optional `bone_name_map` (Dictionary, character
-## bone name -> animation-source bone name) for a model/animation-source pair
-## whose skeletons don't share bone names at all -- confirmed to actually be
-## the case between a Meshy auto-rig and every free pack here (Meshy's rig
-## uses Mixamo-style names like "LeftUpLeg"; Quaternius uses "thigh_l",
-## KayKit uses "upperleg.l" -- zero names in common, checked directly by
-## extracting both skeletons' real bone lists, not assumed). Without a map,
-## _setup_animation()'s bone-matching loop requires an EXACT name match
-## (every existing entry above relies on this -- Quaternius's own pack
-## sharing names with itself, KayKit's own pack sharing names with itself),
-## which is why a Meshy-rigged model paired with a free-pack animation source
-## needs this field to animate at all; omitting it (every entry above) keeps
-## today's exact-match behavior byte-for-byte unchanged.
-##
-## TWO separate Meshy bone-naming conventions have shown up already, not one
-## -- checked directly rather than assumed to still hold from the first
-## rigged model, and good thing: they're genuinely different.
-## `MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP` is from `orc_warrior.glb`,
-## rigged via the Composio-connected `MESHY_CREATE_RIGGING_TASK` API (no
-## skeleton-template choice exposed there) -- Mixamo-STYLE names but no
-## `mixamorig:` prefix, "Spine01"/"Spine02", lowercase "neck". 22 of its 24
-## bones map cleanly; the 2 left out (`head_end`, `headfront`) are small
-## Meshy-specific attachment bones with no Quaternius equivalent, not part
-## of the walk/idle/attack silhouette -- harmless to leave unmapped, they
-## just stay in their bind pose.
-## `MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP` is from a model rigged
-## through Meshy's website Rigging tool with "Skeleton template: Mixamo"
-## explicitly selected (a dropdown the API path doesn't expose) -- genuine
-## `mixamorig:`-prefixed names matching real Adobe Mixamo output exactly
-## ("mixamorig:Hips", "mixamorig:Spine1"/"Spine2", capitalized "Neck"). 24 of
-## its 28 bones are mapped (down from an original 26 -- see this constant's
-## own doc comment for why `LeftShoulder`/`RightShoulder` were deliberately
-## removed after live testing, not a bone-name mismatch this time); the
-## remaining 4 left out are `mixamorig:HeadTop_End`, the stray `headfront`,
-## and now `LeftShoulder`/`RightShoulder`. This is the path an ordinary
-## website download + manual rig (not the API) actually produces, so it's
-## the one to expect for most future models.
-## Both verified the same way: every target name confirmed to actually exist
-## in `mannequin_animations.glb`'s real skeleton, no duplicate targets, no
-## typo'd source keys -- see godot/tools/inspect_bone_name_map.gd. Don't
-## assume either map still applies to a DIFFERENT future rig (a different
-## creature, a quadruped, a different "Skeleton template" choice) without
-## re-running that check -- this project has already been burned once this
-## same phase by assuming one rigged model's bone names would generalize.
-##
-## A real gotcha already hit once, not hypothetical: `MESHY_MIXAMO_TEMPLATE_
-## TO_QUATERNIUS_UAL1_BONE_MAP`'s keys were originally written with a colon
-## ("mixamorig:Hips"), matching the raw glTF file's own bone names exactly
-## (confirmed by extracting them directly) -- but the FIRST live Godot run
-## (`inspect_bone_name_map.gd`, not assumed) came back 0/28 matched. Cause:
-## Godot's glTF importer replaces ":" with "_" when it turns each joint into
-## a Skeleton3D bone, something only visible by actually running it in Godot,
-## never by reading the source file. Keys below use "mixamorig_" for exactly
-## that reason -- if a future rig's own real prefix ever needs checking
-## again, check the LIVE Godot bone names via the inspect tool, not the raw
-## file.
-const MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP := {
-	"Hips": "pelvis",
-	"Spine": "spine_01", "Spine01": "spine_02", "Spine02": "spine_03",
-	"neck": "neck_01", "Head": "Head",
-	"LeftShoulder": "clavicle_l", "LeftArm": "upperarm_l", "LeftForeArm": "lowerarm_l", "LeftHand": "hand_l",
-	"RightShoulder": "clavicle_r", "RightArm": "upperarm_r", "RightForeArm": "lowerarm_r", "RightHand": "hand_r",
-	"LeftUpLeg": "thigh_l", "LeftLeg": "calf_l", "LeftFoot": "foot_l", "LeftToeBase": "ball_l",
-	"RightUpLeg": "thigh_r", "RightLeg": "calf_r", "RightFoot": "foot_r", "RightToeBase": "ball_r"
-}
-## Keys use "mixamorig_" (underscore), NOT "mixamorig:" (colon) -- the raw
-## glTF file's own bone names really do use a colon (confirmed by direct
-## extraction, see this constant's own doc comment above), but Godot's glTF
-## importer replaces ":" with "_" when it turns each joint into a Skeleton3D
-## bone entry, a real, confirmed-live behavior (godot/tools/
-## inspect_bone_name_map.gd run against a real Godot 4.7.2 install reported
-## 0/28 matched with colon-keyed names, then 26/28 once corrected to
-## underscores) -- not something the raw file itself or a script reading it
-## directly would ever reveal, only Godot's own import pipeline. Don't
-## "fix" this back to colons without re-confirming live first.
-##
-## mixamorig_LeftShoulder/RightShoulder are DELIBERATELY left OUT (no entry
-## here at all) -- confirmed live, not guessed: with every other joint fixed
-## (see the rest-pose-relative retargeting fix in _process()), the arm chain
-## itself (upper arm through hand) animated correctly on its own, but the
-## shoulder bone specifically kept pulling the whole arm backward, in both
-## Idle and Walk. Most likely cause: Quaternius's "clavicle_l"/"clavicle_r"
-## isn't really the same functional joint as Meshy's "LeftShoulder"/
-## "RightShoulder" -- a clavicle bone in many rigs barely rotates at all
-## (mostly a fixed shoulder-width spacer), while Meshy's own rig may use the
-## shoulder bone as a more active joint, so even a correct rest-relative
-## delta computed from Quaternius's own near-static clavicle motion doesn't
-## mean much applied to a bone Meshy's rig expects to actually move. Same
-## fix strategy already proven for the root bone: leave it out of the map
-## entirely so _process()'s bone_map loop never touches it, staying at its
-## own rest pose permanently while the arm chain below it (which already
-## works) continues to be driven normally -- the character's own natural
-## shoulder-width rest angle, not an animated one.
-const MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP := {
-	"mixamorig_Hips": "pelvis",
-	"mixamorig_Spine": "spine_01", "mixamorig_Spine1": "spine_02", "mixamorig_Spine2": "spine_03",
-	"mixamorig_Neck": "neck_01", "mixamorig_Head": "Head",
-	"mixamorig_LeftArm": "upperarm_l", "mixamorig_LeftForeArm": "lowerarm_l", "mixamorig_LeftHand": "hand_l",
-	"mixamorig_RightArm": "upperarm_r", "mixamorig_RightForeArm": "lowerarm_r", "mixamorig_RightHand": "hand_r",
-	"mixamorig_LeftUpLeg": "thigh_l", "mixamorig_LeftLeg": "calf_l", "mixamorig_LeftFoot": "foot_l", "mixamorig_LeftToeBase": "ball_l", "mixamorig_LeftToe_End": "ball_leaf_l",
-	"mixamorig_RightUpLeg": "thigh_r", "mixamorig_RightLeg": "calf_r", "mixamorig_RightFoot": "foot_r", "mixamorig_RightToeBase": "ball_r", "mixamorig_RightToe_End": "ball_leaf_r",
-	"mixamorig_LeftHandMiddle4": "middle_04_leaf_l", "mixamorig_RightHandMiddle4": "middle_04_leaf_r"
-}
-const MODEL_CONFIG := {
-	"hero": {
-		"path": "res://assets/creatures/hero/superhero_male.gltf", "label_height": 2.0,
-		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
-		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
-		"hits": ["Hit_Chest", "Hit_Head"]
-	},
-	## First per-name HERO entry (mirrors "monster:skeleton"/"monster:orc"
-	## below) -- a hero token literally named "Barbarian" now gets this model
-	## instead of the generic superhero_male fallback every hero shared until
-	## now.
-	##
-	## Third pipeline for this one model, not the first two -- both earlier
-	## attempts are kept as real history, not deleted, because the actual
-	## lesson (see ROADMAP.md's full account) generalizes beyond this one
-	## character:
-	##   1. Meshy's own website Rigging tool ("Skeleton template: Mixamo") +
-	##      MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP's rest-pose-
-	##      relative retargeting onto Quaternius's UAL1 -- got legs/spine/face
-	##      looking right after several live-tested fixes, but never fully
-	##      resolved the shoulders, and a later Idle-clip swap re-broke
-	##      things a different way (a frozen root fighting a clip whose own
-	##      weight-shift choreographs hip+spine together). Real diminishing
-	##      returns bridging two genuinely DIFFERENT rigs' rest poses through
-	##      rotation math alone, however carefully done.
-	##   2. Same Meshy-rigged model, but driven by real mixamo.com animations
-	##      instead of Quaternius -- exact-name bone matching worked (no more
-	##      delta math needed for BONE names), but the model itself was still
-	##      Meshy's own rig, built by a different pipeline than the one that
-	##      made the animations, so pose problems kept resurfacing.
-	##   3. **What's actually used now**: uploaded the plain unrigged static
-	##      Meshy download to Mixamo's OWN Auto-Rigger directly (not Meshy's
-	##      rigger at all), so Mixamo builds the skeleton AND owns every
-	##      animation applied to it -- the character and its animations now
-	##      come from the exact same system, not two different ones being
-	##      reconciled after the fact. Real, non-obvious problem hit getting
-	##      here: Mixamo's auto-rigger kept failing with "unable to map your
-	##      existing skeleton" on a genuinely UNRIGGED mesh (confirmed
-	##      directly -- zero bone/skeleton strings in the raw file) -- a
-	##      known-misleading Mixamo error message for a completely different
-	##      real cause, confirmed against community reports: the model's
-	##      45MB, full-PBR (separate metallic/normal/roughness maps) export
-	##      was too complex. Dropping to a plain base-color texture (no other
-	##      channels) got it to 12MB and past the auto-rigger immediately --
-	##      polygon count turned out NOT to be the actual lever (remeshing to
-	##      10K faces alone changed nothing, confirmed live).
-	##
-	## `barbarian.fbx` (both `path` and `animation_source` -- a single file
-	## has mesh + skeleton + its own baked Idle clip, the with-skin download)
-	## and every `barbarian_*.fbx` animation file are genuine Mixamo output,
-	## same bone-naming convention throughout -- no bone_name_map needed,
-	## exact-name matching, same reliable mechanism the plain "hero" entry
-	## above already uses against Quaternius.
-	##
-	## `animate_root: true` -- unlike the two abandoned attempts above, this
-	## is no longer bridging two different rigs, so there's no known reason
-	## root motion should be unsafe here; left on since it's what actually
-	## fixed the earlier "twisted waist" problem once source and target
-	## became genuinely the same rig family.
-	##
-	## Every downloaded FBX still shares the same internal clip name
-	## ("mixamo.com", sanitized to "mixamo_com" by Godot's FBX importer --
-	## confirmed live, not the raw file's own string -- see
-	## _import_animation_clip()'s own doc comment), so every non-idle field
-	## below still needs the "as" key to avoid a shared-library collision.
-	## `death` uses the downloaded "Dying" clip (Mixamo's own name for a
-	## collapse-and-stay-down animation, matching this project's OWN
-	## "permanently dead, frozen on last frame" concept) and `dying` uses
-	## "Kneeling Down" -- deliberately NOT named to match each other, since
-	## Mixamo's clip-naming vocabulary and this project's state-naming
-	## vocabulary aren't the same thing and shouldn't be assumed to line up.
-	##
-	## `loop_dying: false` -- confirmed live this needed correcting: "Kneeling
-	## Down" turned out to be a stand-to-kneel TRANSITION, not a held pose
-	## the way KayKit Skeleton's own "Skeletons_Inactive_Floor_Pose" is
-	## (every OTHER family still defaults to looping dying, unaffected). Left
-	## looping (the project-wide default), it replayed the whole transition
-	## on every loop -- visibly standing back up then kneeling again, over
-	## and over. A non-looping clip freezes naturally on its own last frame
-	## once finished (see _loop_dying's own doc comment and
-	## _on_source_animation_finished(), both already built for exactly this
-	## case via "death"), which is the actually-correct behavior for a
-	## transition-into-a-pose clip like this one.
-	## label_height reuses "hero"'s own 2.0 as a starting default (this
-	## specific model's real proportions haven't been measured live) --
-	## revisit once actually seen in Godot, same as every other
-	## not-yet-live-verified number in this project's own history.
-	"hero:barbarian": {
-		"path": "res://assets/creatures/hero/barbarian.fbx", "label_height": 2.0,
-		"animation_source": "res://assets/creatures/hero/barbarian.fbx",
-		"animate_root": true,
-		"loop_dying": false,
-		"idle": "mixamo_com",
-		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_walk.fbx", "as": "Barbarian_Walk"},
-		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_death.fbx", "as": "Barbarian_Death"},
-		"dying": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_dying.fbx", "as": "Barbarian_Dying"},
-		"hits": [
-			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_hit1.fbx", "as": "Barbarian_Hit1"},
-			{"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_hit2.fbx", "as": "Barbarian_Hit2"}
-		]
-	},
-	"monster": {
-		"path": "res://assets/creatures/monster/imp.glb", "label_height": 1.9,
-		"animation_source": "res://assets/creatures/animations/mannequin_animations.glb",
-		"idle": "Idle", "walk": "Walk", "death": "Death01", "dying": "Crouch_Idle",
-		"hits": ["Hit_Chest", "Hit_Head"]
-	},
-	## KayKit Skeletons (godot/assets/README.md) -- a genuine per-name match for
-	## the SRD "Skeleton" stat block, not a reuse of something else. Bone-name
-	## compatibility against this specific animation pack was verified directly
-	## (godot/tools/inspect_kaykit_skeleton.gd: 23/23 bones match across every
-	## file checked), not assumed from a shared "Rig_Medium" folder name --
-	## exactly the check godot/assets/README.md's own KayKit section flagged as
-	## still outstanding before wiring anything in. idle/walk/death/dying all
-	## come from the pack's own SKELETON-SPECIFIC clip set (Skeletons_Idle,
-	## Skeletons_Walking, Skeletons_Death, Skeletons_Inactive_Floor_Pose --
-	## e.g. that pack visibly authored a creature literally rising from an
-	## inert heap on the floor, a much better fit than a generic humanoid
-	## idle), found by listing that file's real clips rather than guessing;
-	## hits reuse the pack's generic Hit_A/Hit_B (no skeleton-specific hit
-	## reaction exists) from a separate sibling file in the same pack.
-	"monster:skeleton": {
-		"path": "res://assets/creatures/monster/skeleton_warrior.glb", "label_height": 1.9,
-		"animation_source": "res://assets/creatures/animations/kaykit_rig_medium_special.glb",
-		"idle": "Skeletons_Idle", "walk": "Skeletons_Walking", "death": "Skeletons_Death",
-		"dying": "Skeletons_Inactive_Floor_Pose",
-		"hits": [
-			{"clip": "Hit_A", "source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"},
-			{"clip": "Hit_B", "source": "res://assets/creatures/animations/kaykit_rig_medium_general.glb"}
-		]
-	},
-	## Meshy AI (Phase 8, 2026-09-13) -- a custom-generated model for the SRD
-	## "Orc" stat block, no free pre-made pack covered it. Generated via the
-	## Composio-connected Meshy API: text-to-3D preview -> remesh to under the
-	## 320k-face rigging limit -> rig (biped) with the preview's own texture
-	## baked on -> one MESHY_CREATE_ANIMATION_TASK per needed clip against
-	## Meshy's own preset animation library (its own search turned up
-	## thematically-fitting picks: "Slow_Orc_Walk" already exists in that
-	## library by name, and "Fall_Dead_from_Abdominal_Injury" is a real death
-	## clip -- neither guessed at). Bone-name compatibility confirmed directly
-	## (godot/tools/inspect_meshy_orc.gd: 24/24 bones match across every
-	## animation file), same discipline as every other family here -- expected
-	## to hold since Meshy retargets each requested clip onto the exact rig it
-	## generated, but checked rather than assumed anyway.
-	##
-	## Every clip below needs the `{clip, source}` import form: Meshy's
-	## animation API returns one full skinned model per requested clip
-	## (`Armature|<ClipName>|baselayer`, its own export naming, not a
-	## Godot-namespacing thing), not one shared multi-clip file the way
-	## Quaternius/KayKit ship theirs -- animation_source (idle) is the only
-	## clip that needs no import, since its own file already has a usable
-	## skeleton+player pair to serve as the primary one _process() drives.
-	## No good held "kneeling/wounded" pose exists in Meshy's preset library
-	## (checked directly, not assumed) -- "dying" reuses a kneel-then-stand
-	## transition clip as an imperfect stand-in, looped like the other
-	## families' real held poses; revisit if it reads oddly at the table.
-	"monster:orc": {
-		"path": "res://assets/creatures/monster/orc_warrior.glb", "label_height": 2.1,
-		"animation_source": "res://assets/creatures/animations/meshy_orc_idle.glb",
-		"idle": "Armature|Idle|baselayer",
-		"walk": {"clip": "Armature|Slow_Orc_Walk_inplace|baselayer", "source": "res://assets/creatures/animations/meshy_orc_walk.glb"},
-		"death": {"clip": "Armature|Fall_Dead_from_Abdominal_Injury|baselayer", "source": "res://assets/creatures/animations/meshy_orc_death.glb"},
-		"dying": {"clip": "Armature|Kneel_on_One_Knee_and_Stand|baselayer", "source": "res://assets/creatures/animations/meshy_orc_kneel.glb"},
-		"hits": [
-			{"clip": "Armature|Hit_Reaction|baselayer", "source": "res://assets/creatures/animations/meshy_orc_hit1.glb"},
-			{"clip": "Armature|Hit_Reaction_1|baselayer", "source": "res://assets/creatures/animations/meshy_orc_hit2.glb"}
-		]
-	}
-}
+## see _stat_block_key() and _rebuild_model()'s own lookup order.
+const MODEL_CONFIG := {}
 const FALLBACK_LABEL_HEIGHT := 1.9
 const FALLBACK_CAPSULE_RADIUS := 0.4
 const FALLBACK_CAPSULE_HEIGHT := 1.6
@@ -364,8 +82,6 @@ var grid_y := 1
 var hp := 0
 var max_hp := 1
 var _last_hp := -1 # -1 means "no previous value yet" -- distinguishes first-ever apply_data from a real HP change
-var _was_dead := false
-var _was_dying := false
 
 var _initialized := false
 var _move_tween: Tween
@@ -373,36 +89,6 @@ var _move_tween: Tween
 # model is loaded) -- lets HP-driven color react every poll without rebuilding
 # the whole model tree each time (see _update_fallback_color below).
 var _fallback_mesh: MeshInstance3D
-
-# Animation state -- see _setup_animation(). All null/empty whenever the
-# fallback capsule is active (no skeleton to animate) or the animation source
-# asset isn't present.
-var _character_skeleton: Skeleton3D
-var _anim_source_skeleton: Skeleton3D
-var _anim_source_player: AnimationPlayer
-var _bone_map := {} # character bone index -> animation-source bone index
-# See MODEL_CONFIG's "hero:barbarian" doc comment and _process()'s own comment
-# for why this exists and defaults false -- true only opts a family INTO
-# animating its root bone (rest-pose-relative, not a raw copy), never the
-# default, so every already-working family (hero/monster/skeleton/orc, all
-# proven fine with a frozen root all session) is completely unaffected.
-var _animate_root := false
-# Defaults true (every family's existing behavior, unchanged) -- forces the
-# dying clip to loop, matching KayKit Skeleton's own "Skeletons_Inactive_
-# Floor_Pose," a real held pose authored to be looped indefinitely. Only set
-# false by a family whose dying clip is actually a TRANSITION (e.g. Mixamo's
-# "Kneeling Down," standing-to-kneeling) rather than a held pose -- looping a
-# transition clip replays the whole stand-to-kneel motion over and over
-# instead of holding the kneel, confirmed live for the Barbarian. A
-# non-looping clip already freezes naturally on its own last frame once
-# finished (the same mechanism "death" already relies on), which is the
-# actually-correct behavior for a transition-into-a-pose clip.
-var _loop_dying := true
-var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
-var _walk_animation_key := ""
-var _death_animation_key := ""
-var _dying_animation_key := ""
-var _hit_animation_keys: Array[String] = []
 
 func _ready() -> void:
 	_body.add_to_group("tokens")
@@ -424,13 +110,6 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 	var new_type: String = str(data.get("type", token_type))
 	hp = int(data.get("hp", hp))
 	max_hp = int(max(data.get("maxHp", max(hp, 1)), 1))
-	var is_dead := bool(data.get("dead", false))
-	# Present (a {successes, failures, stable} dict) means actively making
-	# death saves OR stabilized-but-still-down -- both look the same
-	# (kneeling), matching RAW: a stable creature is still unconscious, just
-	# no longer rolling. Absent means either never went down, or came back up
-	# (healed) -- not distinguished here, both just mean "not dying".
-	var is_dying: bool = data.get("dying") != null
 
 	if player_facing:
 		_label.text = ""
@@ -446,42 +125,7 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 		token_type = new_type
 		_rebuild_model()
 	_update_fallback_color() # a real model's own texture is left alone; only the fallback capsule reacts to HP
-
-	# Death/dying/hit-reaction animation -- only after the first real data (so
-	# a freshly-spawned token at full HP doesn't play a "hit" reaction against
-	# the -1 sentinel), and only via the real `dead`/`dying` flags (NOT a bare
-	# hp<=0 check -- a token can sit at 0 HP mid-death-saves without being
-	# `dead` yet, and RAW says nothing about kneeling just for losing HP while
-	# still conscious). Priority order matters: dead beats everything (frozen,
-	# permanent for this encounter -- UNLESS healed, see below), dying beats
-	# hit-reaction (a creature already down doesn't play a standing
-	# hit-flinch), and the transitions into/out of dying/dead are
-	# edge-triggered off _was_dying/_was_dead so the loop isn't re-started
-	# every single poll while nothing has changed.
-	#
-	# `applyHealing` (engine-server/engine/encounter.js) treats healing a dead
-	# token above 0 HP as a deliberate revival (Revivify, Raise Dead, a DM
-	# ruling -- there's no separate "revive" action, the same generic Heal
-	# button does it) and clears `dead` server-side when that happens -- so a
-	# dead token CAN come back to `is_dead == false` directly, without ever
-	# passing back through `dying`. Only handling the was_dying->idle
-	# transition below and not this one left a revived token permanently
-	# frozen on Death01's last frame even though the server had already
-	# correctly revived it -- a real animation bug, not a rules question.
-	if _initialized and _anim_source_player:
-		if is_dead and not _was_dead:
-			_play_source_animation(_death_animation_key)
-		elif is_dead:
-			pass # stay frozen on Death01's last frame
-		elif is_dying and not _was_dying:
-			_play_source_animation(_dying_animation_key)
-		elif not is_dying and (_was_dying or _was_dead):
-			_play_source_animation(_idle_animation_key) # healed/revived/stood back up
-		elif not is_dying and _last_hp >= 0 and hp < _last_hp and not _hit_animation_keys.is_empty():
-			_play_source_animation(_hit_animation_keys.pick_random())
 	_last_hp = hp
-	_was_dead = is_dead
-	_was_dying = is_dying
 
 	# Grid cell -> world space directly, no extra vertical offset -- Body's own
 	# children (the collision capsule, the fallback mesh) each carry whatever
@@ -505,17 +149,6 @@ func _rebuild_model() -> void:
 	for child in _model_root.get_children():
 		child.queue_free()
 	_fallback_mesh = null
-	_character_skeleton = null
-	_anim_source_skeleton = null
-	_anim_source_player = null
-	_bone_map.clear()
-	_animate_root = false
-	_loop_dying = true
-	_idle_animation_key = ""
-	_walk_animation_key = ""
-	_death_animation_key = ""
-	_dying_animation_key = ""
-	_hit_animation_keys = []
 
 	# A token's real per-name entry (e.g. "monster:skeleton", "hero:barbarian")
 	# wins over its type's generic fallback if one exists -- see MODEL_CONFIG's
@@ -538,7 +171,6 @@ func _rebuild_model() -> void:
 		var instance := scene.instantiate() as Node3D
 		_model_root.add_child(instance)
 		_ground_model(instance)
-		_setup_animation(instance, config)
 		_label.position.y = label_height
 	else:
 		_add_fallback_capsule()
@@ -571,267 +203,6 @@ func _stat_block_key(name: String) -> String:
 	var base_name := result.get_string(1) if result else name
 	return base_name.strip_edges().to_lower()
 
-## Drives `instance`'s skeleton from a SEPARATE, hidden instance of the
-## family's own shared animation-source model (config["animation_source"]),
-## copying bone poses across every frame by matching bone NAMES between the
-## two skeletons -- deliberately not attempting to graft the source's
-## Animation resources directly onto this model's own (nonexistent)
-## AnimationPlayer via NodePath surgery, which would depend on Godot's glTF
-## importer producing byte-for-byte identical scene structure across every
-## different file, an assumption this project has already been burned by
-## more than once this phase (see _ground_model's and GridManager.gd's own
-## comments on trusting file structure over measuring the real thing).
-## Copying bone-by-bone through each Skeleton3D's own pose API works
-## regardless of how either scene happens to be structured around its
-## skeleton.
-func _setup_animation(instance: Node3D, config: Dictionary) -> void:
-	var skeletons := instance.find_children("*", "Skeleton3D", true, false)
-	if skeletons.is_empty():
-		return
-	_character_skeleton = skeletons[0] as Skeleton3D
-
-	var animation_source_path: String = config.get("animation_source", "")
-	if animation_source_path == "" or not ResourceLoader.exists(animation_source_path):
-		return
-	var source_scene := load(animation_source_path) as PackedScene
-	var source_instance := source_scene.instantiate() as Node3D
-	source_instance.visible = false # only its skeleton/player matter -- never rendered itself
-	_model_root.add_child(source_instance)
-
-	var source_skeletons := source_instance.find_children("*", "Skeleton3D", true, false)
-	var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
-	if source_skeletons.is_empty() or source_players.is_empty():
-		return
-	_anim_source_skeleton = source_skeletons[0] as Skeleton3D
-	_anim_source_player = source_players[0] as AnimationPlayer
-	_animate_root = bool(config.get("animate_root", false))
-	_loop_dying = bool(config.get("loop_dying", true))
-
-	# bone_name_map (see MODEL_CONFIG's own doc comment) translates the
-	# character's bone name before searching the animation source, for a pair
-	# whose skeletons don't share bone names at all (Meshy's rig vs. a free
-	# pack's own animation library). Every existing family below has no
-	# bone_name_map entry, so .get() falls through to bone_name unchanged --
-	# this is a pure addition, exact-match behavior is byte-for-byte the same
-	# as before for every family that doesn't opt in.
-	var bone_name_map: Dictionary = config.get("bone_name_map", {})
-	for char_idx in range(_character_skeleton.get_bone_count()):
-		var bone_name := _character_skeleton.get_bone_name(char_idx)
-		var source_bone_name: String = bone_name_map.get(bone_name, bone_name)
-		var source_idx := _anim_source_skeleton.find_bone(source_bone_name)
-		if source_idx != -1:
-			_bone_map[char_idx] = source_idx
-
-	# Resolved once here rather than assumed from config's bare clip name
-	# directly -- a glTF import can namespace its animations under a named
-	# AnimationLibrary (yielding a key like "somelib/Idle") rather than the
-	# default unnamed one, and has_animation()/play() need the exact key
-	# either way. Each of these may instead be a {clip, source} Dictionary
-	# naming a DIFFERENT file entirely -- see _resolve_or_import() and
-	# MODEL_CONFIG's own doc comment for why the Orc family needs that for
-	# every field.
-	_idle_animation_key = _resolve_or_import(config.get("idle", ""))
-	_walk_animation_key = _resolve_or_import(config.get("walk", ""))
-	_death_animation_key = _resolve_or_import(config.get("death", ""))
-	_dying_animation_key = _resolve_or_import(config.get("dying", ""))
-
-	_hit_animation_keys = []
-	for hit_entry in config.get("hits", []):
-		var resolved: String = _resolve_or_import(hit_entry)
-		if resolved != "":
-			_hit_animation_keys.append(resolved)
-
-	# "_Loop"-suffixed clips in some packs aren't necessarily flagged to loop
-	# by default on import -- force it so Idle/Walk actually repeat instead of
-	# freezing on their last frame. Death/hit clips are deliberately NOT
-	# forced to loop -- a death pose should freeze on its last frame, and a
-	# hit reaction should play once and hand back to idle (see
-	# _on_source_animation_finished). Dying is forced to loop too, UNLESS
-	# _loop_dying opts out (see its own doc comment) -- true for every
-	# existing family (KayKit Skeleton's own held "inactive on the floor"
-	# pose genuinely wants to loop), false for the Barbarian, whose "dying"
-	# clip is a stand-to-kneel TRANSITION that looked like it kept getting
-	# back up and re-kneeling when forced to loop, confirmed live.
-	var loop_keys := [_idle_animation_key, _walk_animation_key]
-	if _loop_dying:
-		loop_keys.append(_dying_animation_key)
-	for key in loop_keys:
-		if key != "":
-			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
-
-	if not _anim_source_player.animation_finished.is_connected(_on_source_animation_finished):
-		_anim_source_player.animation_finished.connect(_on_source_animation_finished)
-
-	print("Token %s: animation bone map covers %d/%d bones (%s); idle=%s walk=%s dying=%s%s" % [
-		token_name, _bone_map.size(), _character_skeleton.get_bone_count(),
-		"looks complete" if _bone_map.size() == _character_skeleton.get_bone_count() else "some bones unmatched -- check names",
-		_idle_animation_key if _idle_animation_key != "" else "NOT FOUND",
-		_walk_animation_key if _walk_animation_key != "" else "NOT FOUND",
-		_dying_animation_key if _dying_animation_key != "" else "NOT FOUND",
-		"; available: %s" % [_anim_source_player.get_animation_list()] if _idle_animation_key == "" or _walk_animation_key == "" or _dying_animation_key == "" else ""
-	])
-
-	_play_source_animation(_idle_animation_key)
-
-## Resolves one config animation VALUE (idle/walk/death/dying, or one hits
-## entry) against `_anim_source_player` -- either a plain clip name (String,
-## resolved directly, the common case every Quaternius/KayKit field uses) or
-## a `{"clip": <name>, "source": <path>}` Dictionary meaning that clip
-## actually lives in a different file and needs importing first (see
-## MODEL_CONFIG's own doc comment for why the Orc family needs this for
-## every field). An optional `"as"` field renames the clip on import -- see
-## _import_animation_clip()'s own doc comment for why the Mixamo family
-## below needs this where the Orc never did. Returns "" if the clip can't be
-## found/imported at all -- every caller already treats an empty key as
-## "this family has no animation for this state," the same graceful-
-## degradation convention _play_source_animation()'s own no-op-on-empty-key
-## already relies on.
-func _resolve_or_import(value) -> String:
-	if value is String:
-		return _resolve_animation_name(_anim_source_player, value)
-	if value is Dictionary:
-		var clip_name: String = value.get("clip", "")
-		var source_path: String = value.get("source", "")
-		if clip_name == "" or source_path == "" or not ResourceLoader.exists(source_path):
-			return ""
-		var target_key: String = value.get("as", clip_name)
-		var source_scene := load(source_path) as PackedScene
-		var source_instance := source_scene.instantiate() as Node3D
-		var source_players := source_instance.find_children("*", "AnimationPlayer", true, false)
-		var imported := ""
-		if not source_players.is_empty():
-			imported = _import_animation_clip(_anim_source_player, source_players[0] as AnimationPlayer, clip_name, target_key)
-		source_instance.queue_free() # never added to the tree -- just a temporary clip source
-		return imported
-	return ""
-
-## Copies one named clip's Animation resource from `source_player` (a
-## temporary, never-added-to-the-tree instance -- see its caller above) into
-## `target_player`'s own default animation library under `target_key`, so a
-## single AnimationPlayer can play a clip that actually lives in a
-## completely different imported file. Returns `target_key` (now playable
-## directly on `target_player`) once imported, or "" if `clip_name` isn't
-## found in `source_player` at all. Reuses (mutates in place), not replaces,
-## `target_player`'s existing default library if it already has one -- a
-## fresh glTF/FBX-imported AnimationPlayer already owns its own default
-## library full of its native clips, and replacing it outright would lose
-## all of them.
-##
-## `clip_name` (what to look up in the SOURCE) and `target_key` (what to
-## store it as) are deliberately separate parameters, not one shared value
-## the way this function originally worked -- the Orc's own Meshy-generated
-## clips never needed the distinction (each file's one clip already had a
-## unique name, "Armature|Idle|baselayer" vs "Armature|Slow_Orc_Walk_inplace|
-## baselayer" etc.), but Mixamo's own FBX exports are well known to name
-## EVERY downloaded clip's internal AnimStack the same generic "mixamo.com"
-## regardless of which specific animation was actually downloaded (confirmed
-## directly against all 5 real files this project downloaded, not assumed
-## from Mixamo's general reputation for this) -- importing several of them
-## into one shared library under that same literal name would silently
-## overwrite each other, only the last-processed one surviving.
-func _import_animation_clip(target_player: AnimationPlayer, source_player: AnimationPlayer, clip_name: String, target_key: String) -> String:
-	var resolved_source_key := _resolve_animation_name(source_player, clip_name)
-	if resolved_source_key == "":
-		return ""
-	var animation: Animation = source_player.get_animation(resolved_source_key)
-	var library: AnimationLibrary
-	if target_player.has_animation_library(""):
-		library = target_player.get_animation_library("")
-	else:
-		library = AnimationLibrary.new()
-		target_player.add_animation_library("", library)
-	if library.has_animation(target_key):
-		library.remove_animation(target_key)
-	library.add_animation(target_key, animation)
-	return target_key
-
-## A one-shot reaction clip (hit or death) finishing playback hands control
-## back to idle -- EXCEPT death, which should stay frozen on its final pose,
-## not snap back to standing, and EXCEPT dying, which is forced to loop (see
-## _setup_animation) so this only fires for it once per lap the same way it
-## does for idle/walk -- re-playing the same key it's already on is already a
-## no-op in _play_source_animation(), so excluding it here isn't strictly
-## required for correctness, but keeps this function's intent (idle is the
-## only "resting" state it hands control to) honest.
-func _on_source_animation_finished(anim_name: String) -> void:
-	if anim_name == _death_animation_key:
-		return
-	if anim_name != _idle_animation_key and anim_name != _walk_animation_key and anim_name != _dying_animation_key:
-		_play_source_animation(_idle_animation_key)
-
-## `anim_name` is the bare clip name (e.g. "Idle_Loop"); returns the exact key
-## `AnimationPlayer.play()`/`has_animation()` need, which may be namespaced
-## under a library ("somelib/Idle_Loop") -- or "" if no match exists at all.
-func _resolve_animation_name(player: AnimationPlayer, anim_name: String) -> String:
-	for candidate in player.get_animation_list():
-		if candidate == anim_name or candidate.ends_with("/" + anim_name):
-			return candidate
-	return ""
-
-func _play_source_animation(anim_key: String) -> void:
-	if anim_key != "" and _anim_source_player and _anim_source_player.current_animation != anim_key:
-		_anim_source_player.play(anim_key)
-
-## History worth keeping, not just current behavior -- this function went
-## through 5 live-tested iterations bridging Meshy's rig onto Quaternius's
-## UAL1 (genuinely different rigs) before that approach was abandoned
-## entirely in favor of real Mixamo animations for the Barbarian (see
-## MODEL_CONFIG's own "hero:barbarian" doc comment): (1) copying every
-## bone's raw POSITION crumpled the body -- fixed by restricting position to
-## the root only; (2) copying the root's raw ROTATION too tipped the whole
-## body over -- _ground_model()'s own doc comment explains why (a baked
-## per-model root rotation convention); (3) even root-only POSITION sank the
-## body into the floor (the two rigs' roots sit at different heights within
-## their own skeletons); (4) freezing the root entirely (neither position
-## nor rotation) fixed standing/grounding; (5) raw absolute ROTATION for
-## every OTHER bone still produced visible twisting at every joint (worst at
-## chain ends -- toes, the face) -- fixed with a rest-pose-RELATIVE delta
-## (extract how far the source bone rotated away from ITS OWN rest pose,
-## apply that same delta onto the target's OWN rest pose) instead of a raw
-## copy, which is what's still used below for every bone.
-##
-## The root bone specifically stays frozen (_animate_root false, the default
-## for every family) UNLESS a family's own MODEL_CONFIG entry opts in --
-## freezing it was the right call bridging two genuinely different rigs
-## (Meshy vs. Quaternius), but once source and target are the SAME real
-## rig family (the Barbarian's own Mixamo-to-Mixamo animations), keeping it
-## frozen caused a NEW, different problem: an Idle clip whose natural
-## weight-shift choreographs the hip and spine rotating together showed up
-## as a visibly twisted waist, because the spine's full rotation delta was
-## still being applied against a hip that wasn't moving with it. Re-enabling
-## root motion (via the exact same rest-relative delta technique, for both
-## rotation and position) fixed it -- confirmed live. Opt-in per family
-## rather than a global change specifically so hero/monster/skeleton/orc
-## (all proven fine with a frozen root all session) are completely
-## unaffected.
-func _process(_delta: float) -> void:
-	if not (_character_skeleton and _anim_source_skeleton):
-		return
-	for char_idx in _bone_map:
-		var source_idx: int = _bone_map[char_idx]
-		var is_root := _character_skeleton.get_bone_parent(char_idx) == -1
-		if is_root and not _animate_root:
-			continue
-
-		var source_rest: Transform3D = _anim_source_skeleton.get_bone_rest(source_idx)
-		var target_rest: Transform3D = _character_skeleton.get_bone_rest(char_idx)
-
-		var source_rest_rotation: Quaternion = source_rest.basis.get_rotation_quaternion()
-		var source_pose_rotation: Quaternion = _anim_source_skeleton.get_bone_pose_rotation(source_idx)
-		var rotation_delta: Quaternion = source_rest_rotation.inverse() * source_pose_rotation
-		var target_rest_rotation: Quaternion = target_rest.basis.get_rotation_quaternion()
-		_character_skeleton.set_bone_pose_rotation(char_idx, target_rest_rotation * rotation_delta)
-
-		if is_root:
-			# Position is ONLY ever touched for the root -- every other bone's
-			# local position is its own fixed rest-pose bone length/offset from
-			# its parent (copying it for every bone is what crumpled the body in
-			# iteration 1 above). Rest-pose-relative here too, for the same
-			# reason rotation is -- the source's own root height doesn't
-			# necessarily match the target's.
-			var position_delta: Vector3 = _anim_source_skeleton.get_bone_pose_position(source_idx) - source_rest.origin
-			_character_skeleton.set_bone_pose_position(char_idx, target_rest.origin + position_delta)
-
 ## Shifts `instance` up/down so the lowest point of its actual rendered
 ## geometry sits exactly at this token's own ground level (y=0 in ModelRoot's
 ## local space, which has no offset of its own -- see the class comment).
@@ -839,7 +210,7 @@ func _process(_delta: float) -> void:
 ## Deliberately NOT relying on the model file's own raw mesh vertex bounds --
 ## a first attempt at this trusted glTF accessor min/max values read directly
 ## from the file (feet at ~y=0 in mesh-local space) and still rendered
-## floating in Godot. The actual cause: both character rigs used here have a
+## floating in Godot. The actual cause: character rigs seen here can have a
 ## skeleton root bone with a baked-in -90 degree rotation (a Z-up/Y-up
 ## conversion artifact from whatever tool exported them), which changes a
 ## skinned mesh's final bind-pose position in a way raw accessor data alone
@@ -908,24 +279,9 @@ func set_selected(is_selected: bool) -> void:
 func _animate_to(target: Vector3) -> void:
 	if _move_tween:
 		_move_tween.kill()
-	_play_source_animation(_walk_animation_key)
 	_face_direction(target - position)
 	_move_tween = create_tween()
 	_move_tween.tween_property(self, "position", target, 0.35).set_trans(Tween.TRANS_SINE)
-	_move_tween.finished.connect(_resume_idle_or_dying)
-
-## A moved token's walk cycle (started in _animate_to) hands back to idle when
-## the move finishes -- except a token that's down making death saves (or
-## stabilized) should settle back into its kneeling pose instead of popping
-## back onto its feet. An edge case in practice (a dying creature isn't
-## usually the one being repositioned), but a DM could still drag one, and
-## standing it up mid-tween-finish would look wrong for however long it stays
-## dying.
-func _resume_idle_or_dying() -> void:
-	if _was_dying:
-		_play_source_animation(_dying_animation_key)
-	else:
-		_play_source_animation(_idle_animation_key)
 
 ## Turns the whole token (an instant snap-turn, then the position tween moves
 ## it -- not a smooth turn-while-walking, a deliberately simpler first cut) to

@@ -1,5 +1,24 @@
 # Assets
 
+**PROJECT DECISION (2026-09-17, see `ROADMAP.md`'s own entry and the PROJECT
+DECISION comment atop `godot/scripts/Token.gd`): every token is now a
+static model -- no skeletal animation.** The `MODEL_CONFIG` entries that
+referenced the animated hero/monster/skeleton/orc/barbarian pipelines
+described throughout this file (bone-name maps, `animation_source`,
+per-clip cross-file imports) were removed from `Token.gd` entirely, and
+that code was preserved in `_archive/animation-system-2026-09-17/` (one
+directory above `godot/`) rather than deleted -- see that folder's own
+`README.md`. This file's own content below is left as-is: a real record of
+what was sourced, how it was licensed, and how each pipeline was built,
+useful again if/when a future version restores animation. The asset FILES
+themselves (barbarian*.fbx, orc_warrior.glb, skeleton_warrior.glb, etc.)
+were not touched by that refactor either -- none of them are committed to
+git regardless (see Licensing below), so "removing" them from the project
+meant only removing the code that loaded them, not deleting anything from
+disk. Any NEW creature/hero model going forward is sourced as a plain
+static model (a model with its own integrated display base is fine) --
+see "Adding more monsters/heroes later" at the bottom of this file.
+
 ## What's here
 
 - **`Environment/dungeon-kit/`** -- Kenney's "Mini Dungeon" kit. **CC0** (public
@@ -419,8 +438,22 @@ cp "$ANIM_SRC/Rig_Medium_General.glb" godot/assets/creatures/animations/kaykit_r
 
 ## Adding more monsters/heroes later
 
-`Token.gd`'s `MODEL_CONFIG` constant maps a token **type** (`"hero"` /
-`"monster"`) to one model -- every monster currently renders as the Imp
-regardless of which SRD stat block it actually is (goblin, troll, whatever).
-A real per-name mapping (goblin -> some goblin-ish model, etc.) is a natural
-follow-up once more monster models are actually on hand -- see ROADMAP.md.
+`Token.gd`'s `MODEL_CONFIG` constant is currently **empty** -- every token
+renders as the plain placeholder capsule until a static replacement model
+is sourced for it (see the PROJECT DECISION note at the top of this file).
+It maps a token **type** (`"hero"` / `"monster"`, the fallback used when no
+more specific entry matches) or a per-name key (`"monster:<stat-block
+name>"`, lowercased, e.g. `"monster:skeleton"`) to one model -- see
+`_stat_block_key()`/`_rebuild_model()` in `Token.gd` for the lookup order,
+unchanged by the animation removal.
+
+A new entry needs only `path` (and optionally `label_height`) -- no
+`animation_source`, `bone_name_map`, or any of the other animation-only
+fields documented earlier in this file; `_setup_animation()` and the whole
+retargeting system those fields drove have been archived, not just left
+unused (see the PROJECT DECISION note above). Free-first sourcing (Sketchfab,
+3D-print-mini repositories, KayKit/Quaternius's own static poses, Lentera's
+Patreon), Meshy retexture as a fallback only when nothing free fits -- see
+`ROADMAP.md` for the concrete near-term target (the Lost Mine of Phandelver
+module's own 27-creature list) and the free-source research behind this
+approach.

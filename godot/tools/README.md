@@ -29,59 +29,21 @@ checking without a live `node server.js` or opening the editor GUI.
   just fail to connect, which is fine). A cheap regression check after
   editing any of the scripts either scene uses, before ever opening the
   real editor.
-- **`inspect_kaykit_skeleton.gd`** (Phase 8) -- lists every real animation
-  clip name in a set of KayKit animation files and checks their skeleton's
-  bone names against a target model's, the same "verify a rig actually
-  matches, don't assume from a shared folder name" check that already
-  covered Quaternius's UAL1. A template for verifying the NEXT new
-  monster/hero model family before wiring it into `Token.gd`'s
-  `MODEL_CONFIG` -- edit `SKELETON_MODEL`/`ANIM_FILES` for whatever's being
-  checked next.
-- **`test_skeleton_token.gd`/`.tscn`**, **`test_imp_token.gd`/`.tscn`**, and
-  **`test_orc_token.gd`/`.tscn`** -- actual `Node`-scene functional checks
-  (NOT bare `--script` SceneTree tools -- those run before
-  `@onready`/`_ready()` ever fire on manually-instanced children, which
-  silently breaks a real `Token.apply_data()` call; see the gotcha these
-  were written to work around, below) that build a real `Token` for a
-  specific server-shaped name ("Skeleton 1", "Goblin 1", "Orc 1") and print
-  whether `MODEL_CONFIG`'s lookup/bone-map/animation resolution actually
-  succeeded. Run via
-  `<Godot>.exe --headless --path godot res://tools/test_skeleton_token.tscn`
-  (a real scene path, not `--script`). A template for confirming the NEXT
-  new per-monster-name `MODEL_CONFIG` entry actually resolves before ever
-  looking at it live in the editor.
-- **`inspect_meshy_orc.gd`** (Phase 8) -- same bone/clip check as
-  `inspect_kaykit_skeleton.gd`, but for a set of Meshy-generated animation
-  files against a Meshy-generated character model. A template for verifying
-  the next custom-generated model before wiring it in -- edit
-  `CHARACTER_MODEL`/`ANIM_FILES`. Confirmed a real, non-obvious thing worth
-  checking rather than assuming: Meshy's own animation-clip names come back
-  pipe-delimited (`"Armature|Idle|baselayer"`), not the plain bare names
-  every other pack here uses -- `_resolve_animation_name()`'s exact-match
-  branch already handles this correctly once the FULL literal string is
-  used as the config value, no code change needed, just don't assume a
-  short bare name will match.
-
-- **`inspect_bone_name_map.gd`** -- verifies a `MODEL_CONFIG` `bone_name_map`
-  (Token.gd) actually resolves against a real character model + animation-
-  source pair, checking Token's own map constants directly (not a copy) so
-  it can't silently drift from what Token.gd ships. Built after confirming a
-  Meshy-rigged model and Quaternius's UAL1 animation library share ZERO bone
-  names at all (Meshy: Mixamo-style `LeftUpLeg`; Quaternius: `thigh_l`) --
-  `_setup_animation()`'s bone-matching loop needs an exact name match
-  otherwise, so pairing a Meshy rig with a free pack's animations needed a
-  translation table, not just wiring the two files together.
-  **Two different Meshy rig conventions confirmed already, not one**: the
-  Composio-connected rigging API (`orc_warrior.glb`) produces Mixamo-STYLE
-  names with no `mixamorig:` prefix (`MESHY_API_RIG_TO_QUATERNIUS_UAL1_BONE_MAP`);
-  Meshy's website Rigging tool with "Skeleton template: Mixamo" selected --
-  a choice the API doesn't expose -- produces genuine `mixamorig:`-prefixed
-  names matching real Adobe Mixamo output
-  (`MESHY_MIXAMO_TEMPLATE_TO_QUATERNIUS_UAL1_BONE_MAP`). A template for
-  checking the NEXT Meshy-rigged model before reusing either -- edit
-  `CHARACTER_MODEL`/`ANIMATION_SOURCE`/`BONE_NAME_MAP` -- since a model
-  rigged a third way (a different template choice, a quadruped) isn't
-  guaranteed to match either existing map.
+- **Animation-era tools archived, not deleted** (2026-09-17 project
+  decision -- see `ROADMAP.md`'s own entry and the PROJECT DECISION comment
+  atop `Token.gd`: every token is now a static model, no skeletal
+  animation). `inspect_kaykit_skeleton.gd`, `inspect_meshy_orc.gd`,
+  `inspect_bone_name_map.gd`, and the `test_skeleton_token.gd`/`.tscn`,
+  `test_imp_token.gd`/`.tscn`, `test_orc_token.gd`/`.tscn` functional checks
+  all verified pieces of the bone-retargeting/animation-resolution system
+  `Token.gd` no longer has -- each now references `Token` fields (e.g.
+  `_death_animation_key`, `_bone_map`) that don't exist on the live,
+  simplified script, so running any of them as-is would error. Moved to
+  `_archive/animation-system-2026-09-17/tools/` (one directory above
+  `godot/`, outside Godot's own project scan, each renamed with a trailing
+  `.txt`) alongside the full pre-refactor `Token.gd` they were built to
+  verify -- see that archive folder's own `README.md` for what each did and
+  how to restore them if animation comes back in a future version.
 
 - **`inspect_higgsfield_test.gd`** / **`fix_higgsfield_vertex_colors.gd`**
   (Phase 8) -- a matched pair for Higgsfield's "3D Jutsu" catalog imports.

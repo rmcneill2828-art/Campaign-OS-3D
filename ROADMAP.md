@@ -1909,3 +1909,65 @@ creatures is actually achievable."
 seeded Goblins, the Skeleton, the Orc, and the Barbarian all keep
 animating exactly as they already do; this policy governs new work
 going forward, it doesn't retroactively strip anything already built.
+
+## Existing animated tokens removed, animation system archived -- 2026-09-17
+
+The "existing animated tokens are unaffected" call above didn't survive
+contact with actually living with a mixed static/animated roster: having
+some tokens animate and others not made the two feel like different
+tiers of an unfinished feature rather than one coherent static-model
+game, and every one of the 5 animated families (hero, monster,
+monster:skeleton, monster:orc, hero:barbarian) still carries the same
+long-term risk that made animation get deferred in the first place --
+none of it is truly "done," just not yet broken by the next Godot
+import quirk or asset-file loss. The sponsor made a second, narrower
+call: rather than keep 5 animated exceptions alongside an otherwise
+static-only project, remove them entirely -- every token, including
+these 5, now falls back to the plain placeholder capsule until a static
+replacement model is sourced for each one.
+
+**Removed, not deleted.** The full working animation system --
+rest-pose-relative bone retargeting (`_process()`), both Meshy bone-name
+maps (API-rig and website-Mixamo-template conventions), per-clip
+cross-file animation import, the death/dying/hit-reaction state machine,
+and all 5 `MODEL_CONFIG` entries with their own detailed doc comments
+recounting exactly how each was built -- is preserved at
+`_archive/animation-system-2026-09-17/` (one directory above `godot/`,
+so Godot's own project scanner never sees it -- a second `class_name
+Token` inside the scanned project would conflict with the live one).
+That folder's own `README.md` has the full restore procedure. The three
+animation-diagnostic tools built to verify these pipelines
+(`inspect_bone_name_map.gd`, `inspect_kaykit_skeleton.gd`,
+`inspect_meshy_orc.gd`) and the three functional smoke tests that drove
+a real `Token.apply_data()` against them (`test_skeleton_token.gd`,
+`test_imp_token.gd`, `test_orc_token.gd`, each with its own `.tscn`)
+moved into the archive alongside it -- each referenced `Token` fields
+(`_death_animation_key`, `_bone_map`, etc.) that no longer exist on the
+live, simplified script.
+
+**`Token.gd` itself is substantially simplified**, not just missing
+config entries: `MODEL_CONFIG` is now empty, every animation-only
+instance variable and the two bone-name-map constants are gone, the
+death/dying/hit-reaction block in `apply_data()` is gone (along with the
+`is_dead`/`is_dying`/`_was_dead`/`_was_dying` tracking that only existed
+to drive it), and `_setup_animation()`/`_resolve_or_import()`/
+`_import_animation_clip()`/`_on_source_animation_finished()`/
+`_resolve_animation_name()`/`_play_source_animation()`/`_process()`/
+`_resume_idle_or_dying()` are all gone. Everything static-model-relevant
+is unchanged: `_ground_model()`'s AABB-measurement grounding,
+`_add_fallback_capsule()`/`_update_fallback_color()`, `_update_hp_bar()`,
+`_stat_block_key()`'s per-name lookup (still live -- a future static
+per-name entry uses the exact same two-tier `MODEL_CONFIG` lookup the
+animated entries used), and `_face_direction()`'s cosmetic snap-turn.
+`_animate_to()` keeps its position tween and facing turn, minus the now
+-gone walk-animation trigger.
+
+The asset FILES themselves (`barbarian*.fbx`, `orc_warrior.glb`,
+`skeleton_warrior.glb`, `imp.glb`, `mannequin_animations.glb`,
+`kaykit_rig_medium_*.glb`, `meshy_orc_*.glb`, `superhero_male.gltf`)
+were left exactly where they were on disk -- none of them were ever
+committed to git (see `godot/assets/README.md`'s own Licensing section),
+so this was a pure code-level change; nothing to restore from git if a
+future version needs them back, only from wherever they were originally
+sourced (or from the archive folder's own restore notes, which name each
+one).
