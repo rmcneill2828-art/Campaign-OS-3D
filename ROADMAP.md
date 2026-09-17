@@ -1842,5 +1842,27 @@ that's actually good at retargeting (Mixamo itself) rather than trying
 to reconcile a rig from one pipeline with animations from another inside
 this project's own runtime code, however carefully that code is written.
 
-**Not yet verified live** -- files are copied and `MODEL_CONFIG` is
-rewired, but this hasn't been seen running in Godot yet.
+**Update, 2026-09-17: verified live -- essentially a full success.**
+User confirmed directly in Godot: bone matching (41/41, a genuinely
+complete match, not partial like every earlier attempt), walking,
+and taking hits all correct with zero further fixes needed. The whole
+"reconcile two different rigs" class of problem that ate seven
+iterations earlier in this file is gone entirely, exactly as expected
+once both the character and its animations came from the same system.
+
+One real, separate issue found: at 0 HP, the Barbarian kept cycling
+kneel-then-stand-then-kneel instead of holding the kneeling pose.
+Cause: "dying" is force-looped by `_setup_animation()` for every family
+(existing code, written around KayKit Skeleton's own
+"Skeletons_Inactive_Floor_Pose," a genuine held pose meant to loop) --
+but Mixamo's "Kneeling Down" turned out to be a stand-to-kneel
+TRANSITION, not a held pose, so looping it replayed the whole
+transition every cycle. Fixed with a new opt-out, `_loop_dying`
+(defaults true, matching every existing family's unchanged behavior;
+only `"hero:barbarian"` sets `"loop_dying": false`) -- a non-looping
+clip already freezes naturally on its own last frame once finished (the
+same mechanism "death" already relies on), which is the actually-
+correct behavior for a transition-into-a-pose clip. **Not yet
+re-verified live** -- reasoned and applied narrowly (opt-in per family,
+so KayKit Skeleton's own working dying pose can't regress), but this
+specific fix hasn't been seen running yet.

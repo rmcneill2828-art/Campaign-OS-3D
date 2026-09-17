@@ -212,11 +212,21 @@ const MODEL_CONFIG := {
 	## `death` uses the downloaded "Dying" clip (Mixamo's own name for a
 	## collapse-and-stay-down animation, matching this project's OWN
 	## "permanently dead, frozen on last frame" concept) and `dying` uses
-	## "Kneeling Down" (a held pose, matching this project's OWN "actively
-	## rolling death saves, looped" concept) -- deliberately NOT named to
-	## match each other, since Mixamo's clip-naming vocabulary and this
-	## project's state-naming vocabulary aren't the same thing and shouldn't
-	## be assumed to line up.
+	## "Kneeling Down" -- deliberately NOT named to match each other, since
+	## Mixamo's clip-naming vocabulary and this project's state-naming
+	## vocabulary aren't the same thing and shouldn't be assumed to line up.
+	##
+	## `loop_dying: false` -- confirmed live this needed correcting: "Kneeling
+	## Down" turned out to be a stand-to-kneel TRANSITION, not a held pose
+	## the way KayKit Skeleton's own "Skeletons_Inactive_Floor_Pose" is
+	## (every OTHER family still defaults to looping dying, unaffected). Left
+	## looping (the project-wide default), it replayed the whole transition
+	## on every loop -- visibly standing back up then kneeling again, over
+	## and over. A non-looping clip freezes naturally on its own last frame
+	## once finished (see _loop_dying's own doc comment and
+	## _on_source_animation_finished(), both already built for exactly this
+	## case via "death"), which is the actually-correct behavior for a
+	## transition-into-a-pose clip like this one.
 	## label_height reuses "hero"'s own 2.0 as a starting default (this
 	## specific model's real proportions haven't been measured live) --
 	## revisit once actually seen in Godot, same as every other
@@ -225,6 +235,7 @@ const MODEL_CONFIG := {
 		"path": "res://assets/creatures/hero/barbarian.fbx", "label_height": 2.0,
 		"animation_source": "res://assets/creatures/hero/barbarian.fbx",
 		"animate_root": true,
+		"loop_dying": false,
 		"idle": "mixamo_com",
 		"walk": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_walk.fbx", "as": "Barbarian_Walk"},
 		"death": {"clip": "mixamo_com", "source": "res://assets/creatures/animations/barbarian_death.fbx", "as": "Barbarian_Death"},
@@ -356,6 +367,17 @@ var _bone_map := {} # character bone index -> animation-source bone index
 # default, so every already-working family (hero/monster/skeleton/orc, all
 # proven fine with a frozen root all session) is completely unaffected.
 var _animate_root := false
+# Defaults true (every family's existing behavior, unchanged) -- forces the
+# dying clip to loop, matching KayKit Skeleton's own "Skeletons_Inactive_
+# Floor_Pose," a real held pose authored to be looped indefinitely. Only set
+# false by a family whose dying clip is actually a TRANSITION (e.g. Mixamo's
+# "Kneeling Down," standing-to-kneeling) rather than a held pose -- looping a
+# transition clip replays the whole stand-to-kneel motion over and over
+# instead of holding the kneel, confirmed live for the Barbarian. A
+# non-looping clip already freezes naturally on its own last frame once
+# finished (the same mechanism "death" already relies on), which is the
+# actually-correct behavior for a transition-into-a-pose clip.
+var _loop_dying := true
 var _idle_animation_key := "" # resolved AnimationPlayer key, see _resolve_animation_name()
 var _walk_animation_key := ""
 var _death_animation_key := ""
@@ -468,6 +490,7 @@ func _rebuild_model() -> void:
 	_anim_source_player = null
 	_bone_map.clear()
 	_animate_root = false
+	_loop_dying = true
 	_idle_animation_key = ""
 	_walk_animation_key = ""
 	_death_animation_key = ""
@@ -562,6 +585,7 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 	_anim_source_skeleton = source_skeletons[0] as Skeleton3D
 	_anim_source_player = source_players[0] as AnimationPlayer
 	_animate_root = bool(config.get("animate_root", false))
+	_loop_dying = bool(config.get("loop_dying", true))
 
 	# bone_name_map (see MODEL_CONFIG's own doc comment) translates the
 	# character's bone name before searching the animation source, for a pair
@@ -598,12 +622,20 @@ func _setup_animation(instance: Node3D, config: Dictionary) -> void:
 			_hit_animation_keys.append(resolved)
 
 	# "_Loop"-suffixed clips in some packs aren't necessarily flagged to loop
-	# by default on import -- force it so Idle/Walk/Dying actually repeat
-	# instead of freezing on their last frame. Death/hit clips are
-	# deliberately NOT forced to loop -- a death pose should freeze on its
-	# last frame, and a hit reaction should play once and hand back to idle
-	# (see _on_source_animation_finished).
-	for key in [_idle_animation_key, _walk_animation_key, _dying_animation_key]:
+	# by default on import -- force it so Idle/Walk actually repeat instead of
+	# freezing on their last frame. Death/hit clips are deliberately NOT
+	# forced to loop -- a death pose should freeze on its last frame, and a
+	# hit reaction should play once and hand back to idle (see
+	# _on_source_animation_finished). Dying is forced to loop too, UNLESS
+	# _loop_dying opts out (see its own doc comment) -- true for every
+	# existing family (KayKit Skeleton's own held "inactive on the floor"
+	# pose genuinely wants to loop), false for the Barbarian, whose "dying"
+	# clip is a stand-to-kneel TRANSITION that looked like it kept getting
+	# back up and re-kneeling when forced to loop, confirmed live.
+	var loop_keys := [_idle_animation_key, _walk_animation_key]
+	if _loop_dying:
+		loop_keys.append(_dying_animation_key)
+	for key in loop_keys:
 		if key != "":
 			_anim_source_player.get_animation(key).loop_mode = Animation.LOOP_LINEAR
 
