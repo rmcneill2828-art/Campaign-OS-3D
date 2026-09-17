@@ -14,13 +14,33 @@ class_name Token
 ## shipped with -- rather than fail to load the scene at all. `load()` +
 ## `ResourceLoader.exists()` achieves that; `preload()` would not.
 
+## PROJECT DECISION (2026-09-17, see ROADMAP.md's own entry for the full
+## reasoning): every NEW creature/hero entry from here on is a STATIC model
+## -- no `animation_source`, no `bone_name_map`, no `animate_root`/
+## `loop_dying`, none of the rigging/retargeting machinery this file
+## documents in such detail below. Animation is deliberately deferred to a
+## future version, after a stable/playable/presentable VTT exists on static
+## models first -- a call made only after the Barbarian's own three-pipeline
+## saga showed what animating even ONE humanoid actually costs, with a real
+## campaign needing dozens of creatures and the full SRD bestiary running to
+## hundreds. This needed no code change to support -- `_setup_animation()`
+## already treats a missing `animation_source` as fully valid (exactly how
+## the original Phase 0 placeholder capsules worked before any animation
+## existed here at all), and `_ground_model()` grounds any mesh shape
+## correctly regardless, including one with its own built-in display base. A
+## new entry needs only `path` (and `label_height`). Existing animated
+## entries (hero, monster, monster:skeleton, monster:orc, hero:barbarian)
+## are unaffected -- this governs new work, not what's already built.
+##
 ## Lookup key -> a full "model family" config: which model to instance, where
 ## its name/HP label floats (label_height, meters above its own feet --
 ## whatever vertical offset the model actually needs to stand on the floor is
 ## figured out at runtime regardless, see _ground_model()), which shared
 ## animation-source file drives its skeleton (see _setup_animation()), and
 ## the bare clip names (post Godot-import, see IDLE/WALK's own comment below)
-## for idle/walk/death/dying/hit reactions within it.
+## for idle/walk/death/dying/hit reactions within it -- ALL OPTIONAL as of
+## the project decision above; omit animation_source/idle/walk/etc entirely
+## for a plain static model.
 ##
 ## Keys are either a bare token type ("hero", "monster" -- the fallback used
 ## when no more specific entry matches) or "monster:<stat-block name>"

@@ -1866,3 +1866,46 @@ correct behavior for a transition-into-a-pose clip. **Not yet
 re-verified live** -- reasoned and applied narrowly (opt-in per family,
 so KayKit Skeleton's own working dying pose can't regress), but this
 specific fix hasn't been seen running yet.
+
+## Project decision: static models only for new creatures, animation deferred to a future version -- 2026-09-17
+
+After everything above -- a full session getting one humanoid character
+animating correctly, only to learn non-humanoid creatures often have no
+clean animation path at all, against the backdrop of a real campaign
+needing 27+ distinct creatures (Lost Mine of Phandelver's own Appendix B
+count) and the full SRD bestiary running to hundreds -- the project
+sponsor made a deliberate, top-level call rather than continuing
+creature-by-creature: **every new creature/hero model going forward is a
+static 3D model, no rigging or animation pipeline at all. Animation
+(the whole Meshy/Mixamo/retargeting apparatus this file documents in
+such detail above) is explicitly deferred to a future version, once
+there's a stable, playable, presentable VTT built on static models
+first.** A model that comes with its own physical display base
+(mimicking a real tabletop miniature's base) is completely fine -- not
+a problem to work around.
+
+**This needed zero code changes** -- `_setup_animation()` already treats
+a missing/absent `animation_source` as a fully valid case (it's exactly
+how the very first Phase 0 placeholder capsules worked, before any
+animation existed in this project at all), and `_ground_model()`'s own
+AABB-measurement grounding already works on ANY mesh shape regardless of
+whether it's animated, including one with a built-in base -- it just
+measures the real lowest point and grounds there. A new `MODEL_CONFIG`
+entry going forward needs only `"path"` (and `"label_height"`) -- no
+`"animation_source"`, no `bone_name_map`, no `animate_root`/`loop_dying`,
+no live bone-name/clip-name verification loop, none of the machinery
+the Barbarian's three-pipeline saga needed. This is purely a workflow
+simplification, not an architecture change.
+
+**What this actually unlocks**: the entire "find a model, wire it in"
+cycle collapses to sourcing a static model and dropping it into
+`MODEL_CONFIG` -- no Mixamo upload, no auto-rigger troubleshooting, no
+clip-name/bone-name diagnostics, no multi-round live-testing loop. Given
+what the Barbarian alone took, this is the difference between "maybe a
+handful of creatures ever get built" and "a real campaign's worth of
+creatures is actually achievable."
+
+**Existing animated tokens are unaffected** -- Darkhawk, Wren, the
+seeded Goblins, the Skeleton, the Orc, and the Barbarian all keep
+animating exactly as they already do; this policy governs new work
+going forward, it doesn't retroactively strip anything already built.
