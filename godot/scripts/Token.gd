@@ -55,6 +55,21 @@ const FALLBACK_LABEL_HEIGHT := 1.9
 const FALLBACK_CAPSULE_RADIUS := 0.4
 const FALLBACK_CAPSULE_HEIGHT := 1.6
 
+## "Painted tabletop miniature" material finish (2026-09-18) -- applied to
+## every loaded model in _apply_miniature_finish() and to the fallback
+## capsule in _add_fallback_capsule(), so a static download's own PBR finish
+## (often glossier/flatter than a real painted mini) reads consistently
+## across every source pack (Meshy, KayKit, Quaternius, Sketchfab...)
+## without hand-tuning each asset individually -- see that function's own
+## doc comment for why this has to run per-instance in code rather than as a
+## one-off Inspector edit. ROUGHNESS gives a soft matte-plastic finish
+## instead of a glossy one; RIM/RIM_TINT catches edge lighting off the
+## scene's own angled DirectionalLight3D ("Sun" in Main.tscn), mimicking how
+## a real miniature's paint catches overhead room light.
+const MINIATURE_ROUGHNESS := 0.4
+const MINIATURE_RIM := 0.5
+const MINIATURE_RIM_TINT := 0.3
+
 @onready var _model_root: Node3D = $Body/ModelRoot
 @onready var _label: Label3D = $NameLabel
 @onready var _selection_ring: MeshInstance3D = $SelectionRing
@@ -171,6 +186,7 @@ func _rebuild_model() -> void:
 		var instance := scene.instantiate() as Node3D
 		_model_root.add_child(instance)
 		_ground_model(instance)
+		_apply_miniature_finish(instance)
 		_label.position.y = label_height
 	else:
 		_add_fallback_capsule()
@@ -229,8 +245,42 @@ func _ground_model(instance: Node3D) -> void:
 	if is_finite(lowest_y):
 		instance.position.y -= lowest_y
 
+## Gives `instance` a consistent "painted tabletop miniature" finish
+## (MINIATURE_ROUGHNESS/RIM/RIM_TINT above) regardless of which pack/
+## generator it came from -- runs on a DUPLICATE of each surface's own
+## active material (get_active_material(), which resolves whatever the
+## imported model is actually rendering with -- StandardMaterial3D or
+## ORMMaterial3D, both BaseMaterial3D, both carrying roughness/rim), never
+## the imported resource itself. Duplicating first matters for the same
+## reason _ready() builds a fresh HP-bar material per instance rather than
+## mutating a shared one: Godot's ResourceLoader caches/shares a model
+## file's materials across every instance of it, so tweaking one in place
+## would silently reskin every OTHER token using that same model too, not
+## just this one. Only the roughness/rim are touched -- albedo, its texture,
+## and every other property (normal maps, transparency, etc.) carry over
+## from the original untouched, since duplicate() copies the whole material
+## first.
+func _apply_miniature_finish(instance: Node3D) -> void:
+	for visual in instance.find_children("*", "MeshInstance3D", true, false):
+		var mesh_instance := visual as MeshInstance3D
+		if not mesh_instance.mesh:
+			continue
+		for surface_idx in range(mesh_instance.mesh.get_surface_count()):
+			var base_material := mesh_instance.get_active_material(surface_idx)
+			if not (base_material is BaseMaterial3D):
+				continue # e.g. a ShaderMaterial -- nothing safe to tweak generically
+			var tweaked := (base_material as BaseMaterial3D).duplicate() as BaseMaterial3D
+			tweaked.roughness = MINIATURE_ROUGHNESS
+			tweaked.rim_enabled = true
+			tweaked.rim = MINIATURE_RIM
+			tweaked.rim_tint = MINIATURE_RIM_TINT
+			mesh_instance.set_surface_override_material(surface_idx, tweaked)
+
 ## Plain colored capsule -- Phase 0's original placeholder, now only used when
 ## the real model for this token type isn't available (see the class comment).
+## Carries the same MINIATURE_ROUGHNESS/RIM finish as a real model (see
+## _apply_miniature_finish()) so a token without a sourced model yet still
+## looks visually consistent with ones that have one, not glossier/flatter.
 func _add_fallback_capsule() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var capsule := CapsuleMesh.new()
@@ -238,7 +288,12 @@ func _add_fallback_capsule() -> void:
 	capsule.height = FALLBACK_CAPSULE_HEIGHT
 	mesh_instance.mesh = capsule
 	mesh_instance.position = Vector3(0, FALLBACK_CAPSULE_HEIGHT / 2.0, 0)
-	mesh_instance.material_override = StandardMaterial3D.new()
+	var material := StandardMaterial3D.new()
+	material.roughness = MINIATURE_ROUGHNESS
+	material.rim_enabled = true
+	material.rim = MINIATURE_RIM
+	material.rim_tint = MINIATURE_RIM_TINT
+	mesh_instance.material_override = material
 	_model_root.add_child(mesh_instance)
 	_fallback_mesh = mesh_instance
 
