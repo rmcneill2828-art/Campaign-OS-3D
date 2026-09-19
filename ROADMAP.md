@@ -2235,3 +2235,127 @@ first (7, then 1, then 3), the rest after.
    asserting the checkbox auto-check/uncheck/freeze behavior end to end
    (23/23 passing). Wired into `.github/workflows/test.yml`'s
    `godot-smoke-tests` job alongside the three existing smoke tests.
+
+## Adventure map import -- reviewed 2026-09-19, narrowed scope for a v1
+
+A separate tool session (GitHub Copilot, per its own header) produced
+`CAMPAIGN_MAP_IMPORT_REPORT.md` at the repo root -- unprompted, found
+sitting untracked while the "Seven requested features" work above was in
+progress -- proposing a pipeline to import illustrated adventure maps from
+`I:\DnD\Adventures & Modules` (Curse of Strahd, Lost Mine of Phandelver,
+etc. -- PDFs/images, not a machine-readable VTT format) and generate 3D
+battle maps from them, via a new versioned JSON "map manifest" a DM
+annotates (grid, walls, doors, elevation) before Godot generates geometry
+from it. This is a real gap worth solving -- item 5's own note above
+("only 2 hand-built maps exist... every map is hand-built/hardcoded") --
+but a distinct one from either item 4 (markdown campaign/character data
+import, `campaign.js`, unrelated) or item 5's own original narrower scope
+("build more maps from packs already in `godot/assets/Environment/`");
+tracked here as its own direction rather than silently folded into either.
+
+**Committed as-is (not modified) for the historical record** -- see that
+file directly for the full original proposal, phased plan, manifest schema,
+and Godot scene-generation model. What follows is this project's own review
+of it, and the actual decision made.
+
+**Agreed with:** the core reframing (hand-authored scenes shouldn't be the
+only path to a 3D map); metadata-first over blind image-to-3D conversion
+(auto-deriving walls/doors from pixel content alone is a real computer-
+vision problem, correctly kept "assistive only, never authoritative"); "the
+Node engine remains authoritative for movement, line of sight, encounter
+state... rules" -- exactly `ARCHITECTURE.md`'s own already-stated principle;
+GridMap + curated `MeshLibrary` for regular dungeon geometry, consistent
+with the Kenney/KayKit tile assets already in this project; the licensing
+section (adventure PDFs/map art are copyrighted, keep raw source and
+derived art out of git, never distribute); phasing discipline in spirit,
+singling out "a selected Lost Mine of Phandelver map running in the 3D
+client with real tokens and real server-authoritative rules" as the actual
+target for a first slice, deferring procedural dressing/curated kits past it.
+
+**Corrected, in order of how much they change the actual plan:**
+
+1. **The report doesn't check whether the 2D app already solved most of
+   Phases 1-3.** Confirmed directly (not assumed): `Campaign-OS/ui/app.js`
+   already has map image upload (`mapImageInput` -> `setMapImage`), grid
+   calibration (`renderGridHandles`), and click-drag wall drawing
+   (`toggleWalls`/`renderWallsOverlay`) -- all writing into the exact same
+   `state.maps[name]` shape (`setMapImage`/`addWall`) `engine-server`
+   already loads verbatim into this project. "Discover a map, calibrate its
+   grid, annotate its walls" is a solved problem today, just in the 2D app,
+   not Godot. **This inverts the report's own plan**: a DM annotates the
+   map in the already-working 2D app (upload the player-safe image,
+   calibrate the grid, draw walls with the existing tool); Campaign-OS-3D's
+   job shrinks to reading the resulting `state.maps[name]` and rendering 3D
+   geometry from it. No new manifest schema, no new annotation editor.
+2. **The manifest's relationship to `state.maps[name].walls` (the actual
+   thing `hasLineOfSight`/`cellVisibleToHero` read) is underspecified.**
+   "Node engine remains authoritative" is stated but the manifest's
+   `geometry.walls` isn't shown flowing into a real `addWall()` call -- if
+   it stayed a separate, Godot-only description, line-of-sight would
+   silently not respect walls a DM just drew. Whatever gets built, the wall
+   data needs to actually BE `state.maps[name].walls`, not a second copy.
+3. **A real coordinate-convention footgun.** The manifest's example walls
+   use grid-CELL coordinates (`"a": [3, 2]`); the real engine's `addWall()`
+   uses VERTEX space (cell corners, "index - 0.5"), explicitly documented
+   in this project's own `seedState()` as "NOT the 1..columns cell-index
+   space tokens use." This exact off-by-half-cell class of bug has already
+   cost real iterations here (`Token.gd`'s grounding saga, `GridManager`'s
+   floor-offset fix) -- any implementation reuses the engine's own
+   conversion, doesn't re-derive it.
+4. **Elevation/multi-level walls aren't reconciled against the real
+   engine**, which is flatly 2D -- `hasLineOfSight`/`cellVisibleToHero` have
+   no elevation concept at all. Building true single-scene multi-elevation
+   dungeons would need real new engine work the report doesn't account for.
+   **Decided instead:** model each dungeon level as its own separate named
+   map, using the multi-map/`switch_map` mechanism that already exists
+   (exactly how Prototype Chamber and Entrance Hall coexist today). Stairs
+   become "walk onto this cell -> `switch_map`," not new elevation-aware
+   line-of-sight.
+5. **Phases 3-5 (a full semantic layout editor, curated per-setting
+   procedural dressing kits, CV-assisted grid/wall detection) are each
+   independently substantial** -- bigger than anything shipped in this
+   project so far, and per point 1, Phase 3 in particular is largely
+   already-existing 2D-app functionality, not new Godot work. Deferred:
+   tracked as a future direction below, not a near-term commitment.
+
+**One addition the report doesn't make:** fog-of-war hiding tokens isn't
+the only spoiler risk -- a DM's map image can have room labels or secret-
+door markings baked into its own pixels, which per-cell hidden-token logic
+wouldn't touch. Checked directly: `PlayerView.gd`'s `_rebuild_fog()` draws
+a fully OPAQUE quad per unexplored cell, above the floor geometry -- it
+already occludes the underlying texture too, not just tokens, so this
+happens to already be safe. Worth stating explicitly rather than assuming
+it, since fog being cell-opaque (not token-only) is what actually makes it
+safe here.
+
+**One implementation note the report leaves vague:** Godot can't render
+PDFs at all; a raster image from an arbitrary OS path is trivially
+loadable at runtime (`Image.load()` + `ImageTexture`, the same
+runtime-loading idea `CharacterViewer.gd`'s `GLTFDocument` use already
+established for external `.glb` files, just simpler for a plain image) --
+but a PDF page needs rasterizing to an image FIRST, outside Godot.
+`poppler`'s `pdftoppm` is already available in this environment (already
+used for D&D PDF text extraction elsewhere) and handles that one step
+directly.
+
+**Decided v1 scope**, a fraction of the full report:
+1. Confirm in the 2D app that a real published map (rasterized via
+   `pdftoppm` first, if it's a PDF page) can be uploaded, grid-calibrated,
+   and wall-annotated using the EXISTING 2D tools -- no new code, just
+   proving the existing pipeline handles this input.
+2. On the Campaign-OS-3D side: read that same `state.maps[name]` (image
+   reference, columns/rows/feetPerSquare, walls) and render it -- a
+   textured floor plane using the calibrated image, plus procedural wall
+   meshes generated from the same wall segments the engine already uses for
+   line-of-sight. Genuinely new work, but rendering-only, reusing data that
+   already exists rather than inventing a parallel format for it.
+3. Multi-level dungeons: separate named maps + `switch_map`, not new
+   elevation-aware engine work (point 4 above).
+4. Licensing constraints from the original report are hard requirements
+   from day one regardless of how much scope narrows: player-safe image
+   only, never commit source PDFs/derived art, track provenance.
+
+**Explicitly deferred, tracked as a future direction, not a commitment:**
+the custom manifest format, a from-scratch semantic layout editor, curated
+per-setting procedural dressing kits, and any CV-assisted wall/grid
+detection -- everything in the original report's Phases 3-5.

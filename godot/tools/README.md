@@ -110,6 +110,32 @@ real scene + `Node` script instead (see `test_skeleton_token.tscn`'s own
 pattern: an `await get_tree().process_frame` before touching anything just
 instantiated), and run it as a normal scene path instead of via `--script`.
 
+**Update, 2026-09-19: a lighter-weight fix exists for the "smoke test" case
+specifically, found the hard way.** `smoke_test_main.gd`/
+`smoke_test_player_view.gd` had exactly this bug from the day they were
+written -- `quit()` ran synchronously at the end of `_init()`, before
+`Main.tscn`/`PlayerView.tscn`'s own `_ready()` (and every `@onready`
+assignment) ever actually executed -- so despite their own doc comments
+claiming to catch "a `_ready()`-time runtime error," they were only ever
+catching a scene-file/parse error, for as long as they existed, without
+anyone noticing (nothing they checked required `_ready()` to have run).
+Confirmed directly: probing a known `_ready()`-built value came back null
+right after `add_child()`, but populated by the first `_process()` tick.
+Fix, without switching to a whole separate scene + `Node` file: override
+`_process(delta) -> bool` on the SAME bare `--script` `SceneTree` tool, do
+the real work (and call `quit()`) there instead of in `_init()`, and
+`return true`. One real iteration is all `_ready()` needs, and a bare
+`--script` tool gets exactly one before this fix, zero without it. This
+doesn't replace the real-scene-+-`Node` approach above for anything that
+needs MULTIPLE frames or genuine physics/animation settling over real
+time (`test_dice_roll.gd`'s own settle-timing check instead calls
+`_process(delta)` manually with a large `delta` to fast-forward past that,
+rather than actually waiting) -- it only buys the first frame, but that's
+enough for `_ready()`/`@onready` itself, which is all four of this
+project's current `test_*.gd` scripts (`test_aoe_template.gd`,
+`test_character_creator.gd`, `test_character_viewer.gd`,
+`test_dice_roll.gd`) actually need.
+
 **Third gotcha: `ResourceSaver.save()` cannot write an actual `.glb` file,
 even though it happily accepts the path and only fails at the actual write.**
 Passing a `.glb` destination to `ResourceSaver.save(packed_scene, path)`

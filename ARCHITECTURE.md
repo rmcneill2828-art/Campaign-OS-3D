@@ -92,14 +92,25 @@ handling) and `ROADMAP.md` for what's not built yet.
   read-only and structurally incapable of sending `POST /action` -- the same
   shape as the 2D app's own Player window. A remote/networked player view (a
   different player's own machine, over a real network) is still open.
-- **How map geometry (walls, terrain, non-flat spaces) gets authored.** Answered
-  for the flat case: hand-built Godot scenes per map (`godot/scenes/maps/`,
-  built via one-off editor scripts in `godot/tools/`) provide the visual
-  geometry, while wall segments in the same vertex space the 2D app's
-  `addWall()` already uses are seeded server-side so `hasLineOfSight`/
-  `cellVisibleToHero`/etc. mean the same thing they do in the 2D app (see
-  `engine-server/server.js`'s `seedState()`). True 3D terrain (multiple floors,
-  height-blocking line of sight) is still open.
+- **How map geometry (walls, terrain, non-flat spaces) gets authored.**
+  Two paths now, not one. Hand-built Godot scenes per map
+  (`godot/scenes/maps/`, built via one-off editor scripts in `godot/tools/`)
+  remain the path for premium/showcase locations, with wall segments in the
+  same vertex space the 2D app's `addWall()` already uses seeded
+  server-side so `hasLineOfSight`/`cellVisibleToHero`/etc. mean the same
+  thing they do in the 2D app (see `engine-server/server.js`'s
+  `seedState()`). For a real published adventure map (an illustrated image,
+  not hand-built geometry), the decided direction (see `ROADMAP.md`'s
+  "Adventure map import" entry, 2026-09-19) reuses the 2D app's OWN already-
+  working map-image-upload/grid-calibration/wall-drawing tools
+  (`ui/app.js`'s `setMapImage`/`renderGridHandles`/`toggleWalls`) to produce
+  the exact same `state.maps[name]` shape either path already relies on --
+  Campaign-OS-3D's own job is then just rendering a textured floor + wall
+  meshes from that data, not building a whole second annotation editor.
+  True multi-level 3D terrain (elevation-aware line of sight) is still
+  explicitly not modeled -- decided instead to represent each dungeon level
+  as its own separate named map via the multi-map/`switch_map` mechanism
+  that already exists, not new elevation-aware engine work.
 - **Asset pipeline specifics for animated models** -- explored in depth (Mixamo/
   Meshy rigging, bone-name-map retargeting across mismatched skeletons) and
   then deliberately shelved: as of 2026-09-17 every new creature/hero model is a

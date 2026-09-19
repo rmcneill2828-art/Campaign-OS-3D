@@ -156,7 +156,11 @@ against the 2D app, still open:
 - No Encounter Difficulty calculator, no freeform dice roller (both are already
   pure functions in the shared engine, just not wired into this client's UI yet).
 - No Token Library / Map Library / folder-based asset browsing -- every map and
-  creature model is hand-built/hardcoded today.
+  creature model is hand-built/hardcoded today. A path for real published
+  adventure maps specifically (not folder browsing in general) has a reviewed,
+  scoped-down plan -- see [ROADMAP.md](ROADMAP.md)'s "Adventure map import"
+  entry -- reusing the 2D app's own already-working map-image/grid/wall tools
+  rather than building a new annotation editor in Godot.
 - No End Session / session-transcript reporting -- already exists in
   `dm-bridge/watch.js` itself; this client's UI just never added a way to
   trigger it.
