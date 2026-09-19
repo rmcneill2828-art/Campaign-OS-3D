@@ -1273,14 +1273,11 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   `renderMusicFolderResults`) -- every 3D map and creature is hand-built/
   hardcoded via this project's own headless tools rather than something a
   DM can browse a folder and drop into a live session.
-- **No Character Creator wizard** and **no End Session / session
-  transcript reporting** -- both are real `dm-bridge/watch.js` features
-  (confirmed already, Phase 7's own notes: "requires `DND_REPO_PATH` env
-  var only for End Session/Create Character features (not used yet in 3D
-  client)") -- `watch.js` itself is copied byte-for-byte and already
-  supports both; the 3D client's own UI just never added a way to trigger
-  either. The Character Creator half is tracked in detail as item 1 of
-  "Seven requested features" below.
+- ~~**No Character Creator wizard**~~ -- **fixed 2026-09-19**, see item 1 of
+  "Seven requested features" below for the full account. **No End Session /
+  session transcript reporting** is still open -- also a real
+  `dm-bridge/watch.js` feature (confirmed, Phase 7's own notes) the 3D
+  client's UI just never added a way to trigger.
 - **No campaign-level save/load** -- the 2D app has a whole `renderCampaign`/
   `renderCampaignDetail` system for multiple saved campaigns/characters
   across sessions; the 3D client only ever has the one live
@@ -1970,7 +1967,7 @@ future version needs them back, only from wherever they were originally
 sourced (or from the archive folder's own restore notes, which name each
 one).
 
-## Seven requested features -- 2026-09-19, planned (item 7 fixed same day)
+## Seven requested features -- 2026-09-19, planned (items 1 and 7 fixed same day)
 
 User request: interactive character creation, visual dice rolls, a 3D
 character viewer, a system to import campaigns and create assets, higher-
@@ -1982,25 +1979,57 @@ turned out to have most of their hard logic already built and just never
 exposed through this client's UI. Working order: cheapest/most-grounded
 first (7, then 1, then 3), the rest after.
 
-1. **Interactive character creation.** Mostly plumbing already exists.
-   `engine-server/engine/characterCreator.js` (copied verbatim, 299 lines)
-   computes a full level-1+ sheet from a plain draft object -- modifiers,
-   proficiency bonus, HP, saves, skills, AC, attack bonus -- and renders it
-   as markdown matching the DnD campaign repo's `characters/_template.md`
-   shape. `dm-bridge/watch.js` already has a deterministic (no Claude call,
-   no cost) write-back protocol for it -- `create-character-request.json`
-   in, watcher writes the `.md` into `DND_REPO_PATH/characters/`, never
-   overwriting an existing file, `create-character-response.json` out --
-   which the 2D app already drives from its own in-browser form (`ui/app.js`
-   calling `window.CampaignOSCharacterCreator.computeCharacter()`/
-   `characterMarkdown()` directly, no server round trip needed since it's
-   pure computation). **Missing on the 3D side:** the actual Godot form
-   (race/class/ability-score/skill picker, matching `characterCreator.js`'s
-   own `CLASS_LIST`/`SKILL_LIST`/`ABILITY_KEYS`) and a way to reach the same
-   `dm-bridge/` mailbox files -- likely a new `engine-server` endpoint that
-   proxies to `create-character-request.json`/`create-character-response.json`
-   the same way `/dm-command` already proxies to `request.json`/
-   `response.json`, rather than Godot writing into `dm-bridge/` directly.
+1. **Interactive character creation -- fixed 2026-09-19.** Going in, most of
+   the hard logic already existed: `engine-server/engine/characterCreator.js`
+   (copied verbatim, 299 lines) computes a full level-1+ sheet from a plain
+   draft object -- modifiers, proficiency bonus, HP, saves, skills, AC,
+   attack bonus -- and renders it as markdown matching the DnD campaign
+   repo's `characters/_template.md` shape, and `dm-bridge/watch.js` already
+   had a deterministic (no Claude call, no cost) write-back protocol for it
+   -- `create-character-request.json` in, watcher writes the `.md` into
+   `DND_REPO_PATH/characters/`, never overwriting an existing file,
+   `create-character-response.json` out. What was missing was the actual
+   Godot form and a way to reach that mailbox.
+
+   **What got built:** rather than port ~300 lines of character math to
+   GDScript (the AoE-shape-math precedent item 7 set, but a much larger and
+   more error-prone surface here), `engine-server/server.js` now also loads
+   `characterCreator.js` into the same engine realm as `encounter.js`/
+   `dmBridge.js` and exposes a new `POST /create-character`: validates the
+   draft (`CharacterCreator.validateDraft()`, a real 400 with the actual
+   reasons on failure), computes the sheet and markdown synchronously
+   server-side, then writes `create-character-request.json` and waits (a new
+   `createCharacterLock`, mirroring `/dm-command`'s own `dmBridgeLock` --
+   its own separate mailbox pair, so it can't race a concurrent
+   `/dm-command`) for `create-character-response.json`, same 20s ceiling
+   `ui/app.js`'s own `createCharacterResponseTimeoutMs` uses (this is a
+   deterministic file write, not a 2-minute Claude call, so no reason to
+   share the DM bridge's own 120s one). Returns `{ok, message, fileName,
+   character}` -- `ok` can legitimately be false (a filename collision,
+   `DND_REPO_PATH` unset) without that being an HTTP-level error, same "a
+   miss isn't a 500" precedent `POST /action`'s own attack/save results
+   already establish.
+
+   `Main.gd` gained a new "Create Character" collapsible section (built
+   entirely in code, same convention as the AoE Template controls and the
+   Conditions grid) mirroring `ui/app.js`'s own form field-for-field --
+   name/race/class/level/background/alignment, all 6 ability scores (with
+   Standard Array and Roll-4d6-Drop-Lowest buttons matching the 2D app's
+   own), an AC override, speed, all 18 skill-proficiency checkboxes,
+   languages/tools/features/equipment, an optional spellcasting sub-section,
+   an attack (weapon/dice/ability/damage-type), personality traits/ideals/
+   bonds/flaws, and backstory. Not gated on a selected token, same
+   "DM Assistant"/`trigger_lair_action` precedent -- a new character isn't
+   acting through an existing one.
+
+   **New tests:** `engine-server/tests/createCharacter.test.js` (4 tests --
+   the real HTTP contract against a simulated watcher, an invalid-draft
+   400, an `ok:false` outcome surfaced correctly, two concurrent calls
+   serialized -- 53/53 passing engine-server-wide) and
+   `godot/tools/test_character_creator.gd` (17 assertions -- every control
+   actually gets built, and `_character_draft_from_form()` reads them back
+   into the exact shape `characterCreator.js` expects), both wired into
+   their respective CI jobs.
 
 2. **Visual dice rolls.** Nothing to reuse -- not even the 2D app has this.
    Every roll (attack, save, check, damage, initiative) is resolved as pure

@@ -25,16 +25,20 @@ design along for the ride.
 ## What's here today
 
 - **`engine-server/`** -- a small, zero-dependency Node HTTP server that loads a
-  verbatim copy of Campaign-OS's `engine/encounter.js` + `engine/dmBridge.js` (the
-  same way Campaign-OS's own tests do -- see `lib/loadEngine.js`) and exposes it as
-  `GET /state`, `POST /action`, `POST /dm-command`, and `POST /reset`. This is the
+  verbatim copy of Campaign-OS's `engine/encounter.js` + `engine/dmBridge.js` +
+  `engine/characterCreator.js` (the same way Campaign-OS's own tests do -- see
+  `lib/loadEngine.js`) and exposes it as `GET /state`, `POST /action`,
+  `POST /dm-command`, `POST /create-character`, and `POST /reset`. This is the
   ONLY place 5e rules are decided -- the Godot client never computes a rule itself,
   it just renders whatever the server reports and asks it to do things. State
   persists to `state/encounter.json` with atomic writes and a `.bak` recovery copy.
 - **`dm-bridge/`** -- Campaign-OS's own Claude DM bridge (`watch.js`), copied
   verbatim and never hand-edited. Run separately (`node dm-bridge/watch.js`); it
   watches for a `request.json` the engine-server's `/dm-command` endpoint writes and
-  answers with a `response.json`, the same file-based protocol the 2D app uses.
+  answers with a `response.json`, the same file-based protocol the 2D app uses --
+  plus a second, independent mailbox (`create-character-request.json`/
+  `create-character-response.json`) for `POST /create-character` (see below), a
+  deterministic file write requiring no Claude call.
 - **`godot/`** -- a Godot 4 project with two scenes:
   - **`Main.tscn`** -- the DM's working view: an orbit/pan/zoom camera over a real
     3D board (hand-built maps with real geometry, floor/wall glTF assets, and
@@ -51,7 +55,12 @@ design along for the ride.
     initiative (roll or set), an advantage/disadvantage roll-mode toggle, and
     quick actions for damage/drop-concentration/spend-hit-die/remove-token. A
     "DM Assistant (Claude)" panel sends free-text narration through
-    `POST /dm-command` and applies whatever actions Claude decides on.
+    `POST /dm-command` and applies whatever actions Claude decides on. A separate
+    "Create Character" panel builds a full level-1+ 5e sheet (race/class/ability
+    scores with Standard Array/Roll buttons, all 18 skill proficiencies, an
+    optional spellcasting block, an attack, personality, backstory, ...) and
+    writes it straight into the DnD campaign repo's `characters/` folder via
+    `POST /create-character`.
   - **`PlayerView.tscn`** -- a read-only second window (opened via "Open Player
     Window" in the DM view, meant for a second monitor/TV) with no `POST /action`
     call anywhere in it, structurally incapable of mutating the encounter. Shows
@@ -84,14 +93,19 @@ first time it runs, and persists any changes to `state/encounter.json` so restar
 it doesn't lose progress. `POST /reset` restores the default encounter at any time.
 
 **2. (Optional) Start the Claude DM bridge** (from the project root), if you want
-the in-game "DM Assistant" panel to work:
+the in-game "DM Assistant" panel to work, **or** the "Create Character" panel to
+actually write a file (it needs the watcher running too, just not a Claude call --
+see `POST /create-character`'s own doc comment in `server.js`):
 
 ```text
 node dm-bridge/watch.js
 ```
 
-Requires the `claude` CLI already installed and authenticated on this machine --
-see `dm-bridge/watch.js`'s own header comment for how it's invoked. Everything else
+Requires the `claude` CLI already installed and authenticated on this machine for
+DM Assistant narration -- see `dm-bridge/watch.js`'s own header comment for how
+it's invoked. Create Character has no such requirement, but does need
+`DND_REPO_PATH` set on the watcher's own environment (pointing at your campaign
+repo) before it can write a real `characters/*.md` file. Everything else
 (move/attack/spells/etc. from the Token Actions panel) works without this running.
 
 **3. Open the Godot project.** Requires **Godot 4.7+** (the project targets Godot's
@@ -130,9 +144,9 @@ against the 2D app, still open:
   pure functions in the shared engine, just not wired into this client's UI yet).
 - No Token Library / Map Library / folder-based asset browsing -- every map and
   creature model is hand-built/hardcoded today.
-- No Character Creator wizard, no End Session / session-transcript reporting
-  (both already exist in `dm-bridge/watch.js` itself; this client's UI just never
-  added a way to trigger them).
+- No End Session / session-transcript reporting -- already exists in
+  `dm-bridge/watch.js` itself; this client's UI just never added a way to
+  trigger it.
 - No campaign-level save/load across multiple sessions -- one live
   `engine-server/state/encounter.json` only.
 - No music/ambience system.

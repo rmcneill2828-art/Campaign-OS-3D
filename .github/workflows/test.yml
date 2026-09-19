@@ -54,6 +54,14 @@ jobs:
       - name: test_aoe_template.gd (AoE Template shape math + Main.gd wiring)
         run: godot --headless --path godot --script res://tools/test_aoe_template.gd
 
+      # Covers the piece of the Character Creator that lives only in Godot -- every
+      # control actually gets built, and the draft read back off them matches
+      # characterCreator.js's own expected shape. The HTTP round trip itself (POST
+      # /create-character against a simulated dm-bridge/watch.js) is covered by
+      # engine-server's own tests/createCharacter.test.js instead, in the node-tests job.
+      - name: test_character_creator.gd (Character Creator controls + draft shape)
+        run: godot --headless --path godot --script res://tools/test_character_creator.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce

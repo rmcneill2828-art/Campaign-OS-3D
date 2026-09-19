@@ -9,12 +9,18 @@ const { loadEngineInto } = require("./lib/loadEngine");
 // Load order matters: dmBridge.js reads window.CampaignOS at call time (not at load
 // time), but encounter.js must still run first so that object exists before anything
 // invokes it -- same order Campaign-OS's own tests/dmBridge.test.js uses.
+// characterCreator.js has no such cross-dependency (its own SKILL_LIST/ABILITY_KEYS/
+// HIT_DIE_BY_CLASS are self-contained duplicates, same "no shared-module mechanism
+// across these plain scripts" convention this project already documents elsewhere),
+// so its own position in this list doesn't matter -- appended last.
 const engineWindow = loadEngineInto({}, [
   path.join(__dirname, "engine", "encounter.js"),
-  path.join(__dirname, "engine", "dmBridge.js")
+  path.join(__dirname, "engine", "dmBridge.js"),
+  path.join(__dirname, "engine", "characterCreator.js")
 ]);
 const CampaignOS = engineWindow.CampaignOS;
 const DMBridge = engineWindow.CampaignOSDMBridge;
+const CharacterCreator = engineWindow.CampaignOSCharacterCreator;
 
 const DEFAULT_STATE_FILE = path.join(__dirname, "state", "encounter.json");
 
@@ -33,6 +39,21 @@ const DEFAULT_STATE_FILE = path.join(__dirname, "state", "encounter.json");
 const DEFAULT_DM_BRIDGE_DIR = path.join(__dirname, "..", "dm-bridge");
 const DM_BRIDGE_TIMEOUT_MS = 120000; // matches ui/app.js's own 2-minute give-up
 const DM_BRIDGE_POLL_MS = 1000;
+
+// Seven requested features (ROADMAP.md, 2026-09-19), item 1 -- Create Character.
+// dm-bridge/watch.js (copied verbatim, unmodified -- see above) already has a SEPARATE
+// deterministic write-back mailbox for this, distinct from request.json/response.json:
+// a create-character-request.json {id, fileName, markdown, createdAt} in, a
+// create-character-response.json {id, ok, message, respondedAt} out, with its own
+// independent poll loop in watch.js (pollCreateCharacter(), never touching
+// request.json/response.json). No Claude call happens on this path at all -- the sheet
+// is already fully computed (see CharacterCreator.computeCharacter/characterMarkdown
+// above) before anything gets written -- so this is a much shorter timeout than the DM
+// bridge's own 2-minute one, matching ui/app.js's own createCharacterResponseTimeoutMs
+// exactly (a plain local file write should never genuinely take 20s; that ceiling is
+// really "how long to wait for a slow-to-start dm-bridge/watch.js process," same as the
+// 2D app's own reasoning).
+const CREATE_CHARACTER_TIMEOUT_MS = 20000;
 
 // The largest real client-sent body today is a /dm-command's optional
 // {title, text} context -- itself capped at 6000 chars by the 2D app's own
@@ -476,6 +497,12 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   let state = loadState(stateFile);
   const bridgeRequestPath = path.join(bridgeDir, "request.json");
   const bridgeResponsePath = path.join(bridgeDir, "response.json");
+  // A separate mailbox pair from request.json/response.json above -- dm-bridge/watch.js
+  // polls this one independently (pollCreateCharacter(), never touching the DM-command
+  // pair), so a /create-character call and a /dm-command call in flight at the same time
+  // can't clobber each other's files.
+  const createCharacterRequestPath = path.join(bridgeDir, "create-character-request.json");
+  const createCharacterResponsePath = path.join(bridgeDir, "create-character-response.json");
 
   // request.json/response.json are a single shared mailbox -- fixed filenames
   // dm-bridge/watch.js (verbatim-copied from the 2D app, never hand-edited) reads and
@@ -493,6 +520,19 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   function withDmBridgeLock(fn) {
     const result = dmBridgeLock.then(fn, fn);
     dmBridgeLock = result.then(() => {}, () => {});
+    return result;
+  }
+
+  // Same "serialize the whole cycle" reasoning as withDmBridgeLock above, for
+  // create-character-request.json/create-character-response.json's own mailbox pair --
+  // but no queue-depth cap/429 rejection: unlike a Claude call, this path is a
+  // deterministic file write expected to resolve in well under CREATE_CHARACTER_TIMEOUT_MS,
+  // so a real pileup here would mean something is actually broken (watch.js not running,
+  // a stuck filesystem), not ordinary load a DM would ever generate.
+  let createCharacterLock = Promise.resolve();
+  function withCreateCharacterLock(fn) {
+    const result = createCharacterLock.then(fn, fn);
+    createCharacterLock = result.then(() => {}, () => {});
     return result;
   }
 
@@ -615,6 +655,63 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
       return sendJson(res, outcome.status, outcome.body);
     }
 
+    // Seven requested features (ROADMAP.md, 2026-09-19), item 1 -- Create Character.
+    // Deterministic, not an LLM call: CharacterCreator.computeCharacter()/
+    // characterMarkdown() (already loaded verbatim above, same as CampaignOS/DMBridge)
+    // fully compute the sheet right here, synchronously, before anything is written --
+    // there's nothing left to draft. Mirrors ui/app.js's own createCharacterForm submit
+    // handler exactly (validate -> compute -> write create-character-request.json ->
+    // wait for dm-bridge/watch.js's create-character-response.json), just server-side
+    // instead of in-browser, so the Godot client doesn't need its own GDScript port of
+    // ~300 lines of character math (a real duplication/drift risk) the way AoeTemplate.gd
+    // reasonably ported the much smaller AoE shape functions -- this is "a rule," in
+    // ARCHITECTURE.md's own terms, and belongs in the shared engine layer.
+    if (req.method === "POST" && req.url === "/create-character") {
+      let draft;
+      try {
+        draft = await readJsonBody(req);
+      } catch (err) {
+        return sendJson(res, err.status || 400, { error: err.message || "Malformed JSON body." });
+      }
+      const errors = CharacterCreator.validateDraft(draft || {});
+      if (errors.length) {
+        return sendJson(res, 400, { errors });
+      }
+
+      const character = CharacterCreator.computeCharacter(draft);
+      const markdown = CharacterCreator.characterMarkdown(character);
+      const fileName = CharacterCreator.fileNameForCharacter(character.name);
+
+      const outcome = await withCreateCharacterLock(async () => {
+        const id = `char-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        try {
+          fs.mkdirSync(bridgeDir, { recursive: true });
+          fs.writeFileSync(
+            createCharacterRequestPath,
+            JSON.stringify({ id, fileName, markdown, createdAt: new Date().toISOString() }, null, 2)
+          );
+        } catch (err) {
+          return { status: 500, body: { error: `Could not write to the DM bridge folder: ${err.message}` } };
+        }
+
+        const response = await waitForBridgeResponse(createCharacterResponsePath, id, CREATE_CHARACTER_TIMEOUT_MS);
+        if (!response) {
+          return {
+            status: 504,
+            body: { error: `No response after ${Math.round(CREATE_CHARACTER_TIMEOUT_MS / 1000)}s -- make sure "node dm-bridge/watch.js" is running, then try again.` }
+          };
+        }
+        // response.ok can legitimately be false (DND_REPO_PATH not set, a filename
+        // collision, a write error -- see dm-bridge/watch.js's own
+        // handleCreateCharacterRequest) without this being an HTTP-layer failure: the
+        // request was received and answered correctly, same "a miss isn't a 500" precedent
+        // POST /action's own attack/save results already establish. The caller checks
+        // body.ok, same as ui/app.js's own response.ok branch does.
+        return { status: 200, body: { ok: response.ok, message: response.message, fileName, character } };
+      });
+      return sendJson(res, outcome.status, outcome.body);
+    }
+
     if (req.method === "POST" && req.url === "/reset") {
       state = seedState();
       if (state.mapName) state = CampaignOS.revealVisibleTiles(state, state.mapName);
@@ -633,7 +730,7 @@ if (require.main === module) {
   const server = createServer({});
   server.listen(port, "127.0.0.1", () => {
     console.log(`Campaign OS 3D engine-server listening on http://127.0.0.1:${port}`);
-    console.log("GET /state | POST /action {type, ...} | POST /reset");
+    console.log("GET /state | POST /action {type, ...} | POST /dm-command | POST /create-character | POST /reset");
   });
 }
 

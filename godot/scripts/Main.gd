@@ -52,6 +52,20 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
+## Character Creator (ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 1)
+## -- duplicated from engine-server/engine/characterCreator.js's own CLASS_LIST, same
+## "no shared-module mechanism across these plain scripts" convention ABILITY_KEYS/
+## SKILL_LIST above already document. Reuses this file's own ABILITY_KEYS/SKILL_LIST
+## constants above for everything else -- characterCreator.js's own copies of those two
+## lists happen to be identical to encounter.js's (same names, same order), so no
+## separate duplicate is needed for them specifically.
+const CHARACTER_CLASS_LIST: Array[String] = [
+	"Barbarian", "Bard", "Cleric", "Druid", "Fighter", "Monk",
+	"Paladin", "Ranger", "Rogue", "Sorcerer", "Warlock", "Wizard"
+]
+## Same 4d6-drop-lowest convention ui/app.js's own rollAbilityScore() uses.
+const STANDARD_ARRAY: Array[int] = [15, 14, 13, 12, 10, 8]
+
 ## AoE template tool (ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 7)
 ## -- fixed option order, matches how TEMPLATE_SHAPES's own index is used as
 ## OptionButton.selected below (same "index, not id" convention ROLL_MODE_* already uses).
@@ -174,6 +188,8 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _dm_response_label: Label = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList/DmAssistantBody/DmResponseLabel
 @onready var _dm_command_request: HTTPRequest = $DmCommandRequest
 
+@onready var _token_actions_list: VBoxContainer = $HUD/TokenActionsPanel/TokenActionsScroll/TokenActionsList
+
 var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 var _area_target_checkboxes := {} # token name (String) -> CheckBox
 var _last_target_names: Array[String] = [] # last set the spell-target UI was built from -- see _sync_spell_targets()
@@ -196,6 +212,47 @@ var _template_length_input: SpinBox
 var _template_width_row: HBoxContainer
 var _template_width_input: SpinBox
 var _template_info_label: Label
+
+## Character Creator -- POSTs to engine-server's own /create-character (see
+## server.js's own doc comment on that endpoint), which runs the exact same
+## engine/characterCreator.js compute+markdown logic the 2D app runs in-browser, then
+## writes into dm-bridge/'s own SEPARATE create-character-request.json/
+## create-character-response.json mailbox (distinct from /dm-command's request.json/
+## response.json). Built entirely in code, same convention as the AoE Template
+## controls above. A SEPARATE in-flight flag from _dm_command_in_flight/
+## _action_in_flight -- this can take a few seconds (waiting on dm-bridge/watch.js to
+## write the file), but there's no reason it should block ordinary combat actions or
+## vice versa.
+var _cc_in_flight := false
+var _cc_name: LineEdit
+var _cc_race: LineEdit
+var _cc_class: OptionButton
+var _cc_level: SpinBox
+var _cc_background: LineEdit
+var _cc_alignment: LineEdit
+var _cc_ability_inputs := {} # ability key (String) -> SpinBox
+var _cc_ac: LineEdit
+var _cc_speed: SpinBox
+var _cc_skill_checkboxes := {} # skill name (String) -> CheckBox
+var _cc_languages: LineEdit
+var _cc_tools: LineEdit
+var _cc_features: TextEdit
+var _cc_is_caster: CheckBox
+var _cc_spell_ability: OptionButton
+var _cc_spells_known: TextEdit
+var _cc_weapon_name: LineEdit
+var _cc_weapon_dice: LineEdit
+var _cc_weapon_ability: OptionButton
+var _cc_weapon_damage_type: OptionButton
+var _cc_equipment: TextEdit
+var _cc_traits: LineEdit
+var _cc_ideals: LineEdit
+var _cc_bonds: LineEdit
+var _cc_flaws: LineEdit
+var _cc_backstory: TextEdit
+var _cc_status_label: Label
+var _cc_create_button: Button
+var _cc_request: HTTPRequest
 
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
@@ -259,6 +316,7 @@ func _ready() -> void:
 	_cast_spell_button.pressed.connect(_on_cast_spell_pressed)
 	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
 	_build_template_controls()
+	_build_character_creator_controls()
 
 	_heal_button.pressed.connect(_on_heal_pressed)
 	_full_heal_button.pressed.connect(_on_full_heal_pressed)
@@ -870,6 +928,281 @@ func _build_template_mesh(shape: Dictionary) -> MeshInstance3D:
 	material.albedo_color = Color(1.0, 0.45, 0.1, 0.35) # translucent orange -- reads as "template," distinct from the grid-line white and fog's black
 	mesh_instance.material_override = material
 	return mesh_instance
+
+## --- Character Creator: small row-builder helpers, reducing the boilerplate every ---
+## field below would otherwise repeat (same reasoning _build_template_controls() above
+## already applies at a smaller scale).
+
+func _cc_row(parent: Control, label_text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size.x = 130
+	row.add_child(label)
+	parent.add_child(row)
+	return row
+
+func _cc_line_edit_row(parent: Control, label_text: String) -> LineEdit:
+	var row := _cc_row(parent, label_text)
+	var edit := LineEdit.new()
+	edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(edit)
+	return edit
+
+func _cc_spinbox_row(parent: Control, label_text: String, min_v: float, max_v: float, default_v: float) -> SpinBox:
+	var row := _cc_row(parent, label_text)
+	var spin := SpinBox.new()
+	spin.min_value = min_v
+	spin.max_value = max_v
+	spin.value = default_v
+	row.add_child(spin)
+	return spin
+
+func _cc_option_row(parent: Control, label_text: String, items: Array) -> OptionButton:
+	var row := _cc_row(parent, label_text)
+	var option := OptionButton.new()
+	for item in items:
+		option.add_item(str(item))
+	row.add_child(option)
+	return option
+
+func _cc_text_block(parent: Control, label_text: String) -> TextEdit:
+	var label := Label.new()
+	label.text = label_text
+	parent.add_child(label)
+	var edit := TextEdit.new()
+	edit.custom_minimum_size.y = 50
+	parent.add_child(edit)
+	return edit
+
+## Builds the whole Character Creator panel in code (same convention as the AoE
+## Template controls above and the Conditions grid further up) and adds it as a new
+## collapsible section at the end of the Token Actions accordion -- not gated on a
+## selected token (matches "DM Assistant"/trigger_lair_action's own precedent; a new
+## character isn't acting through an existing one). Mirrors ui/app.js's own Create
+## Character form field-for-field (see its own characterDraftFromForm()) so the draft
+## _character_draft_from_form() below builds matches exactly what
+## characterCreator.js's validateDraft()/computeCharacter() already expect -- see
+## engine-server/server.js's own POST /create-character doc comment for the rest of
+## this round trip.
+func _build_character_creator_controls() -> void:
+	var header := Button.new()
+	header.toggle_mode = true
+	var body := VBoxContainer.new()
+	body.visible = false
+	_token_actions_list.add_child(header)
+	_token_actions_list.add_child(body)
+	_wire_collapsible_section(header, body, "Create Character")
+
+	_cc_name = _cc_line_edit_row(body, "Name:")
+	_cc_race = _cc_line_edit_row(body, "Race:")
+	_cc_class = _cc_option_row(body, "Class:", CHARACTER_CLASS_LIST)
+	_cc_level = _cc_spinbox_row(body, "Level:", 1, 20, 1)
+	_cc_background = _cc_line_edit_row(body, "Background:")
+	_cc_alignment = _cc_line_edit_row(body, "Alignment:")
+
+	var scores_label := Label.new()
+	scores_label.text = "Ability Scores:"
+	body.add_child(scores_label)
+	var scores_row := HBoxContainer.new()
+	for ability in ABILITY_KEYS:
+		var column := VBoxContainer.new()
+		var ability_label := Label.new()
+		ability_label.text = ability
+		column.add_child(ability_label)
+		var spin := SpinBox.new()
+		spin.min_value = 1
+		spin.max_value = 30
+		spin.value = 10
+		column.add_child(spin)
+		scores_row.add_child(column)
+		_cc_ability_inputs[ability] = spin
+	body.add_child(scores_row)
+
+	var scores_buttons_row := HBoxContainer.new()
+	var standard_array_button := Button.new()
+	standard_array_button.text = "Standard Array"
+	standard_array_button.pressed.connect(_on_cc_standard_array_pressed)
+	scores_buttons_row.add_child(standard_array_button)
+	var roll_scores_button := Button.new()
+	roll_scores_button.text = "Roll Scores (4d6 drop lowest)"
+	roll_scores_button.pressed.connect(_on_cc_roll_scores_pressed)
+	scores_buttons_row.add_child(roll_scores_button)
+	body.add_child(scores_buttons_row)
+
+	_cc_ac = _cc_line_edit_row(body, "AC (blank = auto):")
+	_cc_speed = _cc_spinbox_row(body, "Speed (ft):", 0, 120, 30)
+
+	var skills_label := Label.new()
+	skills_label.text = "Proficient Skills:"
+	body.add_child(skills_label)
+	var skills_grid := GridContainer.new()
+	skills_grid.columns = 2
+	for skill in SKILL_LIST:
+		var checkbox := CheckBox.new()
+		checkbox.text = skill
+		skills_grid.add_child(checkbox)
+		_cc_skill_checkboxes[skill] = checkbox
+	body.add_child(skills_grid)
+
+	_cc_languages = _cc_line_edit_row(body, "Languages:")
+	_cc_tools = _cc_line_edit_row(body, "Tools/Weapons/Armor:")
+	_cc_features = _cc_text_block(body, "Features & Traits (one per line):")
+
+	_cc_is_caster = CheckBox.new()
+	_cc_is_caster.text = "Spellcaster"
+	body.add_child(_cc_is_caster)
+	_cc_spell_ability = _cc_option_row(body, "Spellcasting Ability:", ABILITY_KEYS)
+	_cc_spells_known = _cc_text_block(body, "Spells Known/Prepared:")
+
+	var attack_label := Label.new()
+	attack_label.text = "Attack:"
+	body.add_child(attack_label)
+	_cc_weapon_name = _cc_line_edit_row(body, "Weapon Name:")
+	_cc_weapon_dice = _cc_line_edit_row(body, "Damage Dice (e.g. 1d8):")
+	_cc_weapon_ability = _cc_option_row(body, "Attack Ability:", ["STR", "DEX"])
+	_cc_weapon_damage_type = _cc_option_row(body, "Damage Type:", DAMAGE_TYPE_LIST.filter(func(t): return t != DAMAGE_TYPE_NONE))
+
+	_cc_equipment = _cc_text_block(body, "Equipment (one per line):")
+
+	var personality_label := Label.new()
+	personality_label.text = "Personality:"
+	body.add_child(personality_label)
+	_cc_traits = _cc_line_edit_row(body, "Traits:")
+	_cc_ideals = _cc_line_edit_row(body, "Ideals:")
+	_cc_bonds = _cc_line_edit_row(body, "Bonds:")
+	_cc_flaws = _cc_line_edit_row(body, "Flaws:")
+
+	_cc_backstory = _cc_text_block(body, "Backstory:")
+
+	_cc_create_button = Button.new()
+	_cc_create_button.text = "Create Character"
+	_cc_create_button.pressed.connect(_on_create_character_pressed)
+	body.add_child(_cc_create_button)
+
+	_cc_status_label = Label.new()
+	_cc_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.add_child(_cc_status_label)
+
+	_cc_request = HTTPRequest.new()
+	add_child(_cc_request)
+	_cc_request.request_completed.connect(_on_create_character_response)
+
+func _on_cc_standard_array_pressed() -> void:
+	for i in range(ABILITY_KEYS.size()):
+		_cc_ability_inputs[ABILITY_KEYS[i]].value = STANDARD_ARRAY[i]
+
+## Matches ui/app.js's own rollAbilityScore() exactly: roll four d6, drop the lowest.
+func _roll_ability_score() -> int:
+	var rolls: Array[int] = []
+	for i in range(4):
+		rolls.append(1 + randi() % 6)
+	rolls.sort()
+	return rolls[1] + rolls[2] + rolls[3]
+
+func _on_cc_roll_scores_pressed() -> void:
+	for ability in ABILITY_KEYS:
+		_cc_ability_inputs[ability].value = _roll_ability_score()
+
+## Mirrors ui/app.js's own characterDraftFromForm() field-for-field -- the exact draft
+## shape engine-server's POST /create-character (CharacterCreator.validateDraft()/
+## computeCharacter()) expects. Pure/no side effects beyond reading control values, so
+## this is unit-testable without a live server (see godot/tools/test_character_creator.gd).
+func _character_draft_from_form() -> Dictionary:
+	var proficient_skills: Array[String] = []
+	for skill in _cc_skill_checkboxes:
+		if _cc_skill_checkboxes[skill].button_pressed:
+			proficient_skills.append(skill)
+
+	var draft := {
+		"name": _cc_name.text,
+		"race": _cc_race.text,
+		"className": CHARACTER_CLASS_LIST[_cc_class.selected],
+		"level": int(_cc_level.value),
+		"background": _cc_background.text,
+		"alignment": _cc_alignment.text,
+		"abilityScores": {},
+		"ac": _cc_ac.text,
+		"speed": int(_cc_speed.value),
+		"proficientSkills": proficient_skills,
+		"languages": _cc_languages.text,
+		"toolsWeaponsArmor": _cc_tools.text,
+		"features": _cc_features.text,
+		"equipment": _cc_equipment.text,
+		"personality": {
+			"traits": _cc_traits.text,
+			"ideals": _cc_ideals.text,
+			"bonds": _cc_bonds.text,
+			"flaws": _cc_flaws.text
+		},
+		"backstory": _cc_backstory.text,
+		"attack": {
+			"weaponName": _cc_weapon_name.text,
+			"diceSize": _cc_weapon_dice.text,
+			"ability": _cc_weapon_ability.get_item_text(_cc_weapon_ability.selected),
+			"damageType": _cc_weapon_damage_type.get_item_text(_cc_weapon_damage_type.selected)
+		}
+	}
+	for ability in ABILITY_KEYS:
+		draft["abilityScores"][ability] = int(_cc_ability_inputs[ability].value)
+	if _cc_is_caster.button_pressed:
+		draft["spellcasting"] = {
+			"isCaster": true,
+			"ability": ABILITY_KEYS[_cc_spell_ability.selected],
+			"spellsKnown": _cc_spells_known.text
+		}
+	return draft
+
+func _on_create_character_pressed() -> void:
+	if _cc_in_flight:
+		return
+	if _cc_name.text.strip_edges() == "":
+		_cc_status_label.text = "Enter a name before creating the character."
+		return
+
+	var draft := _character_draft_from_form()
+	_cc_in_flight = true
+	_cc_create_button.disabled = true
+	_cc_status_label.text = "Writing the character sheet (needs \"node dm-bridge/watch.js\" running, with DND_REPO_PATH set on it)..."
+
+	var body := JSON.stringify(draft)
+	var error := _cc_request.request(
+		server_base_url + "/create-character",
+		["Content-Type: application/json"],
+		HTTPClient.METHOD_POST,
+		body
+	)
+	if error != OK:
+		_cc_in_flight = false
+		_cc_create_button.disabled = false
+		_cc_status_label.text = "Could not send to engine-server (error %d)." % error
+
+func _on_create_character_response(_result: int, response_code: int, _headers: PackedStringArray, response_body: PackedByteArray) -> void:
+	_cc_in_flight = false
+	_cc_create_button.disabled = false
+	var parsed = JSON.parse_string(response_body.get_string_from_utf8())
+
+	# validateDraft() failures land here as a real 400, distinct from a 500/504
+	# transport-level problem below -- surfaces the actual reasons (e.g. "Name is
+	# required.") rather than a generic error string.
+	if response_code == 400 and typeof(parsed) == TYPE_DICTIONARY and parsed.has("errors"):
+		_cc_status_label.text = ", ".join(PackedStringArray(parsed["errors"]))
+		return
+	if response_code != 200:
+		var error_text: String = "unknown error"
+		if typeof(parsed) == TYPE_DICTIONARY and parsed.has("error"):
+			error_text = str(parsed["error"])
+		_cc_status_label.text = "Create Character error (HTTP %d): %s" % [response_code, error_text]
+		return
+	if typeof(parsed) != TYPE_DICTIONARY:
+		_cc_status_label.text = "engine-server sent a response this client doesn't understand."
+		return
+
+	# {ok, message, fileName, character} -- ok can legitimately be false (a filename
+	# collision, DND_REPO_PATH not set on the watcher) without this being an HTTP-level
+	# error; see server.js's own doc comment on this endpoint for why.
+	var message: String = str(parsed.get("message", ""))
+	_cc_status_label.text = message if message != "" else ("Something went wrong." if not parsed.get("ok", false) else "Done.")
 
 ## apply_healing (see engine-server/engine/dmBridge.js) adds a flat amount,
 ## clamped to the target's own maxHp server-side, and clears dying/dead if it
