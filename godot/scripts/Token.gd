@@ -160,6 +160,31 @@ func apply_data(data: Dictionary, grid: GridManager) -> void:
 		position = target
 	_initialized = true
 
+## Item 3 of ROADMAP.md's "Seven requested features" (2026-09-19) -- lets
+## CharacterViewer.gd swap in an already-instantiated model (e.g. a runtime-loaded
+## external glTF file it just parsed, previewing a candidate before it's actually
+## wired into MODEL_CONFIG) through the exact same grounding/miniature-finish
+## treatment _rebuild_model() below gives a real MODEL_CONFIG entry, so a preview
+## looks exactly like what wiring that file in for real would produce -- not a
+## simplified re-derivation of that same logic. Bypasses MODEL_CONFIG/token_type
+## entirely; a later real apply_data() call rebuilds over it the usual way.
+func preview_external_model(instance: Node3D) -> void:
+	for child in _model_root.get_children():
+		child.queue_free()
+	_fallback_mesh = null
+	# queue_free() above only SCHEDULES removal (at the next idle frame) -- if
+	# `instance` was itself already a child of _model_root (a repeat preview of the
+	# same override after a poll tick rebuilt something else in between), it's still
+	# nominally attached at this exact point, and add_child() below would reject it
+	# ("already has a parent"). remove_child() is synchronous, so this makes calling
+	# this function safe regardless of instance's current parenting state, not just
+	# on a fresh never-parented node.
+	if instance.get_parent():
+		instance.get_parent().remove_child(instance)
+	_model_root.add_child(instance)
+	_ground_model(instance)
+	_apply_miniature_finish(instance)
+
 func _rebuild_model() -> void:
 	for child in _model_root.get_children():
 		child.queue_free()

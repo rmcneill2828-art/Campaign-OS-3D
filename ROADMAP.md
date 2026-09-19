@@ -1967,7 +1967,7 @@ future version needs them back, only from wherever they were originally
 sourced (or from the archive folder's own restore notes, which name each
 one).
 
-## Seven requested features -- 2026-09-19, planned (items 1 and 7 fixed same day)
+## Seven requested features -- 2026-09-19, planned (items 1, 3, and 7 fixed same day)
 
 User request: interactive character creation, visual dice rolls, a 3D
 character viewer, a system to import campaigns and create assets, higher-
@@ -2043,16 +2043,66 @@ first (7, then 1, then 3), the rest after.
    produce a result that disagrees with what the server actually rolled and
    applied.
 
-3. **Character viewer (3D model).** No dedicated scene exists at all today
-   -- only `Main.tscn` (battle map), `PlayerView.tscn` (read-only battle
-   map), and `Token.tscn` (in-scene miniature). A standalone viewer (orbit
-   camera + one model + a sheet panel) reuses `Token.gd`'s
-   `_ground_model()`/`_apply_miniature_finish()` directly rather than
-   reimplementing model-loading/grounding a second time. Natural pairing
-   with item 1 (preview a character right after building it) and with the
-   creature-model staging library at `I:\Campaign-OS-3D\Downloaded Static
-   Models\` (browse/preview a candidate model before writing a
-   `MODEL_CONFIG` entry for it).
+3. **Character viewer (3D model) -- fixed 2026-09-19.** No dedicated scene
+   existed at all going in -- only `Main.tscn` (battle map), `PlayerView.tscn`
+   (read-only battle map), and `Token.tscn` (in-scene miniature).
+
+   **What got built:** a new `godot/scripts/CharacterViewer.gd`
+   (`class_name CharacterViewer`, entirely code-built -- no `.tscn` at all,
+   same convention as the AoE Template/Character Creator controls, extended
+   here to the 3D scene graph itself: lighting, a `WorldEnvironment`, and a
+   tight-orbit `CameraRig` instance around one embedded real `Token` scene).
+   Opened via a new "View Character (3D)" button in `Main.gd`'s existing
+   Other Actions section (a per-selected-token action, same category as
+   Remove Token/Damage there) as a real second OS window -- multiple can be
+   open at once for different tokens, unlike the single reused Player
+   Window, since there's no shared state between viewer instances to
+   conflict. Polls `engine-server` independently on its own timer, same
+   "a second independent poller is simpler than pushing updates into a
+   child window" reasoning `PlayerView.gd` already established.
+
+   The embedded `Token` is driven through the exact same `apply_data()`
+   the board itself calls -- model resolution (whatever `MODEL_CONFIG`
+   would show on the real board, automatically staying in sync as real
+   models get wired in later), grounding, miniature finish, HP bar, name
+   label -- rendered close-up, next to a live stat-sheet panel (HP/AC/all
+   6 ability scores with modifiers/conditions/spellcasting/resources).
+
+   **Also built, serving the "browse the model-sourcing library" pairing
+   directly:** a "Load Model" field that previews an arbitrary `.glb`/
+   `.gltf` file from anywhere on disk -- e.g. straight out of
+   `I:\Campaign-OS-3D\Downloaded Static Models\`, which sits entirely
+   outside this Godot project -- via `GLTFDocument.append_from_file()`,
+   Godot's own runtime, importer-independent glTF reader, rather than
+   `ResourceLoader.load()` (which only works for files already inside this
+   project's own `res://` tree with a real `.import` already generated).
+   `.fbx` isn't supported this way -- Godot's FBX pipeline is editor-
+   import-time only (the bundled FBX2glTF converter), with no runtime-
+   loader equivalent -- but that's the overwhelming minority of that
+   library per its own sourcing notes ("models must be plain/static
+   `.glb`, not rigged bipeds"). The preview goes through `Token.gd`'s own
+   new `preview_external_model()` (grounding + miniature finish, same
+   treatment a real `MODEL_CONFIG` entry gets) rather than a simplified
+   re-derivation, and is session-only -- never written back to
+   `MODEL_CONFIG`.
+
+   **A real, non-obvious bug found and fixed while building this:**
+   `queue_free()` only *schedules* removal (at the next idle frame) -- a
+   node is still nominally attached to its old parent at the exact point
+   `add_child()` would try to re-add it elsewhere, which Godot rejects
+   ("already has a parent"). This bit an early version of
+   `preview_external_model()` itself: reapplying a Load Model override
+   after a poll tick had rebuilt the token's *real* model in between would
+   throw. Fixed by making `preview_external_model()` defensively call
+   `remove_child()` (synchronous) on its argument's current parent, if any,
+   before re-adding it -- safe regardless of the node's current parenting
+   state, not just on a fresh never-parented one.
+
+   **New test:** `godot/tools/test_character_viewer.gd` -- 15 assertions,
+   including a genuine end-to-end runtime glTF parse against a `.glb`
+   already committed to this repo (Kenney's `floor.glb`, not a mocked
+   fixture) and a direct regression check for the exact parenting bug
+   above, wired into the `godot-smoke-tests` CI job.
 
 4. **Import campaigns + create assets.** Partial, and browser-locked today.
    `engine-server/engine/campaign.js` (copied verbatim, 569 lines) already

@@ -317,6 +317,7 @@ func _ready() -> void:
 	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
 	_build_template_controls()
 	_build_character_creator_controls()
+	_build_view_character_button()
 
 	_heal_button.pressed.connect(_on_heal_pressed)
 	_full_heal_button.pressed.connect(_on_full_heal_pressed)
@@ -589,6 +590,38 @@ func _on_open_player_window_pressed() -> void:
 	get_tree().root.add_child(_player_window)
 	_player_window.show()
 	_player_window.grab_focus()
+
+## Item 3 of ROADMAP.md's "Seven requested features" (2026-09-19) -- adds a "View
+## Character (3D)" button to the existing Other Actions section (built in code, same
+## convention as everywhere else new controls got added this session), rather than a
+## whole new top-level HUD button/layout slot -- it's a per-selected-token action, the
+## exact same category Remove Token/Damage/Death Save already occupy there.
+func _build_view_character_button() -> void:
+	var button := Button.new()
+	button.text = "View Character (3D)"
+	button.pressed.connect(_on_view_character_pressed)
+	_other_body.add_child(button)
+
+## Opens a real second OS window (same technique as "Open Player Window" above,
+## including its own reasoning for why this doesn't push updates into the child --
+## CharacterViewer.gd polls engine-server independently, on its own timer) holding a
+## CharacterViewer for whichever token is currently selected. Multiple can be open at
+## once for different tokens (unlike the single reused Player Window) -- there's no
+## reason comparing two creatures side by side shouldn't just work, and no shared
+## state between viewer instances to conflict.
+func _on_view_character_pressed() -> void:
+	if not _require_selected_token():
+		return
+	var token_name: String = _tokens[_selected_token_id].token_name
+	var viewer := CharacterViewer.new()
+	viewer.open(server_base_url, _selected_token_id)
+	var window := Window.new()
+	window.title = "Campaign OS 3D -- Character Viewer: %s" % token_name
+	window.size = Vector2i(900, 700)
+	window.add_child(viewer)
+	window.close_requested.connect(window.queue_free)
+	get_tree().root.add_child(window)
+	window.show()
 
 ## rollInitiative (see engine-server/engine/encounter.js) rolls 1d20 + the
 ## target's real DEX modifier (RAW) and sets its initiative directly --

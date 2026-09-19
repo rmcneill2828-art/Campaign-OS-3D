@@ -60,7 +60,12 @@ design along for the ride.
     scores with Standard Array/Roll buttons, all 18 skill proficiencies, an
     optional spellcasting block, an attack, personality, backstory, ...) and
     writes it straight into the DnD campaign repo's `characters/` folder via
-    `POST /create-character`.
+    `POST /create-character`. A "View Character (3D)" button (per-token, in Other
+    Actions) opens a dedicated close-up viewer window -- an orbit camera around that
+    token's actual model plus a full live stat sheet, with a "Load Model" field that
+    can preview any external `.glb`/`.gltf` file from anywhere on disk (e.g. the
+    creature-model-sourcing library) before it's ever wired into a real
+    `MODEL_CONFIG` entry.
   - **`PlayerView.tscn`** -- a read-only second window (opened via "Open Player
     Window" in the DM view, meant for a second monitor/TV) with no `POST /action`
     call anywhere in it, structurally incapable of mutating the encounter. Shows

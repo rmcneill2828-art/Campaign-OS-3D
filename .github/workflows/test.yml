@@ -62,6 +62,13 @@ jobs:
       - name: test_character_creator.gd (Character Creator controls + draft shape)
         run: godot --headless --path godot --script res://tools/test_character_creator.gd
 
+      # Includes a real runtime glTF parse (GLTFDocument) against a .glb already
+      # committed to this repo, and a direct regression check for the "already has a
+      # parent" bug found while building this (see CharacterViewer.gd's own
+      # _apply_token()/Token.gd's preview_external_model() doc comments).
+      - name: test_character_viewer.gd (Character Viewer scene + stats + Load Model)
+        run: godot --headless --path godot --script res://tools/test_character_viewer.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce
