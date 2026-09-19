@@ -52,6 +52,11 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
+## AoE template tool (ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 7)
+## -- fixed option order, matches how TEMPLATE_SHAPES's own index is used as
+## OptionButton.selected below (same "index, not id" convention ROLL_MODE_* already uses).
+const TEMPLATE_SHAPES: Array[String] = ["circle", "cone", "line"]
+
 
 ## applyHealing (see engine-server/engine/encounter.js) clamps to the target's
 ## real maxHp server-side -- this client doesn't need to know that value
@@ -173,6 +178,25 @@ var _condition_buttons := {} # condition name (String) -> Button (toggle_mode)
 var _area_target_checkboxes := {} # token name (String) -> CheckBox
 var _last_target_names: Array[String] = [] # last set the spell-target UI was built from -- see _sync_spell_targets()
 
+## AoE template tool -- shape math lives in AoeTemplate.gd (a port of encounter.js's own
+## point-in-shape functions); these just track placement state, same "local UI concern,
+## never persisted to server state" convention ui/app.js's own template*/ vars document
+## for themselves. Built entirely in code (_build_template_controls(), called from
+## _ready()) rather than hand-edited into Main.tscn, same convention the Conditions
+## toggle-button grid already uses just below.
+var _template_active := false
+var _template_shape := "circle" # one of TEMPLATE_SHAPES
+var _template_origin := Vector2.ZERO # cell units -- see AoeTemplate.gd's class doc comment
+var _template_placed := false # false until a click/drag has actually set an origin
+var _template_angle_rad := 0.0 # cone/line only
+var _template_dragging := false
+var _template_overlay: MeshInstance3D
+var _template_shape_option: OptionButton
+var _template_length_input: SpinBox
+var _template_width_row: HBoxContainer
+var _template_width_input: SpinBox
+var _template_info_label: Label
+
 var _tokens := {} # token id (String) -> Token node
 var _selected_token_id := ""
 var _last_centered_map_name := "" # not just a one-time flag -- see _apply_state()'s own use, below
@@ -234,6 +258,7 @@ func _ready() -> void:
 		_area_save_ability_option.add_item(ability)
 	_cast_spell_button.pressed.connect(_on_cast_spell_pressed)
 	_cast_area_spell_button.pressed.connect(_on_cast_area_spell_pressed)
+	_build_template_controls()
 
 	_heal_button.pressed.connect(_on_heal_pressed)
 	_full_heal_button.pressed.connect(_on_full_heal_pressed)
@@ -363,6 +388,7 @@ func _apply_state(state: Dictionary) -> void:
 
 	_sync_condition_buttons(tokens_on_map)
 	_sync_spell_targets(tokens_on_map)
+	_update_template_overlay() # keeps the covered-token set live even when a token moves via the DM Assistant, not just a local drag
 	_update_status_label(state, map_name, tokens_on_map)
 	_update_combat_log(state.get("log", []))
 
@@ -636,6 +662,214 @@ func _on_cast_area_spell_pressed() -> void:
 	if damage_type != DAMAGE_TYPE_NONE:
 		action["damageType"] = damage_type
 	_send_action(action)
+
+## Builds the AoE Template controls entirely in code -- same convention the Conditions
+## toggle-button grid above already uses -- rather than hand-editing Main.tscn's XML.
+## Inserted into the existing Spell section right above the Area Spell Targets list this
+## tool feeds (not appended after Cast Area Spell), so the panel reads top-to-bottom as
+## "aim, then see targets, then cast."
+func _build_template_controls() -> void:
+	var shape_row := HBoxContainer.new()
+	var shape_label := Label.new()
+	shape_label.text = "AoE Template:"
+	shape_row.add_child(shape_label)
+	_template_shape_option = OptionButton.new()
+	for shape_name in TEMPLATE_SHAPES:
+		_template_shape_option.add_item(shape_name.capitalize())
+	_template_shape_option.item_selected.connect(_on_template_shape_selected)
+	shape_row.add_child(_template_shape_option)
+	_template_toggle_button_setup(shape_row)
+
+	var size_row := HBoxContainer.new()
+	var length_label := Label.new()
+	length_label.text = "Size (ft):"
+	size_row.add_child(length_label)
+	_template_length_input = SpinBox.new()
+	_template_length_input.min_value = 5
+	_template_length_input.max_value = 300
+	_template_length_input.step = 5
+	_template_length_input.value = 20
+	_template_length_input.value_changed.connect(func(_v): _update_template_overlay())
+	size_row.add_child(_template_length_input)
+
+	_template_width_row = HBoxContainer.new()
+	var width_label := Label.new()
+	width_label.text = "Width (ft):"
+	_template_width_row.add_child(width_label)
+	_template_width_input = SpinBox.new()
+	_template_width_input.min_value = 5
+	_template_width_input.max_value = 60
+	_template_width_input.step = 5
+	_template_width_input.value = 5
+	_template_width_input.value_changed.connect(func(_v): _update_template_overlay())
+	_template_width_row.add_child(_template_width_input)
+	_template_width_row.visible = false # circle/cone don't take a separate width -- see AoeTemplate.gd's shape_cells()
+
+	_template_info_label = Label.new()
+	_template_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_template_info_label.add_theme_font_size_override("font_size", 13)
+
+	_spell_body.add_child(shape_row)
+	_spell_body.add_child(size_row)
+	_spell_body.add_child(_template_width_row)
+	_spell_body.add_child(_template_info_label)
+	var insert_at := _area_targets_list.get_index()
+	_spell_body.move_child(shape_row, insert_at)
+	_spell_body.move_child(size_row, insert_at + 1)
+	_spell_body.move_child(_template_width_row, insert_at + 2)
+	_spell_body.move_child(_template_info_label, insert_at + 3)
+
+	_update_template_overlay() # sets the initial hint text
+
+func _template_toggle_button_setup(parent: HBoxContainer) -> void:
+	var button := Button.new()
+	button.text = "Draw Template"
+	button.toggle_mode = true
+	button.toggled.connect(_on_template_toggle.bind(button))
+	parent.add_child(button)
+
+func _on_template_shape_selected(index: int) -> void:
+	_template_shape = TEMPLATE_SHAPES[index]
+	_template_width_row.visible = _template_shape == "line"
+	_template_placed = false # shape changed -- start fresh rather than reinterpreting stale placement
+	_update_template_overlay()
+
+func _on_template_toggle(pressed: bool, button: Button) -> void:
+	_template_active = pressed
+	button.text = "Template On" if pressed else "Draw Template"
+	if not pressed:
+		_template_placed = false
+		_template_dragging = false
+	_update_template_overlay()
+
+## Circle is placed with a plain click (matching the 2D app's own precedent); Cone/Line
+## need a click-DRAG instead, since a direction has to come from somewhere -- this just
+## sets the origin/apex and starts the drag, _handle_template_drag (mouse motion, while
+## _template_dragging) continuously re-aims it, and a plain mouseup (see
+## _unhandled_input) just ends the drag -- the placement itself already happened live,
+## there's nothing left to commit.
+func _handle_template_left_press(screen_pos: Vector2) -> void:
+	var cell = _template_cell_units_from_screen(screen_pos)
+	if cell == null:
+		return
+	_template_origin = cell
+	_template_placed = true
+	if _template_shape != "circle":
+		_template_dragging = true
+	_update_template_overlay()
+
+func _handle_template_drag(screen_pos: Vector2) -> void:
+	var cell = _template_cell_units_from_screen(screen_pos)
+	if cell == null:
+		return
+	var delta: Vector2 = cell - _template_origin
+	if delta.length_squared() > 0.0001: # ignore jitter right at mousedown, before a real direction exists
+		_template_angle_rad = atan2(delta.y, delta.x)
+	_update_template_overlay()
+
+## Raycasts the same way every click-to-move already does, then converts straight to
+## AoeTemplate's own cell-unit space -- a world position divided by cell_size IS a
+## cell-unit coordinate already (see AoeTemplate.gd's class doc comment), continuous
+## rather than snapped to a whole grid cell, so this reads real sub-cell placement/
+## angles directly from the 3D scene rather than leaning on the 2D app's own "screen
+## pixels approximate real angles" assumption. Accepts a hit against a token just as
+## happily as the floor -- both sit at board height, and only the hit's x/z (not y)
+## is ever used here.
+func _template_cell_units_from_screen(screen_pos: Vector2) -> Variant:
+	var hit := _raycast_from_screen(screen_pos)
+	if hit.is_empty():
+		return null
+	var world_pos: Vector3 = hit["position"]
+	return Vector2(world_pos.x, world_pos.z) / _board.cell_size
+
+## Rebuilds the 3D shape overlay, the info label, and the Area Spell Targets checkboxes
+## from the current template placement -- called on every relevant change (toggle,
+## shape switch, size input, drag, and every state poll so a token moving elsewhere --
+## e.g. via the DM Assistant -- keeps the covered set live too). Cheap enough to just
+## rebuild from scratch every time, same convention GridManager._build_grid_lines()/
+## PlayerView._rebuild_fog() already use. Mirrors ui/app.js's own
+## renderTemplateOverlay(), translated from an SVG overlay + floating label to a real
+## 3D mesh + an in-panel label (no natural place to billboard 3D text at an arbitrary
+## polygon centroid the way the 2D app anchors its label there).
+func _update_template_overlay() -> void:
+	if _template_overlay:
+		_template_overlay.queue_free()
+		_template_overlay = null
+
+	if not _template_active or not _template_placed:
+		if _template_info_label:
+			_template_info_label.text = "Toggle \"Draw Template\", then click (Circle) or click-drag (Cone/Line) on the board."
+		return
+
+	var length_cells: float = _template_length_input.value / _board.feet_per_square
+	var width_cells: float = _template_width_input.value / _board.feet_per_square
+	var shape := AoeTemplate.shape_cells(_template_shape, _template_origin, _template_angle_rad, length_cells, width_cells)
+
+	var tokens: Array = []
+	for token in _tokens.values():
+		tokens.append({"name": token.token_name, "x": token.grid_x, "y": token.grid_y})
+	var covered := AoeTemplate.covered_token_names(tokens, _template_shape, _template_origin, _template_angle_rad, length_cells, width_cells)
+
+	_template_overlay = _build_template_mesh(shape)
+	add_child(_template_overlay)
+
+	var size_label := ("%d ft radius" % int(_template_length_input.value)) if _template_shape == "circle" \
+		else ("%d ft %s" % [int(_template_length_input.value), _template_shape])
+	# String.join() wants a PackedStringArray, not a generic Array -- same explicit
+	# conversion Token.gd's own conditions-line building already uses, for the same reason.
+	_template_info_label.text = ("%s -- %s" % [size_label, ", ".join(PackedStringArray(covered))]) if not covered.is_empty() else size_label
+
+	# Auto-check exactly the covered set (both directions -- uncheck a name that just
+	# left the shape, not only check ones that entered it) rather than only ever adding:
+	# a DM re-aiming a cone should see the target list track the shape live, the whole
+	# point of this tool over the previous "check each box by hand" requirement. Toggling
+	# "Draw Template" off stops this loop from running at all (see _on_template_toggle),
+	# freezing whatever's checked for final manual adjustment before Cast Area Spell.
+	for name in _area_target_checkboxes:
+		_area_target_checkboxes[name].button_pressed = covered.has(name)
+
+## Builds the translucent 3D shape mesh itself from AoeTemplate.shape_cells()'s output --
+## a triangle fan for a circle, a plain fan triangulation for a cone's triangle or a
+## line's quad (valid for both -- a triangle needs no further split, and a convex quad
+## fans cleanly from any one corner).
+func _build_template_mesh(shape: Dictionary) -> MeshInstance3D:
+	const OVERLAY_HEIGHT := 0.03 # just above GridManager's own grid-line overlay (0.01) so this draws on top, not z-fighting with it
+	const SEGMENTS := 32
+	var cell_size: float = _board.cell_size
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	if shape["kind"] == "circle":
+		var center: Vector2 = shape["center"]
+		var radius_world: float = float(shape["radius_cells"]) * cell_size
+		var center_world := Vector3(center.x * cell_size, OVERLAY_HEIGHT, center.y * cell_size)
+		for i in range(SEGMENTS):
+			var a0 := (float(i) / SEGMENTS) * TAU
+			var a1 := (float(i + 1) / SEGMENTS) * TAU
+			var p0 := center_world + Vector3(cos(a0) * radius_world, 0.0, sin(a0) * radius_world)
+			var p1 := center_world + Vector3(cos(a1) * radius_world, 0.0, sin(a1) * radius_world)
+			surface.add_vertex(center_world)
+			surface.add_vertex(p0)
+			surface.add_vertex(p1)
+	else:
+		var points: Array = shape["points"]
+		var world_points: Array[Vector3] = []
+		for point in points:
+			world_points.append(Vector3(point.x * cell_size, OVERLAY_HEIGHT, point.y * cell_size))
+		for i in range(1, world_points.size() - 1):
+			surface.add_vertex(world_points[0])
+			surface.add_vertex(world_points[i])
+			surface.add_vertex(world_points[i + 1])
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = surface.commit()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.albedo_color = Color(1.0, 0.45, 0.1, 0.35) # translucent orange -- reads as "template," distinct from the grid-line white and fog's black
+	mesh_instance.material_override = material
+	return mesh_instance
 
 ## apply_healing (see engine-server/engine/dmBridge.js) adds a flat amount,
 ## clamped to the target's own maxHp server-side, and clears dying/dead if it
@@ -920,7 +1154,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_deselect_token()
 	elif event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_handle_left_click(event.position)
+			if _template_active:
+				_handle_template_left_press(event.position)
+			else:
+				_handle_left_click(event.position)
+		elif event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			_template_dragging = false
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			if event.pressed:
 				_right_press_pos = event.position
@@ -929,6 +1168,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				_right_press_active = false
 				if event.position.distance_to(_right_press_pos) <= RIGHT_CLICK_DRAG_THRESHOLD_PX:
 					_handle_right_click(event.position)
+	elif event is InputEventMouseMotion and _template_dragging:
+		_handle_template_drag(event.position)
 
 func _raycast_from_screen(screen_pos: Vector2) -> Dictionary:
 	var camera: Camera3D = _camera_rig.camera

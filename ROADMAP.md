@@ -1252,14 +1252,8 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   every other action here already uses. No confirmation dialog on Remove
   Token -- matches this client's existing no-confirmation convention for
   every other action (Full Heal, dropping to 0 HP, etc.).
-- **No AoE template tool** -- `cast_area_spell` exists and works, but
-  requires manually checking each target's checkbox one at a time; the 2D
-  app lets the DM drag out a cone/circle/line template directly on the map
-  and auto-detects which tokens it covers (`templateCoveredTokenNames()`,
-  built on real point-in-shape geometry already living in `encounter.js`
-  and therefore already available to the 3D server too -- just never
-  wired into a 3D-side drawing tool). Tracked in detail (and worked first)
-  as item 7 of "Seven requested features" below.
+- ~~**No AoE template tool**~~ -- **fixed 2026-09-19**, see item 7 of
+  "Seven requested features" below for the full account.
 - **No ruler/measuring tool** (2D app: click-drag distance measurement
   overlay).
 - **No interactive wall editor** -- walls only come from hardcoded
@@ -1976,7 +1970,7 @@ future version needs them back, only from wherever they were originally
 sourced (or from the archive folder's own restore notes, which name each
 one).
 
-## Seven requested features -- 2026-09-19, planned
+## Seven requested features -- 2026-09-19, planned (item 7 fixed same day)
 
 User request: interactive character creation, visual dice rolls, a 3D
 character viewer, a system to import campaigns and create assets, higher-
@@ -2064,20 +2058,60 @@ first (7, then 1, then 3), the rest after.
    `/action` response the same way `Token.gd`'s move/attack feedback
    already reacts to a state poll.
 
-7. **Spell radius (AoE template tool) -- working this first.** Best-
-   grounded of the seven: the hard geometry already exists and is already
-   copied into this project. `pointInCircle`/`pointInCone`/`pointInLine`
-   all live in `engine-server/engine/encounter.js` (confirmed exported).
-   One correction to this file's own earlier Feature Parity Audit note
-   above, which implied the target-detection wrapper was already engine-
-   side too: `templateCoveredTokenNames()` actually lives in the 2D app's
-   `ui/app.js` (browser UI code), not the shared engine, so it needs
-   porting -- small (~20 lines), but real, not just a wiring exercise.
-   Plan: port that wrapper (GDScript, calling the 3 shape primitives
-   through a small `engine-server` endpoint, or reimplemented directly in
-   `Main.gd` against the same token x/y data it already polls), then a
-   click-drag template-drawing tool over `GridManager`'s board (circle:
-   center+drag-radius; cone/line: apex+drag-direction, matching the 2D
-   app's own control scheme) that highlights covered tokens live and feeds
-   the result into `cast_area_spell`'s existing `targets` array instead of
-   the current manual checkbox list.
+7. **Spell radius (AoE template tool) -- fixed 2026-09-19.** Best-grounded
+   of the seven going in: the hard geometry already existed
+   (`pointInCircle`/`pointInCone`/`pointInLine`, already copied into
+   `engine-server/engine/encounter.js`), just never wired to a 3D drawing
+   tool. `templateCoveredTokenNames()` turned out to be 2D-UI-side only
+   (`ui/app.js`, not the shared engine, correcting this file's own earlier
+   Feature Parity Audit note above) and needed real porting, not just
+   wiring.
+
+   **What got built:** `godot/scripts/AoeTemplate.gd` (new, `class_name
+   AoeTemplate`) ports `pointInCircle`/`pointInCone`/`pointInLine` plus a
+   `shape_cells()`/`covered_token_names()` pair mirroring `ui/app.js`'s own
+   `templateShapeCells()`/`templateCoveredTokenNames()`, all working in the
+   same cell-unit space `encounter.js` itself uses (a cell's center at
+   `index - 0.5` -- conveniently exactly what a world position divided by
+   `GridManager.cell_size` already gives, so no separate offset math is
+   needed anywhere this gets used). `Main.gd` gained: an "AoE Template"
+   row (Shape dropdown, Size/Width-in-feet SpinBoxes, a toggle button) built
+   entirely in code and spliced into the existing Spell section right above
+   the Area Spell Targets list (same "build controls in `_ready()`, no
+   hand-edited `.tscn` XML" convention the Conditions grid already uses);
+   click-to-place for Circle and click-drag-to-aim for Cone/Line (mirroring
+   `ui/app.js`'s own `startTemplateDrag`/`dragTemplateAim`, but reading a
+   real continuous 3D floor raycast instead of leaning on "screen pixels
+   approximate real angles"); a translucent orange `SurfaceTool`-built mesh
+   overlay on the board (a circle as a 32-segment fan, cone/line as a
+   fan-triangulated polygon); and, going one step past the 2D app's own
+   "just show a label" precedent, the covered set now LIVE auto-checks/
+   unchecks the real `_area_target_checkboxes` the existing
+   `cast_area_spell` button already reads -- toggling "Draw Template" off
+   freezes whatever's checked for a final manual adjustment before casting,
+   rather than the tool fighting a DM's own override. No changes needed to
+   `cast_area_spell` itself or the server at all: this only ever pre-fills
+   the same checkbox list that already fed it.
+
+   **A real pre-existing gap found and fixed along the way:** verifying
+   this needed a test that could actually exercise `Main.gd`'s
+   `_ready()`-time state, which surfaced that `smoke_test_main.gd`/
+   `smoke_test_player_view.gd` never actually did what their own doc
+   comments claimed. Both call `quit()` synchronously at the end of
+   `_init()`, but `_ready()` (and `@onready` assignment) only actually runs
+   during the tree's first real iteration -- confirmed directly by probing
+   a known `_ready()`-built value (`_template_shape_option`) and finding it
+   null immediately after `add_child()`, but populated by the first
+   `_process()` tick. Both existing smoke tests were therefore only ever
+   catching a scene-file/parse error, never a genuine `_ready()`-time
+   runtime error, since the day they were written. Fixed by deferring
+   `quit()` to the first `_process()` tick in both files -- confirmed still
+   green afterward, now for real.
+
+   **New test:** `godot/tools/test_aoe_template.gd` -- 15 pure assertions
+   against `AoeTemplate`'s own shape math (boundary cases, a 90-degree
+   rotation, `shape_cells()`'s point counts) plus 8 more driving a real
+   `Main.tscn` instance through a synthetic `_apply_state()` call and
+   asserting the checkbox auto-check/uncheck/freeze behavior end to end
+   (23/23 passing). Wired into `.github/workflows/test.yml`'s
+   `godot-smoke-tests` job alongside the three existing smoke tests.

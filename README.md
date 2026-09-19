@@ -44,11 +44,13 @@ design along for the ride.
     click-to-select / click-to-move / right-click-to-attack,
     a scrolling combat log, and a collapsible Token Actions panel covering the
     full core 5e loop -- saving throws, ability checks, all 11 conditions,
-    single-target and area spellcasting, class resources, long/short rests, death
-    saves, exhaustion, legendary actions, recharge abilities, lair actions,
-    healing, initiative (roll or set), an advantage/disadvantage roll-mode
-    toggle, and quick actions for damage/drop-concentration/spend-hit-die/remove-
-    token. A "DM Assistant (Claude)" panel sends free-text narration through
+    single-target and area spellcasting (with a click-to-place/click-drag-to-aim
+    AoE template tool for circle/cone/line shapes that live-highlights which
+    tokens they cover), class resources, long/short rests, death saves,
+    exhaustion, legendary actions, recharge abilities, lair actions, healing,
+    initiative (roll or set), an advantage/disadvantage roll-mode toggle, and
+    quick actions for damage/drop-concentration/spend-hit-die/remove-token. A
+    "DM Assistant (Claude)" panel sends free-text narration through
     `POST /dm-command` and applies whatever actions Claude decides on.
   - **`PlayerView.tscn`** -- a read-only second window (opened via "Open Player
     Window" in the DM view, meant for a second monitor/TV) with no `POST /action`
@@ -121,8 +123,6 @@ live in Godot -- see [ROADMAP.md](ROADMAP.md)'s Phase 0-8 entries and its
 "Feature Parity Audit" section for the full detail behind each of these. Real gaps
 against the 2D app, still open:
 
-- No AoE template tool (drag out a cone/circle/line on the map and auto-detect
-  covered tokens) -- `cast_area_spell` still requires checking each target by hand.
 - No ruler/measuring tool.
 - No interactive wall editor -- walls come from hardcoded map-building tools or
   DM Assistant text commands, not click-drag drawing.

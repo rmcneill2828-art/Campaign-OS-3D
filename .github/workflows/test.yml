@@ -45,6 +45,15 @@ jobs:
       - name: smoke_test_entrance_hall.gd (Entrance Hall map resolves and loads with the expected node count)
         run: godot --headless --path godot --script res://tools/smoke_test_entrance_hall.gd
 
+      # Unlike the three smoke tests above (load/parse/_ready() only), this actually
+      # drives Main.gd through a synthetic /state response and asserts the AoE
+      # Template tool's own behavior -- shape math correctness, and that placing/
+      # moving/toggling a template really does auto-check/uncheck the right Area
+      # Spell Targets checkboxes. See ROADMAP.md's "Seven requested features"
+      # 2026-09-19 entry, item 7.
+      - name: test_aoe_template.gd (AoE Template shape math + Main.gd wiring)
+        run: godot --headless --path godot --script res://tools/test_aoe_template.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce
