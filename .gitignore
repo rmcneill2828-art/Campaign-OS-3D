@@ -17,6 +17,14 @@ engine-server/state/*.json
 engine-server/state/*.json.bak
 !engine-server/state/.gitkeep
 
+# Adventure map import (ROADMAP.md, 2026-09-19) -- a DM's own real map images
+# (rasterized adventure-module pages, etc.), placed here by hand per
+# MapImagePath.gd's own convention. Same "runtime/DM-provided data, not source"
+# reasoning as encounter.json above, plus real licensing stakes this time (see
+# CAMPAIGN_MAP_IMPORT_REPORT.md's Licensing section) -- never commit these.
+engine-server/state/maps/*
+!engine-server/state/maps/.gitkeep
+
 # Phase 7: runtime request/response files this server and dm-bridge/watch.js write at
 # play time (combat narration) -- generated locally, never meant to be committed. Same
 # entry, same reasoning, as Campaign-OS's own .gitignore for its identical dm-bridge/

@@ -155,12 +155,17 @@ against the 2D app, still open:
   DM Assistant text commands, not click-drag drawing.
 - No Encounter Difficulty calculator, no freeform dice roller (both are already
   pure functions in the shared engine, just not wired into this client's UI yet).
-- No Token Library / Map Library / folder-based asset browsing -- every map and
-  creature model is hand-built/hardcoded today. A path for real published
-  adventure maps specifically (not folder browsing in general) has a reviewed,
-  scoped-down plan -- see [ROADMAP.md](ROADMAP.md)'s "Adventure map import"
-  entry -- reusing the 2D app's own already-working map-image/grid/wall tools
-  rather than building a new annotation editor in Godot.
+- No Token Library / Map Library / folder-based asset browsing -- every
+  hand-built map and creature model is hand-authored/hardcoded today. Real
+  published adventure maps specifically (not folder browsing in general) are
+  partway there: `GridManager` can render a textured floor + generated wall
+  geometry from a real map image + `state.maps[name]`'s own wall data (see
+  [ROADMAP.md](ROADMAP.md)'s "Adventure map import" entry), verified against
+  synthetic test data -- but nothing has actually annotated a real map in the
+  2D app yet (the plan reuses its existing image-upload/grid/wall tools
+  rather than a new Godot editor), and the image-file hand-off from there
+  to this client's gitignored `engine-server/state/maps/` folder is still a
+  manual, unautomated step.
 - No End Session / session-transcript reporting -- already exists in
   `dm-bridge/watch.js` itself; this client's UI just never added a way to
   trigger it.

@@ -74,6 +74,12 @@ jobs:
       - name: test_dice_roll.gd (roll-message extraction + tumbling die visual)
         run: godot --headless --path godot --script res://tools/test_dice_roll.gd
 
+      # Uses a real image already committed to this repo (Kenney's Sample.png),
+      # copied to a throwaway temp path -- never touches the real, gitignored
+      # engine-server/state/maps/ folder.
+      - name: test_raster_map.gd (adventure map import: raster floor + generated walls)
+        run: godot --headless --path godot --script res://tools/test_raster_map.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce

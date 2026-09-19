@@ -28,6 +28,13 @@ const TILE_HEIGHT := 0.1
 const FLOOR_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor.glb"
 const FLOOR_DETAIL_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor-detail.glb"
 
+## Generated wall geometry (see _build_walls()) -- a plain stone-gray box per
+## encounter.js's own {x1,y1,x2,y2} wall segment, no bespoke wall asset (there isn't
+## one for an arbitrary imported map). 10 ft is a typical room wall height, not an
+## SRD rule this project models elsewhere.
+const WALL_HEIGHT_FEET := 10.0
+const WALL_THICKNESS := 0.15
+
 var columns := 0
 var rows := 0
 var feet_per_square := 5.0
@@ -47,6 +54,14 @@ var _floor_detail_scene: PackedScene
 # which columns/rows/cell_size alone can't distinguish.
 var _current_map_scene_path := ""
 var _map_scene_instance: Node3D
+
+## Same "part of the no-op-if-unchanged signature" role as _current_map_scene_path
+## above, for the two ROADMAP.md "Adventure map import" additions -- a DM adding a
+## wall via the DM Assistant mid-session (same map, same size) needs to actually
+## rebuild the generated wall meshes, which columns/rows/cell_size/map_scene_path
+## alone wouldn't catch.
+var _current_raster_image_path := ""
+var _current_walls: Array = []
 
 func _ready() -> void:
 	_light_material = StandardMaterial3D.new()
@@ -92,32 +107,139 @@ func board_center() -> Vector3:
 ## empty path (any map name with no hand-built scene registered yet) falls
 ## back to the original fully-procedural floor, so a new/unmapped map still
 ## renders something instead of staying blank.
-func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "") -> void:
+##
+## `raster_image_path` (ROADMAP.md's "Adventure map import" entry) -- a real image
+## file already resolved by the caller (see MapImagePath.gd), used INSTEAD of the
+## procedural floor when there's no hand-built map_scene_path; a hand-built scene
+## always wins if both happen to be present, same "the hand-authored version is the
+## intentionally better one" precedent already implicit in map_scene_path's own
+## priority over the plain procedural floor. `walls` (encounter.js's own
+## {x1,y1,x2,y2} segments) generates real 3D wall geometry -- but ONLY alongside a
+## raster or procedural floor, never a hand-built scene, which already carries its
+## own hand-placed wall geometry; doubling it here would just draw ugly overlapping
+## boxes on top of it.
+func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "", raster_image_path: String = "", walls: Array = []) -> void:
 	var new_cell_size := new_feet_per_square * METERS_PER_FOOT
 	if new_columns == columns and new_rows == rows and is_equal_approx(new_cell_size, cell_size) \
-			and map_scene_path == _current_map_scene_path and get_child_count() > 0:
+			and map_scene_path == _current_map_scene_path and raster_image_path == _current_raster_image_path \
+			and walls == _current_walls and get_child_count() > 0:
 		return
 	columns = new_columns
 	rows = new_rows
 	feet_per_square = new_feet_per_square
 	cell_size = new_cell_size
 	_current_map_scene_path = map_scene_path
+	_current_raster_image_path = raster_image_path
+	_current_walls = walls
 
+	# free(), not queue_free() -- queue_free() only SCHEDULES removal for the next
+	# idle frame, so an old child is still technically present in get_children()
+	# at the exact moment a SECOND build() call runs before that frame ever
+	# happens (confirmed directly: this bit a test that called build() several
+	# times in a row with no frame in between, undercounting how many old
+	# children had really been replaced). Nothing outside this function holds a
+	# reference to these children past this point, and get_children() below is
+	# already a snapshot array, not a live view, so freeing immediately while
+	# iterating it is safe.
 	for child in get_children():
-		child.queue_free()
+		remove_child(child)
+		child.free()
 	_map_scene_instance = null
 
 	if map_scene_path != "" and ResourceLoader.exists(map_scene_path):
 		var map_scene := load(map_scene_path) as PackedScene
 		_map_scene_instance = map_scene.instantiate() as Node3D
 		add_child(_map_scene_instance)
+	elif raster_image_path != "" and FileAccess.file_exists(raster_image_path):
+		_build_raster_floor(raster_image_path)
+		_build_walls(walls)
 	elif _floor_scene:
 		_build_real_floor_tiles()
+		_build_walls(walls)
 	else:
 		_build_fallback_checkerboard()
+		_build_walls(walls)
 
 	_build_grid_lines()
 	_build_floor_collision()
+
+## Renders a single large textured floor plane from an external image file loaded at
+## RUNTIME from an absolute OS path -- Image.load() + ImageTexture, the same "load
+## real content from outside this project's own res:// tree" idea
+## CharacterViewer.gd's GLTFDocument use already established for external .glb
+## files, simpler here since a plain raster image needs no scene-graph parsing.
+func _build_raster_floor(image_path: String) -> void:
+	var image := Image.new()
+	var error := image.load(image_path)
+	if error != OK:
+		# A corrupt/unreadable file shouldn't blank the whole board -- same
+		# "degrade, don't fail" precedent every other missing-asset path here
+		# already follows (Token.gd's fallback capsule, this class's own
+		# checkerboard fallback just below).
+		_build_fallback_checkerboard()
+		return
+
+	var mesh_instance := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(columns * cell_size, rows * cell_size)
+	mesh_instance.mesh = plane
+	var material := StandardMaterial3D.new()
+	material.albedo_texture = ImageTexture.create_from_image(image)
+	# Unshaded -- a real scanned/photographed map already has its own baked
+	# lighting; letting this project's own DirectionalLight3D (angled for
+	# miniatures, not a flat floor) also light it would just darken/tint it
+	# unpredictably by view angle, the same reasoning the grid-line overlay
+	# material below already uses unshaded for a flat, angle-independent look.
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mesh_instance.material_override = material
+	# PlaneMesh lies flat on XZ already (faces +Y) -- centered at board_center()
+	# exactly spans the board's own [0, columns*cell_size] x [0, rows*cell_size]
+	# extent, the same coordinate space cell_to_world()/world_to_cell() use, no
+	# extra offset math needed.
+	mesh_instance.position = board_center()
+	add_child(mesh_instance)
+
+## Generates a simple StaticBody3D wall box per {x1,y1,x2,y2} segment (encounter.js's
+## own addWall() shape) -- vertex-space coordinates where a vertex sits at an
+## INTEGER cell-unit coordinate (world = vertex * cell_size, no extra 0.5 offset the
+## way a cell CENTER needs; see AoeTemplate.gd's own class doc comment for the same
+## convention already proven there). Generated fresh from the exact data the server
+## already uses for real line-of-sight, so this can never disagree with what
+## hasLineOfSight() itself sees, unlike a hand-authored map scene's own separately
+## modeled walls (which a DM editing walls via the DM Assistant wouldn't update).
+## Uses Node3D's own look_at() to orient each wall box, not hand-derived trig/
+## rotation -- see Token.gd's _face_direction() for why this project specifically
+## avoids reasoning out a rotation sign by hand.
+func _build_walls(walls: Array) -> void:
+	var wall_height := WALL_HEIGHT_FEET * METERS_PER_FOOT
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.42, 0.4, 0.38) # plain stone-gray -- no bespoke wall asset for a generically-generated wall
+
+	for wall in walls:
+		var p1 := Vector3(float(wall.get("x1", 0)) * cell_size, 0.0, float(wall.get("y1", 0)) * cell_size)
+		var p2 := Vector3(float(wall.get("x2", 0)) * cell_size, 0.0, float(wall.get("y2", 0)) * cell_size)
+		var length := p1.distance_to(p2)
+		if length < 0.001:
+			continue
+		var midpoint := (p1 + p2) / 2.0
+
+		var body := StaticBody3D.new()
+		body.position = midpoint + Vector3(0, wall_height / 2.0, 0)
+		add_child(body) # look_at() needs this node genuinely in the tree first, so its own global_transform resolves correctly against a real (already-_ready()'d) parent chain
+		body.look_at(Vector3(p2.x, body.position.y, p2.z), Vector3.UP) # local -Z now points from this wall's own midpoint toward p2
+
+		var mesh_instance := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(WALL_THICKNESS, wall_height, length) # length on local Z, matching look_at()'s own -Z-forward convention
+		mesh_instance.mesh = box
+		mesh_instance.material_override = material
+		body.add_child(mesh_instance)
+
+		var collision := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = box.size
+		collision.shape = shape
+		body.add_child(collision)
 
 ## A real stone floor texture has no per-tile visual break the way the old
 ## flat-colored checkerboard did -- without this, a DM has no way to actually

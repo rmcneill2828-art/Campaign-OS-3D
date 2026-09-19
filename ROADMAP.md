@@ -2236,7 +2236,7 @@ first (7, then 1, then 3), the rest after.
    (23/23 passing). Wired into `.github/workflows/test.yml`'s
    `godot-smoke-tests` job alongside the three existing smoke tests.
 
-## Adventure map import -- reviewed 2026-09-19, narrowed scope for a v1
+## Adventure map import -- reviewed 2026-09-19, Godot rendering slice built 2026-09-20
 
 A separate tool session (GitHub Copilot, per its own header) produced
 `CAMPAIGN_MAP_IMPORT_REPORT.md` at the repo root -- unprompted, found
@@ -2342,18 +2342,75 @@ directly.
 1. Confirm in the 2D app that a real published map (rasterized via
    `pdftoppm` first, if it's a PDF page) can be uploaded, grid-calibrated,
    and wall-annotated using the EXISTING 2D tools -- no new code, just
-   proving the existing pipeline handles this input.
-2. On the Campaign-OS-3D side: read that same `state.maps[name]` (image
-   reference, columns/rows/feetPerSquare, walls) and render it -- a
-   textured floor plane using the calibrated image, plus procedural wall
-   meshes generated from the same wall segments the engine already uses for
-   line-of-sight. Genuinely new work, but rendering-only, reusing data that
-   already exists rather than inventing a parallel format for it.
+   proving the existing pipeline handles this input. **Not done yet** --
+   item 2 below was built and tested against synthetic data first (a
+   deliberate choice, so the renderer is verified and ready the moment a
+   real map gets annotated, not blocked on that happening first).
+2. **Built 2026-09-20.** On the Campaign-OS-3D side: read
+   `state.maps[name]` (image reference, columns/rows/feetPerSquare, walls)
+   and render it -- a textured floor plane using the calibrated image, plus
+   procedural wall meshes generated from the same wall segments the engine
+   already uses for line-of-sight.
 3. Multi-level dungeons: separate named maps + `switch_map`, not new
-   elevation-aware engine work (point 4 above).
+   elevation-aware engine work (point 4 above). Not yet needed -- no
+   multi-level map exists to switch between.
 4. Licensing constraints from the original report are hard requirements
    from day one regardless of how much scope narrows: player-safe image
    only, never commit source PDFs/derived art, track provenance.
+
+**What got built for item 2:** `GridManager.gd` gained
+`raster_image_path`/`walls` parameters on `build()`. A raster image (found
+via the new `MapImagePath.gd`, `class_name MapImagePath`) renders as a
+single large unshaded `PlaneMesh` -- unshaded because a real scanned/
+photographed map already has its own baked lighting, and this project's
+own angled `DirectionalLight3D` (tuned for miniatures) would otherwise
+darken/tint it unpredictably by view angle. Walls generate real
+`StaticBody3D` boxes (mesh + collision) from `encounter.js`'s own
+`{x1,y1,x2,y2}` segments -- the exact data `hasLineOfSight()` already
+uses, so generated geometry can never disagree with what the server
+actually enforces, unlike a hand-authored map's separately modeled walls
+(which wouldn't update if a DM added a wall via the DM Assistant
+mid-session). Orientation uses `Node3D.look_at()`, not hand-derived
+rotation math -- `Token.gd`'s `_face_direction()` already established why
+this project avoids reasoning out a rotation sign by hand, and this is the
+same class of mistake in a new spot. Only applies alongside a raster or
+procedural floor, never a hand-built scene (which already carries its own
+matching wall geometry -- doubling it would draw overlapping boxes).
+
+**`MapImagePath.gd`'s own resolution convention is explicitly
+provisional**, kept in exactly one place so it's easy to revise: a real
+map image lives at `engine-server/state/maps/<slugified-map-name>.<ext>`,
+a sibling of the Godot project's own `res://` root, gitignored like
+`encounter.json` already is. This is NOT the 2D app's own
+`state.maps[name].image` field -- confirmed directly, that's an opaque key
+into the 2D app's own browser-local IndexedDB image store
+(`CampaignOSImageStore`), unreachable from this Node-free, browser-free
+Godot process or from `engine-server` (also plain Node, no browser)
+either. Today the actual hand-off is manual: a DM saves/exports the same
+source image (already calibrated in the 2D app) into this folder
+themselves, named to match the map. Automating that hand-off is real
+future work, not assumed solved here -- see item 1 above, still open.
+
+**A real bug found and fixed along the way, not specific to maps:**
+`GridManager.build()`'s own child-rebuild loop used `queue_free()`, which
+only SCHEDULES removal for the next idle frame -- calling `build()` a
+second time before that frame ever happens (confirmed live: exactly what
+a test asserting after several back-to-back `build()` calls does) would
+see the previous batch of children still present, undercounting what had
+actually been replaced. Fixed by switching to synchronous
+`remove_child()` + `free()` -- nothing outside this function holds a
+reference to these children past this point, and `get_children()` is
+already a snapshot array, not a live view, so freeing immediately while
+iterating it is safe.
+
+**New test:** `godot/tools/test_raster_map.gd` -- 15 assertions, using a
+real image already committed to this repo (Kenney's `Sample.png`) copied
+to a throwaway temp path, never touching the real `engine-server/state/
+maps/` folder. Includes a numeric verification of the generated wall
+geometry -- transforming each box's own local endpoints through its real
+resulting transform and checking they land exactly on the real input
+vertex-space points, rather than trusting the rotation math by
+inspection. Wired into `godot-smoke-tests`.
 
 **Explicitly deferred, tracked as a future direction, not a commitment:**
 the custom manifest format, a from-scratch semantic layout editor, curated
