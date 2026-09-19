@@ -38,8 +38,10 @@ design along for the ride.
 - **`godot/`** -- a Godot 4 project with two scenes:
   - **`Main.tscn`** -- the DM's working view: an orbit/pan/zoom camera over a real
     3D board (hand-built maps with real geometry, floor/wall glTF assets, and
-    line-of-sight-blocking walls), animated humanoid miniatures (idle/walk/hit/
-    death/dying-kneel), click-to-select / click-to-move / right-click-to-attack,
+    line-of-sight-blocking walls), static-model miniatures ("painted tabletop
+    miniature" material finish; a plain colored capsule placeholder until a real
+    model is sourced for a given creature -- see "What this does NOT do yet" below),
+    click-to-select / click-to-move / right-click-to-attack,
     a scrolling combat log, and a collapsible Token Actions panel covering the
     full core 5e loop -- saving throws, ability checks, all 11 conditions,
     single-target and area spellcasting, class resources, long/short rests, death
@@ -60,7 +62,11 @@ design along for the ride.
   Two hand-built example maps ship today (Prototype Chamber, Entrance Hall); see
   [`godot/tools/README.md`](godot/tools/README.md) for how a new one is built, and
   [`godot/assets/README.md`](godot/assets/README.md) for asset licensing and the
-  current (partial) per-monster model coverage.
+  project decision (2026-09-17) to source only static (non-animated) models for
+  new creatures going forward -- an earlier animation pipeline (bone retargeting,
+  Mixamo/Meshy rigs) was built, verified live, and then archived rather than kept
+  as a second, unfinished tier; see `_archive/animation-system-2026-09-17/` and
+  [ROADMAP.md](ROADMAP.md) for the full history.
 
 ## Running it
 
@@ -130,9 +136,15 @@ against the 2D app, still open:
 - No campaign-level save/load across multiple sessions -- one live
   `engine-server/state/encounter.json` only.
 - No music/ambience system.
-- Only a handful of monster types (hero, generic monster, skeleton, orc) have a
-  real per-name 3D model; everything else falls back to a generic placeholder --
-  see `godot/assets/README.md`.
+- No creature has a real per-name 3D model wired in right now -- every token
+  (hero or monster) currently falls back to the plain placeholder capsule.
+  `Token.gd`'s `MODEL_CONFIG` is deliberately empty since the 2026-09-17
+  static-models-only decision reset it (a prior animated-model set for hero/
+  generic monster/skeleton/orc/Barbarian existed and was verified live, then
+  removed rather than left as a mixed static/animated roster -- see
+  `godot/assets/README.md` and [ROADMAP.md](ROADMAP.md)). Adding a real static
+  model for a given creature is now just sourcing a model and adding one
+  `MODEL_CONFIG` entry, no rigging pipeline required.
 - Godot-side CI only runs the existing headless smoke tests (do the scenes
   load and `_ready()` clean); no automated interaction coverage yet for
   things like token selection, movement, player-view fog, or HUD action

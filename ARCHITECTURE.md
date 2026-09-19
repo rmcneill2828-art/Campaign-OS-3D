@@ -87,13 +87,24 @@ handling) and `ROADMAP.md` for what's not built yet.
 
 ## What's deliberately NOT decided yet
 
-- **Real-time multiplayer / a player-facing view.** The 2D app's "Player window"
-  is same-machine, polling-based, and out of scope here until this prototype's
-  single-DM-view loop is solid.
-- **How map geometry (walls, terrain, non-flat spaces) gets authored.** The 2D
-  app's line-of-sight system works against 2D wall segments on a flat map; a real
-  3D equivalent (3D wall meshes? a heightmap? hand-built scenes per encounter?) is
-  an open question, not yet started.
-- **Asset pipeline specifics** (which glTF/format conventions, LOD strategy,
-  animation rig standard) -- deferred until real (non-placeholder) assets are
-  actually being brought in.
+- **Real-time multiplayer.** `PlayerView.tscn` (Phase 6) covers the same-machine,
+  second-monitor/TV case -- a real, independently-polling second OS window,
+  read-only and structurally incapable of sending `POST /action` -- the same
+  shape as the 2D app's own Player window. A remote/networked player view (a
+  different player's own machine, over a real network) is still open.
+- **How map geometry (walls, terrain, non-flat spaces) gets authored.** Answered
+  for the flat case: hand-built Godot scenes per map (`godot/scenes/maps/`,
+  built via one-off editor scripts in `godot/tools/`) provide the visual
+  geometry, while wall segments in the same vertex space the 2D app's
+  `addWall()` already uses are seeded server-side so `hasLineOfSight`/
+  `cellVisibleToHero`/etc. mean the same thing they do in the 2D app (see
+  `engine-server/server.js`'s `seedState()`). True 3D terrain (multiple floors,
+  height-blocking line of sight) is still open.
+- **Asset pipeline specifics for animated models** -- explored in depth (Mixamo/
+  Meshy rigging, bone-name-map retargeting across mismatched skeletons) and
+  then deliberately shelved: as of 2026-09-17 every new creature/hero model is a
+  static (non-animated) glTF/FBX, no rig or animation-clip pipeline decision
+  needed for it. The prior animation system is preserved, not deleted, at
+  `_archive/animation-system-2026-09-17/` for a future version that revisits
+  this -- see `ROADMAP.md`'s 2026-09-17 entries for the full reasoning and
+  `godot/assets/README.md` for exactly what was built.
