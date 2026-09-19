@@ -262,6 +262,14 @@ var _action_in_flight := false
 var _right_press_pos := Vector2.ZERO
 var _right_press_active := false
 
+## Item 2 of ROADMAP.md's "Seven requested features" (2026-09-19) -- Visual Dice
+## Rolls. Captured at send time by _on_roll_save_pressed()/_on_roll_check_pressed()/
+## _on_roll_initiative_pressed() (the only three actions this pass covers -- see
+## _extract_d20_rolls()'s own doc comment for why attack/damage dice are a documented
+## follow-up, not included here), so _on_action_response() knows where to spawn the
+## dice even if the selection changes before the response actually arrives.
+var _last_roll_token_id := ""
+
 ## Phase 7 -- a SEPARATE in-flight flag from _action_in_flight: a DM-command
 ## round trip can take up to ~2 minutes (waiting on a real Claude call via
 ## dm-bridge/watch.js), and there's no reason ordinary button-driven actions
@@ -631,6 +639,7 @@ func _on_view_character_pressed() -> void:
 func _on_roll_initiative_pressed() -> void:
 	if not _require_selected_token():
 		return
+	_last_roll_token_id = _selected_token_id
 	_send_action({
 		"type": "roll_initiative",
 		"target": _tokens[_selected_token_id].token_name
@@ -658,6 +667,7 @@ func _on_set_initiative_pressed() -> void:
 func _on_roll_save_pressed() -> void:
 	if not _require_selected_token():
 		return
+	_last_roll_token_id = _selected_token_id
 	var ability: String = _save_ability_option.get_item_text(_save_ability_option.selected)
 	_send_action(_apply_roll_mode({
 		"type": "saving_throw",
@@ -672,6 +682,7 @@ func _on_roll_save_pressed() -> void:
 func _on_roll_check_pressed() -> void:
 	if not _require_selected_token():
 		return
+	_last_roll_token_id = _selected_token_id
 	var skill: String = _check_skill_option.get_item_text(_check_skill_option.selected)
 	_send_action(_apply_roll_mode({
 		"type": "ability_check",
@@ -1638,3 +1649,94 @@ func _on_action_response(_result: int, response_code: int, _headers: PackedStrin
 		return
 	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("state"):
 		_apply_state(parsed["state"])
+	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("messages"):
+		_try_show_dice_roll(parsed["messages"])
+
+## Scans this action's own returned messages for a saving_throw/ability_check/
+## roll_initiative roll (see _extract_d20_rolls()) and, if one matches, spawns a
+## physical die (or an advantage/disadvantage pair) showing the real result. Shows at
+## most one roll per action response -- good enough for this pass; a Multiattack's
+## compound message (several attacks joined into one string) isn't attempted here at
+## all, see _extract_d20_rolls()'s own doc comment on why attack/damage dice are a
+## separate, not-yet-covered follow-up.
+func _try_show_dice_roll(messages: Array) -> void:
+	for message in messages:
+		var roll_info := _extract_d20_rolls(str(message))
+		if not roll_info.is_empty():
+			_spawn_dice(roll_info)
+			return
+
+## Extracts the real d20 face(s) engine.js already rolled and reported in a roll's own
+## log message -- a display-only concern (the roll was already fully decided
+## server-side before this text was ever generated), so parsing it back out here stays
+## on the "presentation" side of ARCHITECTURE.md's own rules/presentation split,
+## without needing engine.js itself (shared, byte-identical with the 2D app) to expose
+## it as a separate structured field -- that would mean touching Campaign-OS's own
+## canonical copy too, a much bigger and riskier change than a client-side parse of
+## text engine.js already reliably produces. Regexes are anchored on encounter.js's own
+## fixed wording for rollSavingThrow()/rollAbilityCheck()/rollInitiative() specifically
+## -- confirmed against real server responses, not guessed (see
+## godot/tools/test_dice_roll.gd's own fixtures, captured from a real running server).
+## Scoped to these three actions only for this pass -- attack/castSpell/damage rolls
+## produce compound, multi-roll messages (to-hit + damage, sometimes several per
+## Multiattack) that would need a genuinely different extraction approach, a real,
+## separate follow-up rather than an incremental extension of this one.
+##
+## Returns {} if nothing matched, else {"kept": int, "pair": Array[int]} -- `pair` is
+## empty for a normal roll, or the two raw d20s [a, b] rolled under advantage/
+## disadvantage (in original roll order, NOT sorted by kept/discarded -- see
+## rollD20WithMode's own doc comment in encounter.js). `kept` is always the one
+## actually used for the total, whether or not `pair` is present.
+func _extract_d20_rolls(text: String) -> Dictionary:
+	var save_check_regex := RegEx.new()
+	save_check_regex.compile("rolls a .+? (?:save|check): (\\d+)(?: \\((?:advantage|disadvantage): ([\\d, ]+)\\))? [+-]\\d+ = \\d+ vs DC \\d+\\. (?:Success|Failure)\\.")
+	# `match` is a GDScript keyword (the match statement) -- can't use it as a
+	# variable name, hence `found`.
+	var found := save_check_regex.search(text)
+	if found:
+		var kept := int(found.get_string(1))
+		var pair_text := found.get_string(2)
+		var pair: Array[int] = []
+		if pair_text != "":
+			for piece in pair_text.split(","):
+				pair.append(int(piece.strip_edges()))
+		return {"kept": kept, "pair": pair}
+
+	var initiative_regex := RegEx.new()
+	initiative_regex.compile("rolls initiative: (\\d+) [+-]\\d+ = \\d+\\.")
+	found = initiative_regex.search(text)
+	if found:
+		return {"kept": int(found.get_string(1)), "pair": []}
+
+	return {}
+
+## Spawns one die (a plain roll) or two (an advantage/disadvantage pair, the actually-
+## kept one highlighted green, matched by VALUE against `roll_info.kept` rather than
+## assumed to be at a fixed index -- rollD20WithMode's own [a, b] pair is in roll
+## order, not sorted by which one was kept, and a genuine tie (a == b) means both are
+## correctly shown as kept). Positioned above whichever token _last_roll_token_id
+## captured at send time; falls back to a fixed point near the board origin if that
+## token is no longer around by the time the response arrives (removed, map switched).
+func _spawn_dice(roll_info: Dictionary) -> void:
+	const SPAWN_HEIGHT := 2.0
+	const DIE_SPACING := 0.6
+	var origin := Vector3(0, SPAWN_HEIGHT, 0)
+	if _tokens.has(_last_roll_token_id):
+		origin = _tokens[_last_roll_token_id].position + Vector3(0, SPAWN_HEIGHT, 0)
+
+	var pair: Array = roll_info.get("pair", [])
+	if pair.is_empty():
+		_spawn_one_die(int(roll_info.get("kept", 0)), origin, Color.WHITE)
+		return
+
+	var kept: int = roll_info.get("kept", 0)
+	for i in range(pair.size()):
+		var value: int = pair[i]
+		var color := Color(0.3, 0.85, 0.3) if value == kept else Color(0.55, 0.55, 0.55)
+		var offset := Vector3((i - (pair.size() - 1) / 2.0) * DIE_SPACING, 0, 0)
+		_spawn_one_die(value, origin + offset, color)
+
+func _spawn_one_die(value: int, origin: Vector3, color: Color) -> void:
+	var die := DiceRollVisual.new()
+	add_child(die)
+	die.start(value, origin, color)

@@ -69,6 +69,11 @@ jobs:
       - name: test_character_viewer.gd (Character Viewer scene + stats + Load Model)
         run: godot --headless --path godot --script res://tools/test_character_viewer.gd
 
+      # Fixture strings are captured from a real running engine-server, not
+      # hand-guessed -- see this test's own doc comment.
+      - name: test_dice_roll.gd (roll-message extraction + tumbling die visual)
+        run: godot --headless --path godot --script res://tools/test_dice_roll.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce

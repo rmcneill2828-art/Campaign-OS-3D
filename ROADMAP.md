@@ -1967,7 +1967,7 @@ future version needs them back, only from wherever they were originally
 sourced (or from the archive folder's own restore notes, which name each
 one).
 
-## Seven requested features -- 2026-09-19, planned (items 1, 3, and 7 fixed same day)
+## Seven requested features -- 2026-09-19, planned (items 1, 2, 3, and 7 fixed same day)
 
 User request: interactive character creation, visual dice rolls, a 3D
 character viewer, a system to import campaigns and create assets, higher-
@@ -2031,17 +2031,58 @@ first (7, then 1, then 3), the rest after.
    into the exact shape `characterCreator.js` expects), both wired into
    their respective CI jobs.
 
-2. **Visual dice rolls.** Nothing to reuse -- not even the 2D app has this.
-   Every roll (attack, save, check, damage, initiative) is resolved as pure
-   math server-side (`rollDie()` in `encounter.js`) and reported as a text
-   log line; the 2D app's only "dice" UI is a flat dice-tray of buttons plus
-   one CSS tumble keyframe. Genuinely new, 3D-native work: physical
-   `RigidBody3D` dice + a settle/reveal sequence. The result must be decided
-   server-side FIRST (the real roll, already trustworthy and tested) and the
-   physics only animated toward that known face -- letting physics decide
-   the outcome itself would let a client-side desync or a lucky bounce
-   produce a result that disagrees with what the server actually rolled and
-   applied.
+2. **Visual dice rolls -- fixed 2026-09-19 (saving throws/ability checks/
+   initiative; attack and damage dice are a documented follow-up, not
+   covered by this pass).** Nothing to reuse going in -- not even the 2D
+   app has this; every roll is resolved as pure math server-side
+   (`rollDie()` in `encounter.js`) and reported as a text log line.
+
+   **A real scope decision made before writing any code:** the honest way
+   to show a physical die is to decide the result server-side FIRST (the
+   real roll, already trustworthy and tested) and animate the physics
+   toward that known face -- letting physics decide the outcome itself
+   would let a client-side desync or a lucky bounce disagree with what the
+   server actually rolled and applied. The more thorough way to GET that
+   result client-side would be having `encounter.js` return the raw die
+   face as a real structured field (not just baked into the message
+   string) -- but `encounter.js` is shared, byte-identical with the 2D
+   app's own canonical copy (see `ARCHITECTURE.md`), so that would mean
+   editing Campaign-OS's own core rules file too, a materially bigger and
+   riskier change than this feature actually needs. Instead: the roll is
+   already fully decided by the time its log message is generated, and
+   that message's wording is fixed and already tested (`engine-server`'s
+   own `tests/server.test.js` already regex-asserts it) -- so `Main.gd`
+   parses the real result straight back out of the message text it
+   already receives on every `/action` response, a legitimate, testable,
+   presentation-side concern per `ARCHITECTURE.md`'s own rules/
+   presentation split, with zero changes to either engine repo.
+
+   **What got built:** `godot/scripts/DiceRollVisual.gd`
+   (`class_name DiceRollVisual`) -- a real `RigidBody3D` cube (not a
+   per-face-labeled d20 mesh; a real numbered polyhedron is an asset-
+   creation task this project's own static-models-only decision already
+   keeps out of scope, see `Token.gd`'s class doc comment) tossed with a
+   genuine random physics impulse, landing on the same invisible floor
+   collision `GridManager` already builds for click-to-move raycasting,
+   then freezing and revealing the real result via a big `Label3D` once it
+   settles. `Main.gd` gained `_extract_d20_rolls()` (two regexes anchored
+   on `rollSavingThrow()`/`rollAbilityCheck()`/`rollInitiative()`'s own
+   exact wording -- confirmed against real captured server responses, not
+   guessed) and `_spawn_dice()`, wired into `_on_action_response()` and the
+   three roll buttons (`_last_roll_token_id`, captured at send time, tells
+   it where to spawn). An advantage/disadvantage pair spawns both dice,
+   highlighting whichever one was actually kept in green by matching its
+   VALUE against the reported total -- `rollD20WithMode`'s own `[a, b]`
+   pair is in roll order, not sorted by kept/discarded, so index alone
+   isn't enough.
+
+   **New test:** `godot/tools/test_dice_roll.gd` -- 14 assertions, its
+   regex fixtures captured live from a real running `engine-server`
+   instance (plain and advantage/disadvantage saves/checks, an initiative
+   roll) rather than hand-typed, plus a physics-timing check (forcing
+   elapsed time past the settle threshold in one call rather than actually
+   waiting) confirming a settled die freezes and can't have its shown
+   result moved by further physics. Wired into `godot-smoke-tests`.
 
 3. **Character viewer (3D model) -- fixed 2026-09-19.** No dedicated scene
    existed at all going in -- only `Main.tscn` (battle map), `PlayerView.tscn`

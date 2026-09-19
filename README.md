@@ -46,8 +46,11 @@ design along for the ride.
     miniature" material finish; a plain colored capsule placeholder until a real
     model is sourced for a given creature -- see "What this does NOT do yet" below),
     click-to-select / click-to-move / right-click-to-attack,
-    a scrolling combat log, and a collapsible Token Actions panel covering the
-    full core 5e loop -- saving throws, ability checks, all 11 conditions,
+    a scrolling combat log, physical tumbling dice (a real `RigidBody3D` toss that
+    settles on the actual server-decided result -- saving throws, ability checks,
+    and initiative today; attack/damage dice are a documented follow-up), and a
+    collapsible Token Actions panel covering the full core 5e loop -- saving
+    throws, ability checks, all 11 conditions,
     single-target and area spellcasting (with a click-to-place/click-drag-to-aim
     AoE template tool for circle/cone/line shapes that live-highlights which
     tokens they cover), class resources, long/short rests, death saves,
@@ -142,6 +145,11 @@ live in Godot -- see [ROADMAP.md](ROADMAP.md)'s Phase 0-8 entries and its
 "Feature Parity Audit" section for the full detail behind each of these. Real gaps
 against the 2D app, still open:
 
+- No visual dice for attack rolls or damage rolls -- only saving throws, ability
+  checks, and initiative get a physical tumbling die today (see
+  [ROADMAP.md](ROADMAP.md)'s "Seven requested features" entry, item 2); an
+  attack/damage roll's log message bundles several numbers into one compound
+  string that needs a different extraction approach, not yet built.
 - No ruler/measuring tool.
 - No interactive wall editor -- walls come from hardcoded map-building tools or
   DM Assistant text commands, not click-drag drawing.
