@@ -1258,7 +1258,8 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   and auto-detects which tokens it covers (`templateCoveredTokenNames()`,
   built on real point-in-shape geometry already living in `encounter.js`
   and therefore already available to the 3D server too -- just never
-  wired into a 3D-side drawing tool).
+  wired into a 3D-side drawing tool). Tracked in detail (and worked first)
+  as item 7 of "Seven requested features" below.
 - **No ruler/measuring tool** (2D app: click-drag distance measurement
   overlay).
 - **No interactive wall editor** -- walls only come from hardcoded
@@ -1284,11 +1285,14 @@ function against `ui/app.js` (~4000 lines) and its sibling modules.
   var only for End Session/Create Character features (not used yet in 3D
   client)") -- `watch.js` itself is copied byte-for-byte and already
   supports both; the 3D client's own UI just never added a way to trigger
-  either.
+  either. The Character Creator half is tracked in detail as item 1 of
+  "Seven requested features" below.
 - **No campaign-level save/load** -- the 2D app has a whole `renderCampaign`/
   `renderCampaignDetail` system for multiple saved campaigns/characters
   across sessions; the 3D client only ever has the one live
-  `engine-server/state/encounter.json`.
+  `engine-server/state/encounter.json`. The narrower "import an existing
+  campaign's characters" half of this is tracked as item 4 of "Seven
+  requested features" below.
 - **No music/ambience system** -- Campaign-OS's Phase 10 feature
   (`renderMusicFolderResults`, `crossfadeAmbience`, `renderAmbienceControls`)
   has no 3D equivalent at all -- this was already tracked below before
@@ -1971,3 +1975,109 @@ so this was a pure code-level change; nothing to restore from git if a
 future version needs them back, only from wherever they were originally
 sourced (or from the archive folder's own restore notes, which name each
 one).
+
+## Seven requested features -- 2026-09-19, planned
+
+User request: interactive character creation, visual dice rolls, a 3D
+character viewer, a system to import campaigns and create assets, higher-
+quality environment assets, spell effects, and spell radius/AoE templates.
+Investigated each against what already exists in `engine-server/`,
+`dm-bridge/watch.js`, and the 2D app's own `ui/app.js` before writing
+anything, rather than assuming any of these start from zero -- several
+turned out to have most of their hard logic already built and just never
+exposed through this client's UI. Working order: cheapest/most-grounded
+first (7, then 1, then 3), the rest after.
+
+1. **Interactive character creation.** Mostly plumbing already exists.
+   `engine-server/engine/characterCreator.js` (copied verbatim, 299 lines)
+   computes a full level-1+ sheet from a plain draft object -- modifiers,
+   proficiency bonus, HP, saves, skills, AC, attack bonus -- and renders it
+   as markdown matching the DnD campaign repo's `characters/_template.md`
+   shape. `dm-bridge/watch.js` already has a deterministic (no Claude call,
+   no cost) write-back protocol for it -- `create-character-request.json`
+   in, watcher writes the `.md` into `DND_REPO_PATH/characters/`, never
+   overwriting an existing file, `create-character-response.json` out --
+   which the 2D app already drives from its own in-browser form (`ui/app.js`
+   calling `window.CampaignOSCharacterCreator.computeCharacter()`/
+   `characterMarkdown()` directly, no server round trip needed since it's
+   pure computation). **Missing on the 3D side:** the actual Godot form
+   (race/class/ability-score/skill picker, matching `characterCreator.js`'s
+   own `CLASS_LIST`/`SKILL_LIST`/`ABILITY_KEYS`) and a way to reach the same
+   `dm-bridge/` mailbox files -- likely a new `engine-server` endpoint that
+   proxies to `create-character-request.json`/`create-character-response.json`
+   the same way `/dm-command` already proxies to `request.json`/
+   `response.json`, rather than Godot writing into `dm-bridge/` directly.
+
+2. **Visual dice rolls.** Nothing to reuse -- not even the 2D app has this.
+   Every roll (attack, save, check, damage, initiative) is resolved as pure
+   math server-side (`rollDie()` in `encounter.js`) and reported as a text
+   log line; the 2D app's only "dice" UI is a flat dice-tray of buttons plus
+   one CSS tumble keyframe. Genuinely new, 3D-native work: physical
+   `RigidBody3D` dice + a settle/reveal sequence. The result must be decided
+   server-side FIRST (the real roll, already trustworthy and tested) and the
+   physics only animated toward that known face -- letting physics decide
+   the outcome itself would let a client-side desync or a lucky bounce
+   produce a result that disagrees with what the server actually rolled and
+   applied.
+
+3. **Character viewer (3D model).** No dedicated scene exists at all today
+   -- only `Main.tscn` (battle map), `PlayerView.tscn` (read-only battle
+   map), and `Token.tscn` (in-scene miniature). A standalone viewer (orbit
+   camera + one model + a sheet panel) reuses `Token.gd`'s
+   `_ground_model()`/`_apply_miniature_finish()` directly rather than
+   reimplementing model-loading/grounding a second time. Natural pairing
+   with item 1 (preview a character right after building it) and with the
+   creature-model staging library at `I:\Campaign-OS-3D\Downloaded Static
+   Models\` (browse/preview a candidate model before writing a
+   `MODEL_CONFIG` entry for it).
+
+4. **Import campaigns + create assets.** Partial, and browser-locked today.
+   `engine-server/engine/campaign.js` (copied verbatim, 569 lines) already
+   parses a folder of campaign markdown (characters/locations/sessions/
+   notes) via `importMarkdownFiles()` and builds spawnable token drafts
+   (`tokenDraftFromItem()` -- pulls ability scores, spellcasting, attack
+   rows straight out of a character sheet's own markdown). It takes a
+   browser `FileList`, though, so it only works in the 2D app as-is --
+   `engine-server` has no endpoint for it and Godot has no file picker.
+   Worth being precise about scope: this imports narrative/character DATA
+   into tokens; it does not generate 3D assets. Map/environment generation
+   is the fully separate, manual Meshy/Higgsfield pipeline documented
+   elsewhere in this file -- "import a campaign" and "generate 3D assets
+   from one" are two different systems that happen to both be gaps, not one
+   feature split in two.
+
+5. **High-quality environment assets.** Content work, not code. On hand
+   already: Kenney's dungeon-kit (CC0, committed, used by both existing
+   maps), plus gitignored-but-downloaded Quaternius MegaKits (buildings/
+   nature/props) and KayKit dungeon packs that have never actually been
+   used in a built map yet, and one Higgsfield catalog test import. Only 2
+   hand-built maps exist (`Prototype Chamber`, `Entrance Hall`). This is
+   "build more maps from what's already sitting in
+   `godot/assets/Environment/`" using the existing `godot/tools/
+   build_*.gd` one-off-script convention, not a new system to design.
+
+6. **Spell effects.** Zero VFX exists anywhere. `cast_spell`/
+   `cast_area_spell` are purely mechanical today -- dice, HP change, one log
+   line, no particle/shader feedback in `Main.gd` or `Token.gd` at all. New
+   work: a small VFX dispatch keyed by damage type and/or spell name,
+   `GPUParticles3D` one-shots at caster/target position, triggered off the
+   `/action` response the same way `Token.gd`'s move/attack feedback
+   already reacts to a state poll.
+
+7. **Spell radius (AoE template tool) -- working this first.** Best-
+   grounded of the seven: the hard geometry already exists and is already
+   copied into this project. `pointInCircle`/`pointInCone`/`pointInLine`
+   all live in `engine-server/engine/encounter.js` (confirmed exported).
+   One correction to this file's own earlier Feature Parity Audit note
+   above, which implied the target-detection wrapper was already engine-
+   side too: `templateCoveredTokenNames()` actually lives in the 2D app's
+   `ui/app.js` (browser UI code), not the shared engine, so it needs
+   porting -- small (~20 lines), but real, not just a wiring exercise.
+   Plan: port that wrapper (GDScript, calling the 3 shape primitives
+   through a small `engine-server` endpoint, or reimplemented directly in
+   `Main.gd` against the same token x/y data it already polls), then a
+   click-drag template-drawing tool over `GridManager`'s board (circle:
+   center+drag-radius; cone/line: apex+drag-direction, matching the 2D
+   app's own control scheme) that highlights covered tokens live and feeds
+   the result into `cast_area_spell`'s existing `targets` array instead of
+   the current manual checkbox list.
