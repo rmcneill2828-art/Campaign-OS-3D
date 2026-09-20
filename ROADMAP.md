@@ -2531,7 +2531,7 @@ the custom manifest format, a from-scratch semantic layout editor, curated
 per-setting procedural dressing kits, and any CV-assisted wall/grid
 detection -- everything in the original report's Phases 3-5.
 
-## Freeform map annotation -- opened 2026-09-20, not started
+## Freeform map annotation -- opened 2026-09-20, item 1 done same day
 
 Directly motivated by tracing Redbrand Hideout's real walls above: several of
 the map's actual walls end partway across a square, not on a grid corner (a
@@ -2544,21 +2544,24 @@ maps is possible.
 **Checked directly before scoping, rather than assumed:** this splits into
 two genuinely different features, not one --
 
-1. **Precise (non-grid-snapped) wall placement.** This is the actual fix for
-   the problem above, and it's small. `engine/encounter.js`'s `addWall(state,
-   mapName, x1, y1, x2, y2)` stores whatever numbers it's given with no
-   rounding, and `hasLineOfSight`'s `segmentsIntersect`/`orientation`/
-   `onSegment` are plain float geometry -- nothing in the engine assumes
-   integer vertices, that's a convention, not a constraint. `GridManager.gd`'s
-   `_build_walls()` likewise just does `float(wall.get("x1", 0)) * cell_size`
-   arithmetic on whatever it receives, no rounding either. The ONLY place
-   that forces integer vertices is `ui/app.js`'s own `gridVertexFromEvent()`
+1. **Precise (non-grid-snapped) wall placement -- done 2026-09-20, in
+   `Campaign-OS` (2D repo only; nothing here needed changing).** Confirmed
+   before building: `engine/encounter.js`'s `addWall(state, mapName, x1, y1,
+   x2, y2)` stores whatever numbers it's given with no rounding, and
+   `hasLineOfSight`'s `segmentsIntersect`/`orientation`/`onSegment` are plain
+   float geometry -- nothing in the engine assumes integer vertices, that's a
+   convention, not a constraint. `GridManager.gd`'s `_build_walls()` likewise
+   just does `float(wall.get("x1", 0)) * cell_size` arithmetic on whatever it
+   receives, no rounding either -- so the fix needed no changes on this
+   project's side at all. The only place that forced integer vertices was
+   `Campaign-OS`'s own `ui/app.js`, in `gridVertexFromEvent()`
    (`Math.round(fracX)`/`Math.round(fracY)`) -- a pure UI choice in the wall-
-   drawing click handler. Fixing this needs no engine work and no 3D-side
-   work at all: just let that function return the raw fractional position
-   (or snap to a finer sub-grid -- quarter-square, say -- rather than off
-   entirely), probably gated behind a modifier key or a second toggle state
-   so tracing an ordinary square room still snaps cleanly by default.
+   drawing click handler, now fixed there: holding Shift while placing an
+   endpoint snaps to the nearest 20th of a square instead of the nearest
+   whole one, checked independently per endpoint. See `Campaign-OS`'s own
+   `ROADMAP.md` ("Precise (non-grid-snapped) wall placement," 2026-09-20) for
+   the full writeup, including the click-vs-drag detection fix it also
+   needed (exact-equality no longer holds once a point can be a raw float).
 2. **A general freeform sketch/annotation layer** (arbitrary curves, DM
    notes, highlighting an escape route) -- genuinely bigger and separate from
    (1): needs new shared state (a new `state.maps[name]` field holding stroke
@@ -2572,8 +2575,6 @@ two genuinely different features, not one --
    should also be able to double as a real LOS-blocking wall (vs. purely
    cosmetic) is an open design question this hasn't answered yet.
 
-**Recommended next step, not yet built:** (1) first -- it's the one with a
-concrete, already-hit motivating problem, costs a small UI change, and needs
-zero engine or Godot work. (2) is a real, separate feature to scope
-properly (design question above included) if/when general sketching turns
-out to be wanted beyond precise wall tracing.
+**Remaining:** only (2), a real, separate feature to scope properly (design
+question above included) if/when general sketching turns out to be wanted
+beyond precise wall tracing -- not started, not committed to.
