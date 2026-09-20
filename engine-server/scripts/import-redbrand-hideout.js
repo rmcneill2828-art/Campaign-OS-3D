@@ -107,29 +107,44 @@ const WALLS = [
   [14, 11, 13, 11], [13, 11, 13, 13], [13, 13, 14, 14], [14, 14, 14, 16],
   [13, 17, 13, 18], [13, 18, 12, 18], [12, 18, 12, 17], [12, 17, 11, 17],
   [11, 17, 11, 19], [11, 19, 11, 20], [10, 20, 10, 17], [10, 17, 9, 17],
-  [9, 17, 8, 16], [8, 16, 7, 16], [22, 3, 23, 3], [2, 3, 19, 3]
+  [9, 17, 8, 16], [8, 16, 7, 16], [22, 3, 23, 3], [2, 3, 19, 3],
+  // Closes 11 of the 24 originally-detected 1-square wall gaps: the door
+  // audit below (see DOORS's own comment) checked the source map art at
+  // every gap and found no door icon drawn at these 11 -- just continuous
+  // stone wall texture, meaning the gap itself was a tracing bug rather than
+  // an intended doorway. Closing them is a real line-of-sight fix, not
+  // cosmetic (unlike DOORS, these gaps DID reach hasLineOfSight()).
+  [2, 7, 2, 8], [10, 6, 10, 7], [16, 12, 16, 13], [15, 6, 15, 7],
+  [28, 12, 28, 13], [9, 7, 10, 7], [10, 6, 11, 6], [26, 12, 27, 12],
+  [19, 3, 20, 3], [15, 17, 16, 17], [26, 13, 27, 13]
 ];
 
 // Door positions, in the exact same {x1,y1,x2,y2} vertex-space shape as WALLS
 // (reused so GridManager.gd's own _build_doors() can share all of _build_walls()'s
-// orientation math directly) -- but this is NOT engine/line-of-sight data. Not
-// derived from anything the user drew or marked as a door specifically; found
-// PROGRAMMATICALLY by scanning WALLS above for exactly-1-grid-square gaps
-// between two collinear segments (24 found, every one exactly 1.0 squares wide
-// -- consistent enough to be confident these are intentional doorway openings
-// the user left, not tracing noise). Deliberately not narrowed down further to
-// "only the gaps the source map drew a door icon on" -- a plain gap in a stone
-// wall reads as a doorway in the fiction either way, icon or not, and doing
-// that narrowing would mean re-examining the map art gap-by-gap for no real
-// gameplay benefit (doors here are pure decoration, see GridManager.gd's own
-// build()/. _build_doors() doc comments -- they never reach hasLineOfSight()).
+// orientation math directly) -- but this is NOT engine/line-of-sight data.
+//
+// The original version of this array was every one of the 24 1-grid-square
+// gaps found by scanning WALLS programmatically, on the theory that any gap
+// reads as a doorway in the fiction regardless of whether the source map
+// actually drew a door icon there. That theory turned out wrong: the user
+// spotted real doors missing and fake ones present after the wall/door
+// models were wired in, which led to auditing all 24 gaps against the source
+// map art directly (the plain rectangular door-leaf icon, distinct from the
+// map's own "Locked Door" X and "Secret Door" S symbols -- neither of which
+// this array or WALLS models at all). Of the 24:
+//  - 9 had a real door icon drawn -- kept below.
+//  - 11 had no icon at all, just continuous wall texture -- these were
+//    tracing bugs, not doors, and are now closed to solid wall in WALLS
+//    above instead (a real line-of-sight fix).
+//  - 4 ([10,8,10,9], [19,13,20,13], [10,17,11,17], [12,17,13,17]) are gaps
+//    where the built structure meets the natural cave/chasm or a corridor
+//    cuts straight through a wall line -- correctly open in both the art
+//    and WALLS, just with no door leaf drawn, so they're dropped from this
+//    list without touching WALLS.
 const DOORS = [
-  [2, 7, 2, 8], [6, 4, 6, 5], [10, 6, 10, 7], [10, 8, 10, 9],
-  [16, 12, 16, 13], [15, 6, 15, 7], [19, 14, 19, 15], [20, 6, 20, 7],
-  [20, 14, 20, 15], [28, 12, 28, 13], [28, 15, 28, 16], [4, 7, 5, 7],
-  [9, 7, 10, 7], [10, 6, 11, 6], [4, 8, 5, 8], [3, 13, 4, 13],
-  [19, 13, 20, 13], [26, 13, 27, 13], [26, 12, 27, 12], [19, 3, 20, 3],
-  [3, 16, 4, 16], [10, 17, 11, 17], [12, 17, 13, 17], [15, 17, 16, 17]
+  [6, 4, 6, 5], [19, 14, 19, 15], [20, 6, 20, 7], [20, 14, 20, 15],
+  [28, 15, 28, 16], [4, 7, 5, 7], [4, 8, 5, 8], [3, 13, 4, 13],
+  [3, 16, 4, 16]
 ];
 
 function main() {

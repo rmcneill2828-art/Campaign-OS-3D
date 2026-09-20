@@ -2732,6 +2732,40 @@ a real wall gap), and the existing `godot-smoke-tests`/`test_raster_map.gd`
 suite, unaffected this time (doors are additive, no existing assumption
 to break). 53/53 engine-server tests unaffected too.
 
+**Door audit correction -- 2026-09-20.** The "every gap is a doorway, icon
+or not" call above turned out wrong in practice: once real wall/door models
+made the gaps visible, the user spotted doors rendering where the map art
+draws solid stone, and asked to check all 24 candidates for real. Pixel-
+matching a hand-annotated screenshot back to vertex coordinates proved too
+imprecise to trust (a full grid square or more of drift between calibration
+approaches) -- the fix that actually worked was checking the full-resolution
+source image directly at each of the 24 known gap midpoints for the map's
+own plain door-leaf icon (distinct from its "Locked Door" X and "Secret
+Door" S symbols, none of which this project models). Cross-referencing each
+candidate against `WALLS` itself (not just the art) mattered too -- it's
+what separated "wall mistraced with a gap, should be solid" from "gap is
+correct, it's where the structure meets the natural cave/chasm or a
+corridor cuts through a wall line, just no door leaf drawn there."
+Verdict on the 24: 9 real (kept in `DOORS` as before), 11 false positives
+(no icon, continuous stone on both sides -- closed to solid in `WALLS`,
+a real `hasLineOfSight()` fix, not cosmetic) added as a new block at the
+end of `WALLS` in `import-redbrand-hideout.js`, and 4 left open with no
+door prop (natural-cave/corridor-through gaps -- `WALLS` untouched, just
+dropped from `DOORS`). Re-ran the import (126 wall segments, up from 115;
+9 doors, down from 24), verified via `hasLineOfSight()` calls straddling
+each of the 11 newly-closed gaps (now blocked) and one kept door (still
+open), the full 53/53 engine-server suite (unaffected), the existing
+`test_raster_map.gd` suite headless (unaffected -- generic wall-building
+logic, not this map's own data), and a real non-headless Godot screenshot
+of a few of the edited spots (solid wall geometry now renders where the
+false-positive gaps used to be, the kept door's model still renders
+correctly). No doors were found missing entirely (a door can only exist at
+a `WALLS` gap, and all of this map's gaps were already accounted for in
+the original 24 candidates) -- the one unaudited residual risk is a
+doorway drawn in the art where `WALLS` was traced fully solid with no gap
+at all, which wouldn't surface via this gap-by-gap method and would need a
+full perimeter scan to catch.
+
 **Still not done:** placement of freestanding 3D props (chests, beds,
 tables, sarcophagi -- matching Redbrand Hideout's own legend items) to
 dress the rooms shown in the map art. Scoped, not started: a manual
