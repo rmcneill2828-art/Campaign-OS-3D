@@ -64,12 +64,15 @@ const WALL_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment
 ## real door instead of a real wall. Picked by rendering several candidates
 ## side by side (not from filenames) -- a sturdy iron-banded plank door read
 ## as the most "dungeon hideout" fitting of the set, over plainer or more
-## ornate/gothic alternatives. Unlike the wall model, this one's real
-## proportions (~1.4m wide, ~2.0m tall -- a believable real door size) needed
-## no Meshy resize at all: doors don't get stretched to fit their gap the way
-## a wall gets stretched to its segment length (see _build_doors()), so its
-## own authored scale is simply used as-is.
-const DOOR_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Doors/Meshy_AI_Ancient_wooden_dungeo_0919195528_texture.glb"
+## ornate/gothic alternatives. The first (un-resized) version of this file
+## was left at its own authored ~2.0m height -- looked believable as a door
+## in isolation, but sitting in a full 4m-tall wall GAP (this engine has no
+## separate lintel/archway geometry to visually cap a doorway) it read as a
+## small door floating in an oversized hole. Re-exported via the same Meshy
+## "Resize" step the wall used (Height forced to 4.0m, Origin: Bottom), so
+## it now fills the gap floor-to-ceiling with no visible empty space above
+## it, same fix for the same reason as the wall.
+const DOOR_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Doors/Meshy_AI_Meshy_AI_Ancient_wood_rm_0920173018_texture.glb"
 
 var columns := 0
 var rows := 0
@@ -92,8 +95,16 @@ var _wall_model_size := Vector3.ZERO
 var _has_real_wall_model := false
 
 ## Same role as the three _wall_model_* vars above, for DOOR_MODEL_PATH.
+## _door_model_lift is the amount to raise the model so its lowest point sits
+## at Y=0 -- measured, not assumed, because different Meshy exports of what's
+## nominally "the same asset" have turned out to use different pivots (the
+## resized wall model came out bottom-pivoted, needing 0 lift; the ORIGINAL
+## un-resized door model was center-pivoted, needing height/2; the RESIZED
+## door model then came out bottom-pivoted again, needing 0) -- see
+## _measure_scene_lift()'s own doc comment.
 var _door_model_template: Node3D
 var _door_model_size := Vector3.ZERO
+var _door_model_lift := 0.0
 var _has_real_door_model := false
 
 # Which hand-built map scene (if any, see build()'s own doc comment) is
@@ -143,6 +154,7 @@ func _ready() -> void:
 	_door_model_template = _load_external_model(DOOR_MODEL_PATH)
 	if _door_model_template:
 		_door_model_size = _measure_scene_size(_door_model_template)
+		_door_model_lift = _measure_scene_lift(_door_model_template)
 		_has_real_door_model = _door_model_size.x > 0.01 and _door_model_size.y > 0.01
 
 ## Loads an arbitrary .glb file from anywhere on disk at RUNTIME, via
@@ -182,6 +194,26 @@ func _measure_scene_size(scene: Node3D) -> Vector3:
 				combined = combined.expand(world_corner)
 	remove_child(scene)
 	return combined.size
+
+## Companion to _measure_scene_size() -- how far the model's lowest rendered
+## point sits BELOW its own local origin. A true bottom-pivoted export (see
+## DOOR_MODEL_PATH's own doc comment on this not being a safe assumption
+## across different exports of "the same" asset) measures ~0 here, needing no
+## lift to sit on the floor; a center-pivoted one measures ~height/2. Same
+## "measure the real thing, don't assume the pivot" discipline as
+## _measure_scene_size() itself, just for the vertical anchor instead of the
+## box dimensions.
+func _measure_scene_lift(scene: Node3D) -> float:
+	add_child(scene)
+	var lowest_y := INF
+	for visual in scene.find_children("*", "VisualInstance3D", true, false):
+		var vi := visual as VisualInstance3D
+		var aabb: AABB = vi.get_aabb()
+		for i in range(8):
+			var world_corner: Vector3 = vi.global_transform * aabb.get_endpoint(i)
+			lowest_y = min(lowest_y, world_corner.y)
+	remove_child(scene)
+	return -lowest_y if is_finite(lowest_y) else 0.0
 
 ## Cell coordinates are 1-indexed, matching every token's x/y in the engine state.
 func cell_to_world(x: int, y: int) -> Vector3:
@@ -392,7 +424,7 @@ func _build_walls(walls: Array) -> void:
 ## on the `doors` parameter), so skipping it on a machine without the asset
 ## just means one less prop, not a missing wall. Deliberately NOT stretched to
 ## fill its gap's exact width the way a wall is stretched to its segment's
-## exact length -- the door model's own real ~1.4m width already reads as a
+## exact length -- the door model's own real width already reads as a
 ## believable door within a typically 2m-wide gap, and non-uniformly
 ## stretching a single recognizable object (not a repeating stone/brick
 ## texture) would look far more obviously wrong than mild wall-length
@@ -416,12 +448,11 @@ func _build_doors(doors: Array) -> void:
 		# (orienting its own local -Z along the gap), then the wrapper's fixed
 		# 90-degree Y rotation swaps the door model's own local X ("across the
 		# doorway," as measured -- same convention the wall model uses) onto
-		# that -Z-facing axis. Center-pivoted (unlike the bottom-pivoted wall
-		# model -- confirmed by measuring it, not assumed), so it needs the
-		# classic half-height lift to sit on the floor instead of half-buried
-		# in it.
+		# that -Z-facing axis. _door_model_lift (measured, not assumed -- see
+		# its own doc comment) raises the model so its real lowest point sits
+		# on the floor, whatever pivot this particular export happens to use.
 		var positioner := Node3D.new()
-		positioner.position = midpoint + Vector3(0, _door_model_size.y / 2.0, 0)
+		positioner.position = midpoint + Vector3(0, _door_model_lift, 0)
 		add_child(positioner) # look_at() needs this node genuinely in the tree first, same reason _build_walls()'s body is added before being oriented
 		positioner.look_at(Vector3(p2.x, positioner.position.y, p2.z), Vector3.UP)
 

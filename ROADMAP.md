@@ -2667,10 +2667,33 @@ to judge properly), not guessed from filenames. Picked
 `Ancient_wooden_dungeo` (a sturdy iron-banded plank door) over plainer
 options, a gothic/ornate one that read more "haunted mansion" than "bandit
 hideout," and a couple of plain stone archways with no door leaf at all.
-Measured at ~1.4m wide x 2.0m tall x 0.3m thick (a believable real door
-size) -- unlike the wall, needed no Meshy resize at all, since a door isn't
-stretched to fill its gap's exact width the way a wall is stretched to its
-segment's exact length (see below).
+Measured at ~1.4m wide x 2.0m tall x 0.3m thick at first -- a believable
+real door size in isolation, but this engine has no separate lintel/
+archway geometry to visually cap a doorway, so a 2m door sitting in a full
+4m-tall wall GAP read as a small door floating in an oversized hole (user
+caught this immediately from a screenshot: "i think we need to resize like
+we did the wall"). Fixed the same way as the wall: re-exported via Meshy's
+own "Resize" step (Height forced to 4.0m, Origin: Bottom), landing at
+~2.79m wide x 4.0m tall x 0.6m thick -- grown proportionally since Meshy's
+resize scales uniformly, not just the one axis requested. Unlike the wall,
+a door still isn't stretched to fill its gap's exact width -- it's a
+single recognizable object, not a repeating stone texture, so non-uniform
+stretching would look obviously wrong; the door's own real width (now
+~2.79m) is simply used as-is within each ~2m gap.
+
+**A second lesson from the resize, not obvious until measured:** the
+FIRST (un-resized) door export turned out to be center-pivoted, but the
+RESIZED one came out bottom-pivoted -- two Meshy exports of "the same"
+asset used different pivots. `_build_doors()` originally hardcoded the
+center-pivoted half-height lift the way the wall code hardcodes its own
+(already-confirmed) bottom pivot; swapping the file silently broke that
+assumption. Fixed properly rather than just flipping the hardcoded branch:
+added `_measure_scene_lift()` (a companion to `_measure_scene_size()`)
+that measures how far a model's real lowest point sits below its own
+origin, so the lift is correct regardless of which pivot a given export
+happens to use -- verified it measures ~0 for the new bottom-pivoted
+export (and would measure ~half the height for the old center-pivoted
+one, had it still been in use).
 
 Door POSITIONS weren't hand-identified from the map art a second time --
 found programmatically instead, by scanning `WALLS` for pairs of collinear
@@ -2685,9 +2708,9 @@ so there's no real gameplay reason to make that distinction. `DOORS` in
 space shape for exactly this reason -- so `GridManager.gd`'s new
 `_build_doors()` can reuse `_build_walls()`'s own `look_at()`-based
 orientation math directly, just without the length-scaling (a door isn't
-stretched -- its own real ~1.4m width already reads as believable within a
-2m-wide gap, and stretching a single recognizable object, unlike a
-repeating stone texture, would look obviously wrong).
+stretched -- its own real width is used as-is, and stretching a single
+recognizable object, unlike a repeating stone texture, would look
+obviously wrong).
 
 `doors` is deliberately NOT a real `encounter.js`/shared-engine concept --
 no `CampaignOS.addDoor()`, no port to `Campaign-OS`. Purely decorative
