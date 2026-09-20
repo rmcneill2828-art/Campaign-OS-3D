@@ -2049,6 +2049,46 @@
     return nextState;
   }
 
+  // Doors: same {x1,y1,x2,y2} vertex-space shape and per-map array as walls (state.maps[
+  // mapName].doors), stored and managed the same way (addDoor/removeDoor/clearDoors mirror
+  // addWall/removeWall/clearWalls exactly) -- but doors are purely informational/decorative,
+  // deliberately NEVER consulted by hasLineOfSight below. A doorway that should actually block
+  // sight when shut isn't a feature this engine models (no open/closed state at all); what
+  // blocks sight is `walls`, full stop, same as ever. Doors exist so a DM tracing a real map's
+  // walls (see the Redbrand Hideout import in the Campaign-OS-3D project this engine is
+  // shared with) has a reliable, explicit way to mark "there's a doorway here" for a 3D or
+  // other consumer to render a door model at, instead of that consumer guessing from wall
+  // gaps or map artwork -- both tried, on Redbrand Hideout, and both produced real mistakes
+  // (either every accidental tracing gap was rendered as a "door", or wall gaps had to be
+  // audited image-by-image against the source map's own door icons and still got some wrong).
+  // Marking doors by hand, the same trusted way walls themselves are already drawn, replaces
+  // both guesses with ground truth.
+  function addDoor(state, mapName, x1, y1, x2, y2) {
+    const nextState = clone(state);
+    nextState.maps = nextState.maps || {};
+    const current = nextState.maps[mapName] || {};
+    const doors = Array.isArray(current.doors) ? current.doors.slice() : [];
+    doors.push({ x1, y1, x2, y2 });
+    nextState.maps[mapName] = { ...current, doors };
+    return nextState;
+  }
+
+  function removeDoor(state, mapName, index) {
+    const nextState = clone(state);
+    const current = nextState.maps?.[mapName];
+    if (!current || !Array.isArray(current.doors) || !current.doors[index]) return state;
+    nextState.maps[mapName] = { ...current, doors: current.doors.filter((_, i) => i !== index) };
+    return nextState;
+  }
+
+  function clearDoors(state, mapName) {
+    const nextState = clone(state);
+    const current = nextState.maps?.[mapName];
+    if (!current || !Array.isArray(current.doors) || !current.doors.length) return state;
+    nextState.maps[mapName] = { ...current, doors: [] };
+    return nextState;
+  }
+
   // Standard orientation-based segment intersection test (cross-product sign comparison) --
   // the textbook algorithm, not something bespoke to this file. Returns true for a proper
   // crossing OR a collinear overlap; two segments that only touch at a shared endpoint may
@@ -2100,6 +2140,24 @@
     let bestDistance = maxDistance;
     walls.forEach((wall, index) => {
       const distance = distanceToSegment({ x, y }, { x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 });
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    return bestIndex;
+  }
+
+  // Same lookup as findNearestWallIndex, over `doors` instead of `walls` -- used by the UI's
+  // Doors tool for the identical "clicked near an existing door, remove it" vs. "start drawing
+  // a new one" decision the Walls tool already makes.
+  function findNearestDoorIndex(state, mapName, x, y, maxDistance) {
+    const doors = state.maps?.[mapName]?.doors;
+    if (!Array.isArray(doors) || !doors.length) return null;
+    let bestIndex = null;
+    let bestDistance = maxDistance;
+    doors.forEach((door, index) => {
+      const distance = distanceToSegment({ x, y }, { x: door.x1, y: door.y1 }, { x: door.x2, y: door.y2 });
       if (distance <= bestDistance) {
         bestDistance = distance;
         bestIndex = index;
@@ -2938,6 +2996,7 @@
     SKILL_LIST,
     abilityCheckBonus,
     abilityModifier,
+    addDoor,
     addExhaustion,
     addLogEntry,
     addWall,
@@ -2947,6 +3006,7 @@
     addToken,
     castAreaSpell,
     castSpell,
+    clearDoors,
     clearWalls,
     conditionList,
     createState,
@@ -2958,6 +3018,7 @@
     encounterMultiplier,
     evaluateEncounterDifficulty,
     feetPerSquare,
+    findNearestDoorIndex,
     findNearestWallIndex,
     gridMoveCost,
     hasCondition,
@@ -2989,6 +3050,7 @@
     useLegendaryAction,
     useRechargeAbility,
     useResource,
+    removeDoor,
     removeWall,
     setActiveMap,
     setMapGrid,

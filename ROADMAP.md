@@ -2766,6 +2766,23 @@ doorway drawn in the art where `WALLS` was traced fully solid with no gap
 at all, which wouldn't surface via this gap-by-gap method and would need a
 full perimeter scan to catch.
 
+**Superseded -- 2026-09-20, same day.** The user reported the audit above
+still got some doors wrong (a real doorway ended up closed to solid wall).
+Rather than attempt a third round of guessing from map art or gap
+geometry, Campaign-OS (this project's engine source of truth) gained a
+real **Doors** tool -- see its own ROADMAP.md's "Doors tool" entry --
+mirroring the Walls tool exactly, so doors can be marked by hand with the
+same ground-truth confidence `WALLS` itself already has (see this file's
+own "Adventure map import" entry on why that mattered for walls). Synced
+here via `sync-engine.sh`; `import-redbrand-hideout.js` now calls the real
+`CampaignOS.addDoor()`/`clearDoors()` instead of hand-writing `doors` onto
+the map object (that workaround's whole reason for existing -- "no
+`CampaignOS.addDoor()` to call" -- no longer applies). **Still open:**
+re-tracing Redbrand Hideout's real doors with the new tool and
+transcribing the result into `DOORS` (and reopening any `WALLS` gap the
+audit above wrongly closed) -- this file's `WALLS`/`DOORS` still reflect
+the audit's guesses, not yet the user's own hand-marked ground truth.
+
 **Still not done:** placement of freestanding 3D props (chests, beds,
 tables, sarcophagi -- matching Redbrand Hideout's own legend items) to
 dress the rooms shown in the map art. Scoped, not started: a manual

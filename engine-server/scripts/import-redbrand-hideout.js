@@ -183,17 +183,17 @@ function main() {
     state = CampaignOS.addWall(state, MAP_NAME, x1, y1, x2, y2);
   }
 
-  // `doors` is NOT a real encounter.js/shared-engine field -- there's no
-  // CampaignOS.addDoor() to call, deliberately: doors are purely decorative
-  // (GridManager.gd's own _build_doors() never feeds line-of-sight), so this
-  // writes the array directly onto the map object instead of inventing a new
-  // shared-engine concept for something the server itself never needs to know
-  // about. Harmless extra data as far as the 2D app and encounter.js's own
-  // hasLineOfSight() are concerned -- both only ever read `walls`.
-  state = {
-    ...state,
-    maps: { ...state.maps, [MAP_NAME]: { ...state.maps[MAP_NAME], doors: DOORS.map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2 })) } }
-  };
+  // `doors` IS now a real encounter.js/shared-engine field (addDoor/removeDoor/
+  // clearDoors, added alongside Campaign-OS's own Doors tool -- see that
+  // project's ROADMAP.md's "Doors tool" entry) -- still purely decorative as
+  // far as this server and GridManager.gd's own _build_doors() are concerned
+  // (never feeds hasLineOfSight(), only `walls` does), but no longer needs
+  // hand-written object-spreading onto the map now that a real addDoor() call
+  // does the same thing the WALLS loop above already does for walls.
+  state = CampaignOS.clearDoors(state, MAP_NAME);
+  for (const [x1, y1, x2, y2] of DOORS) {
+    state = CampaignOS.addDoor(state, MAP_NAME, x1, y1, x2, y2);
+  }
 
   saveState(STATE_FILE, state);
   console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments, ${DOORS.length} doors (all 12 rooms).`);
