@@ -420,6 +420,12 @@ function applyCorsHeaders(req, res) {
 }
 
 function sendJson(res, status, body) {
+  // The body-read timeout in readJsonBody() can req.destroy() the shared socket out
+  // from under a route handler that's still in flight (e.g. a stalled POST body); that
+  // handler's own catch block then reaches this same call on an already-dead response.
+  // Writing to it here would throw or fire an unhandled 'error' event, so treat it as
+  // "nothing left to send" instead of a bug.
+  if (res.writableEnded || res.destroyed) return;
   const json = JSON.stringify(body);
   // A plain writeHead(status, headers) call here MERGES with anything already set
   // via res.setHeader() (applyCorsHeaders, called once up front for every request) --
@@ -440,7 +446,12 @@ class BodyError extends Error {
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
-    let data = "";
+    // Collect raw Buffer chunks and decode once at the end with Buffer.concat, rather
+    // than `data += chunk` (String += on a Buffer calls its toString("utf8") per chunk):
+    // a multi-byte UTF-8 character split across a TCP chunk boundary gets each half
+    // decoded separately, producing replacement-character corruption for names/text
+    // containing accents, emoji, etc.
+    const chunks = [];
     let bytes = 0;
     let oversized = false;
     let settled = false;
@@ -464,7 +475,7 @@ function readJsonBody(req) {
     req.on("data", (chunk) => {
       bytes += chunk.length;
       if (bytes > MAX_BODY_BYTES) {
-        // Stop buffering (this is what actually bounds memory use -- `data` never
+        // Stop buffering (this is what actually bounds memory use -- `chunks` never
         // grows past the limit) but deliberately DON'T destroy the socket here: an
         // abrupt close mid-upload is what a client sees as a raw connection reset,
         // not a clean HTTP error. Draining the rest of the (now-discarded) body and
@@ -473,12 +484,14 @@ function readJsonBody(req) {
         oversized = true;
         return;
       }
-      data += chunk;
+      chunks.push(chunk);
     });
     req.on("end", () => {
       if (oversized) {
         return finish(false, new BodyError(413, `Request body exceeds the ${MAX_BODY_BYTES}-byte limit.`));
       }
+      if (!chunks.length) return finish(true, {});
+      const data = Buffer.concat(chunks).toString("utf8");
       if (!data) return finish(true, {});
       try {
         finish(true, JSON.parse(data));
@@ -537,6 +550,20 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   }
 
   const server = http.createServer(async (req, res) => {
+    // Without this, a write onto a socket the body-read timeout already destroyed
+    // (see readJsonBody/sendJson above) fires an unhandled 'error' event on `res`,
+    // which Node treats as an uncaught exception and crashes the whole process --
+    // taking down every other in-flight request/client with it.
+    res.on("error", () => {});
+    try {
+      await handleRequest(req, res);
+    } catch (err) {
+      console.error("Unhandled error while handling request:", err);
+      sendJson(res, 500, { error: "Internal server error." });
+    }
+  });
+
+  async function handleRequest(req, res) {
     applyCorsHeaders(req, res);
 
     if (req.method === "OPTIONS") {
@@ -720,7 +747,7 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
     }
 
     sendJson(res, 404, { error: "Not found." });
-  });
+  }
 
   return server;
 }

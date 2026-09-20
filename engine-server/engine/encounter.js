@@ -514,16 +514,22 @@
   }
 
   function findOpenTile(state, startX, startY) {
+    const grid = currentGrid(state);
     const queue = [{ x: startX, y: startY }];
     const seen = new Set();
+    // Bounds the search so a fully-occupied map (or a start point far outside it) can't
+    // make this BFS expand outward forever -- comfortably larger than any grid this app
+    // actually renders, while still terminating the request instead of hanging the server.
+    const maxIterations = 5000;
+    let iterations = 0;
 
-    while (queue.length) {
+    while (queue.length && iterations < maxIterations) {
+      iterations += 1;
       const current = queue.shift();
       const key = `${current.x},${current.y}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const grid = currentGrid(state);
       if (current.x >= 1 && current.x <= grid.columns && current.y >= 1 && current.y <= grid.rows && !occupied(state, current.x, current.y)) {
         return current;
       }
@@ -557,7 +563,7 @@
       const number = nextMonsterNumber(nextState, baseName);
       const tile = findOpenTile(nextState, 7 + index, 3 + index);
       const token = {
-        id: `${monsterName.toLowerCase()}-${Date.now()}-${index}`,
+        id: `${monsterName.toLowerCase()}-${Date.now()}-${index}-${crypto.randomUUID().slice(0, 8)}`,
         name: `${baseName} ${number}`,
         icon: baseName.slice(0, 2).toUpperCase(),
         type: "monster",
@@ -599,7 +605,7 @@
     const nextState = clone(state);
     const tile = findOpenTile(nextState, 4, 4);
     const token = {
-      id: `${slugify(draft.name || "token")}-${Date.now()}`,
+      id: `${slugify(draft.name || "token")}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
       name: draft.name || "Campaign Token",
       icon: draft.icon || String(draft.name || "CT").slice(0, 2).toUpperCase(),
       type: draft.type || "hero",
@@ -1229,9 +1235,18 @@
     const spellName = options.spellName || "a spell";
     const messages = [];
 
+    // Action economy: area spells are always a full action (dm-bridge/watch.js's own
+    // cast_area_spell schema requires level >= 1 and has no actionType field, unlike
+    // cast_spell), so this only needs the plain-action half of castSpell's own check.
+    const isActiveTurn = Boolean(state.turn && state.turn.tokenId === casterId);
+    if (isActiveTurn && (caster.actionUsed || (caster.attacksUsedThisTurn || 0) > 0)) {
+      return { state, message: `${caster.name} has already used their action this turn.` };
+    }
+
     const slotResult = spendSpellSlot(caster, level, spellName);
     if (!slotResult.ok) return { state, message: slotResult.message };
     messages.push(slotResult.message);
+    if (isActiveTurn) caster.actionUsed = true;
 
     if (options.concentration) {
       if (caster.concentratingOn && caster.concentratingOn.spell !== spellName) {
@@ -1586,7 +1601,7 @@
 
     const wasAboveZero = token.hp > 0;
     token.hp = clampNumber(token.hp - adjustedAmount, 0, token.maxHp);
-    if (adjustedAmount <= 0) return { state: nextState, message: modifierNote };
+    if (adjustedAmount <= 0) return { state: nextState, message: modifierNote, amountApplied: adjustedAmount };
 
     const amountTaken = adjustedAmount;
     const messages = modifierNote ? [modifierNote] : [];
@@ -1633,7 +1648,7 @@
       }
     }
 
-    return { state: nextState, message: messages.length ? messages.join(" ") : null };
+    return { state: nextState, message: messages.length ? messages.join(" ") : null, amountApplied: amountTaken };
   }
 
   // Rolls a death saving throw for a token currently making them: a flat d20, no modifiers.

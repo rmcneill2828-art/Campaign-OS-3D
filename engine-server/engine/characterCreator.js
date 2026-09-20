@@ -105,6 +105,15 @@
     return 10 + abilityModifiers.DEX;
   }
 
+  // Number(draft.speed) || 30 would silently turn an explicit 0 ft (a legitimate
+  // homebrew immobile creature -- the Character Creator's own Speed control allows it)
+  // back into the 30 ft default, same falsy-zero trap computeAc's override avoids.
+  function computeSpeed(rawSpeed) {
+    const speedNumber = Number(rawSpeed);
+    if (Number.isFinite(speedNumber) && String(rawSpeed).trim() !== "") return Math.round(speedNumber);
+    return 30;
+  }
+
   function computePassivePerception(abilityModifiers, proficientSkillNames, prof) {
     const isProficient = (proficientSkillNames || []).includes("Perception");
     return 10 + abilityModifiers.WIS + (isProficient ? prof : 0);
@@ -158,7 +167,7 @@
       hitDie: HIT_DIE_BY_CLASS[className] || 8,
       hp: computeHp(className, level, abilityModifiers.CON),
       ac: computeAc(abilityModifiers, draft.ac),
-      speed: Math.round(Number(draft.speed)) || 30,
+      speed: computeSpeed(draft.speed),
       initiativeBonus: abilityModifiers.DEX,
       passivePerception: computePassivePerception(abilityModifiers, proficientSkills, prof),
       savingThrows: computeSavingThrows(className, abilityModifiers, prof),

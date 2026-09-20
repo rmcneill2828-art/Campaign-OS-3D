@@ -416,10 +416,10 @@ function isValidAction(action) {
         && (action.disadvantage === undefined || typeof action.disadvantage === "boolean")
         && (action.actionType === undefined || action.actionType === "action" || action.actionType === "bonusAction" || action.actionType === "reaction");
     case "apply_damage":
-      return typeof action.target === "string" && Number.isFinite(action.amount)
+      return typeof action.target === "string" && Number.isFinite(action.amount) && action.amount > 0
         && (action.damageType === undefined || DAMAGE_TYPE_LIST.includes(String(action.damageType).toLowerCase()));
     case "apply_healing":
-      return typeof action.target === "string" && Number.isFinite(action.amount);
+      return typeof action.target === "string" && Number.isFinite(action.amount) && action.amount > 0;
     case "toggle_condition":
       return typeof action.target === "string" && CONDITION_LIST.includes(action.condition);
     case "set_visibility":
@@ -590,12 +590,35 @@ function buildPrompt(request) {
   return lines.join("\n");
 }
 
+// This project lives under OneDrive (see ARCHITECTURE.md/README.md), where sync or an
+// AV scan can transiently lock a response file (EBUSY/EPERM/EAGAIN) for a moment right
+// when we try to write it. Previously that failure was only ever logged to the console;
+// the actual caller (engine-server's waitForBridgeResponse, or the 2D app's own polling
+// loop) never learns why and just sees its own blind timeout with no pointer to the real
+// cause. Retrying a few times with a short backoff turns that transient lock into a
+// normal write instead of a silently lost request.
+const RESPONSE_WRITE_RETRY_DELAYS_MS = [200, 500, 1000];
+const TRANSIENT_WRITE_ERROR_CODES = new Set(["EBUSY", "EPERM", "EACCES", "EAGAIN"]);
+
+function writeJsonResponseFile(filePath, response, successMessage, failureLabel, attempt = 0) {
+  fs.writeFile(filePath, JSON.stringify(response, null, 2), (err) => {
+    if (!err) {
+      console.log(successMessage);
+      return;
+    }
+    if (TRANSIENT_WRITE_ERROR_CODES.has(err.code) && attempt < RESPONSE_WRITE_RETRY_DELAYS_MS.length) {
+      const delay = RESPONSE_WRITE_RETRY_DELAYS_MS[attempt];
+      console.warn(`[dm-bridge] ${failureLabel} write failed (${err.code}), retrying in ${delay}ms...`);
+      setTimeout(() => writeJsonResponseFile(filePath, response, successMessage, failureLabel, attempt + 1), delay);
+      return;
+    }
+    console.error(`[dm-bridge] failed to write ${failureLabel} after ${attempt} retr${attempt === 1 ? "y" : "ies"}:`, err.message);
+  });
+}
+
 function writeResponse(id, payload) {
   const response = { id, respondedAt: new Date().toISOString(), ...payload };
-  fs.writeFile(responsePath, JSON.stringify(response, null, 2), (err) => {
-    if (err) console.error("[dm-bridge] failed to write response.json:", err.message);
-    else console.log(`[dm-bridge] responded to ${id}: ${payload.message}`);
-  });
+  writeJsonResponseFile(responsePath, response, `[dm-bridge] responded to ${id}: ${payload.message}`, "response.json");
 }
 
 // Every argv element here is fixed and space-free (flag names, "json", "haiku", a
@@ -622,10 +645,26 @@ function runClaude(prompt, onDone) {
 
   let stdout = "";
   let stderr = "";
+  let settled = false;
+  const finish = (err, out, errOut) => {
+    if (settled) return;
+    settled = true;
+    onDone(err, out, errOut);
+  };
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  child.on("error", (err) => onDone(err, "", ""));
-  child.on("close", () => onDone(null, stdout, stderr));
+  child.on("error", (err) => finish(err, "", ""));
+  child.on("close", (code, signal) => {
+    // A well-formed JSON envelope on stdout is not proof the call actually succeeded --
+    // the process can be killed (OOM, a timeout elsewhere, a manual kill) right after
+    // flushing it but before exiting cleanly. Treat a nonzero exit code or a signal the
+    // same as the "error" event above: a failed call, not a silent success.
+    if (code !== 0 || signal) {
+      finish(new Error(`claude CLI exited with ${signal ? `signal ${signal}` : `code ${code}`}`), stdout, stderr);
+      return;
+    }
+    finish(null, stdout, stderr);
+  });
 
   child.stdin.write(prompt);
   child.stdin.end();
@@ -753,10 +792,12 @@ function buildEndSessionPrompt(request) {
 
 function writeEndSessionResponse(id, ok, message) {
   const response = { id, ok, message, respondedAt: new Date().toISOString() };
-  fs.writeFile(endSessionResponsePath, JSON.stringify(response, null, 2), (err) => {
-    if (err) console.error("[dm-bridge] failed to write end-session-response.json:", err.message);
-    else console.log(`[dm-bridge] end-session ${id} ${ok ? "succeeded" : "failed"}: ${message}`);
-  });
+  writeJsonResponseFile(
+    endSessionResponsePath,
+    response,
+    `[dm-bridge] end-session ${id} ${ok ? "succeeded" : "failed"}: ${message}`,
+    "end-session-response.json"
+  );
 }
 
 function handleEndSessionRequest(request) {
@@ -851,10 +892,12 @@ let lastProcessedCreateCharacterId = primeLastProcessedId(createCharacterRequest
 
 function writeCreateCharacterResponse(id, ok, message) {
   const response = { id, ok, message, respondedAt: new Date().toISOString() };
-  fs.writeFile(createCharacterResponsePath, JSON.stringify(response, null, 2), (err) => {
-    if (err) console.error("[dm-bridge] failed to write create-character-response.json:", err.message);
-    else console.log(`[dm-bridge] create-character ${id} ${ok ? "succeeded" : "failed"}: ${message}`);
-  });
+  writeJsonResponseFile(
+    createCharacterResponsePath,
+    response,
+    `[dm-bridge] create-character ${id} ${ok ? "succeeded" : "failed"}: ${message}`,
+    "create-character-response.json"
+  );
 }
 
 function handleCreateCharacterRequest(request) {
@@ -970,10 +1013,12 @@ function findCombatSectionRange(lines) {
 
 function writeUpdateCharacterResponse(id, ok, message) {
   const response = { id, ok, message, respondedAt: new Date().toISOString() };
-  fs.writeFile(updateCharacterResponsePath, JSON.stringify(response, null, 2), (err) => {
-    if (err) console.error("[dm-bridge] failed to write update-character-response.json:", err.message);
-    else console.log(`[dm-bridge] update-character ${id} ${ok ? "succeeded" : "failed"}: ${message}`);
-  });
+  writeJsonResponseFile(
+    updateCharacterResponsePath,
+    response,
+    `[dm-bridge] update-character ${id} ${ok ? "succeeded" : "failed"}: ${message}`,
+    "update-character-response.json"
+  );
 }
 
 function handleUpdateCharacterRequest(request) {

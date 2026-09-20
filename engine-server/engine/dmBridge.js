@@ -56,10 +56,15 @@
         // "takes N damage" line plus whatever it reports still goes through appendLog below
         // as one combined entry, same as attack()/castSpell() fold it into their own message.
         const result = window.CampaignOS.applyDamage(state, target.id, action.amount, { damageType: action.damageType });
-        const baseMessage = `${target.name} takes ${action.amount} damage.`;
+        // Use applyDamage's own post-resistance/immunity amountApplied, not the raw
+        // pre-resistance action.amount -- otherwise an immune target's "is immune to
+        // fire -- no damage taken" note gets a self-contradictory "takes 10 damage."
+        // stapled in front of it.
+        const amountApplied = Number.isFinite(result.amountApplied) ? result.amountApplied : action.amount;
+        const baseMessage = amountApplied > 0 ? `${target.name} takes ${amountApplied} damage.` : null;
         return {
           state: result.state,
-          message: result.message ? `${baseMessage} ${result.message}` : baseMessage,
+          message: [baseMessage, result.message].filter(Boolean).join(" ") || `${target.name} takes no damage.`,
           alreadyLogged: false
         };
       }

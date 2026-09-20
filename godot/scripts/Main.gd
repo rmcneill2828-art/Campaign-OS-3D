@@ -19,6 +19,12 @@ const TokenScene := preload("res://scenes/Token.tscn")
 ## (CameraRig.gd handles that independently) would also fire an attack.
 const RIGHT_CLICK_DRAG_THRESHOLD_PX := 6.0
 
+## See _ready()'s own comment on _action_request.timeout: bounds how long a single
+## POST /action can stay "in flight" before _action_in_flight is forced back open,
+## so a wedged/unresponsive engine-server can't permanently freeze every action
+## button for the rest of the session.
+const ACTION_REQUEST_TIMEOUT_SECONDS := 15.0
+
 ## Duplicated from engine-server/engine/encounter.js's own ABILITY_KEYS/
 ## SKILL_LIST rather than fetched at runtime -- same "no shared-module
 ## mechanism between these plain scripts" convention that project already
@@ -291,6 +297,13 @@ func _ready() -> void:
 	_poll_timer.timeout.connect(_poll_state)
 	_state_request.request_completed.connect(_on_state_response)
 	_action_request.request_completed.connect(_on_action_response)
+	# Without this, a POST /action that never gets a response (engine-server wedged,
+	# or the connection just hangs) leaves _action_in_flight true forever -- request_
+	# completed never fires, so _on_action_response() never runs to clear it, and
+	# every button routed through _send_action() silently no-ops for the rest of the
+	# session. A plain /action call normally resolves in milliseconds; 15s is
+	# generous slack for a slow disk save, not a bound anyone should ordinarily hit.
+	_action_request.timeout = ACTION_REQUEST_TIMEOUT_SECONDS
 	_next_turn_button.pressed.connect(_on_next_turn_pressed)
 	_open_player_window_button.pressed.connect(_on_open_player_window_pressed)
 
@@ -1638,8 +1651,14 @@ func _send_action(action: Dictionary) -> void:
 		_action_in_flight = false
 		_show_hint("Could not send action to engine-server (error %d)." % error)
 
-func _on_action_response(_result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_action_response(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	_action_in_flight = false
+	if result != HTTPRequest.RESULT_SUCCESS:
+		# Covers the ACTION_REQUEST_TIMEOUT_SECONDS timeout above along with any other
+		# connection-level failure (server not running, connection reset) -- none of
+		# these have an HTTP response_code/body worth trying to parse as JSON.
+		_show_hint("Action request failed (%s) -- engine-server may be unresponsive." % result)
+		return
 	var parsed = JSON.parse_string(body.get_string_from_utf8())
 	if response_code != 200:
 		var error_text: String = "unknown error"

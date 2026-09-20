@@ -145,6 +145,12 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, ma
 		remove_child(child)
 		child.free()
 	_map_scene_instance = null
+	# _floor_body is also one of these children (see _build_floor_collision() below),
+	# so the loop above just freed it too -- leaving this reference un-nulled means
+	# _build_floor_collision()'s own `if _floor_body:` check later in this same
+	# build() call sees a stale, already-freed Object instead of null, erroring on
+	# every second-and-later build() call (any map switch or wall edit).
+	_floor_body = null
 
 	if map_scene_path != "" and ResourceLoader.exists(map_scene_path):
 		var map_scene := load(map_scene_path) as PackedScene
