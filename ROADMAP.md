@@ -2582,3 +2582,84 @@ two genuinely different features, not one --
 **Remaining:** only (2), a real, separate feature to scope properly (design
 question above included) if/when general sketching turns out to be wanted
 beyond precise wall tracing -- not started, not committed to.
+
+## Real wall retexturing -- 2026-09-20, wall half done; 3D item placement still open
+
+User asked for "retexture of walls and placement of 3D items" once the
+generated wall boxes (plain stone-gray `BoxMesh`, see `_build_walls()`)
+started looking obviously flat next to a real imported map's floor art.
+
+**Source:** `I:\Campaign-OS-3D\Downloaded Static Models\Environment\`, a
+separate, previously undocumented Meshy-sourced asset library (Walls,
+Props, Furniture, Doors, Floor, Ceiling, Stairs, Rooms, Bridges, Outdoor
+Terrain) sitting alongside the existing Monsters/Heroes/NPCs library that
+folder's own `campaign-os-3d-models-progress.md` tracks -- that doc has
+never covered this `Environment` subfolder, worth folding in if this
+becomes an ongoing sourcing effort the way Monsters/Heroes already is.
+
+**Wall model selection, done properly, not guessed:** 6 real wall
+candidates couldn't be told apart from filenames alone, so they were
+rendered together in a real (non-headless -- `--headless` uses a dummy
+renderer with no real pixels, confirmed by the RID-leak warnings it prints)
+Godot instance and screenshotted for a genuine side-by-side look, the same
+"measure/see the real thing, don't guess" discipline this project already
+applies to file positions and offsets. Picked candidate #4 (plain grey
+weathered stone, cleanest rectangular proportions) over a curved arch
+piece, a small corner piece, and two much darker/blockier options.
+
+**A real proportions problem, found by measuring, not assumed:** every
+candidate's real AABB (measured the same way `_measure_top_offset()`
+already measures the floor tile, not trusted from the file) turned out
+short and wide -- ~0.77-1.5m tall, modeled as one course of stone meant to
+be stacked, not a floor-to-ceiling panel. Non-uniformly stretching one
+~5x vertically to reach this project's real 4m wall height would have
+visibly distorted the stone texture. Considered building a proper tiling
+system (repeating instances along height and length, like
+`_build_real_floor_tiles()` already does per-cell) before it turned out
+unnecessary: Meshy's own "Resize" export step could force the model's
+height to exactly 4.0m directly at the source (with Origin: Bottom, so
+Godot needs no extra vertical-centering offset either) -- re-exporting
+`a_wall_made_of_stone_0919141517` this way was simpler than any in-engine
+tiling approach and avoids the height-axis distortion entirely.
+
+**What got built:** `GridManager.gd`'s `_ready()` loads the resized model
+once via `_load_wall_model()` (the same runtime `GLTFDocument` technique
+`CharacterViewer.gd`'s own `_load_external_glb()` already established, for
+the same reason -- Meshy-sourced content outside `res://`, no `.import`
+possible), then measures its real (Width, Height, Depth) AABB into
+`_wall_model_size` via a new `_measure_scene_size()` (`_measure_top_offset()`
+generalized from "just the top Y" to the full box). `_build_walls()` then
+duplicates that template per wall segment instead of building a `BoxMesh`,
+whenever `_has_real_wall_model` is true. The model's own local X is its
+"along the wall" axis as authored (confirmed by measurement, not assumed),
+but this project's own wall convention runs length along local Z (matching
+`look_at()`'s `-Z`-forward and the fallback box) -- a child wrapper with a
+fixed 90-degree Y rotation swaps which axis is which, and the model is
+scaled in its OWN pre-rotation local space, only along X (the length axis,
+`length / _wall_model_size.x`); height and thickness stay at scale 1.0,
+their real authored proportions, since only the length genuinely varies
+per segment. `WALL_MODEL_PATH` is this-machine-specific and explicitly
+provisional, same category as `MapImagePath.gd`'s own resolution
+convention -- another clone falls back to the original plain box wall via
+`_has_real_wall_model`, no crash, no missing walls.
+
+**Verified three ways, not just "it compiled":** a headless dump of the
+real generated transforms for all 115 of Redbrand Hideout's live walls
+(scale.x matched `length / 9.838` exactly in every sampled case, collision
+shapes correctly sized/positioned); then an actual non-headless screenshot
+of the live board, showing real full-height stacked-stone walls tracing
+the real room shapes with no visible distortion; then the existing
+`godot/tools/test_raster_map.gd` suite, which broke in the process (its
+`_is_wall_body()`/`_test_walls()` helpers had implicitly assumed the
+fallback BoxMesh's specific node shape, since no machine had ever had a
+real wall model available to trigger the other path before) -- fixed by
+asserting against the wall's `CollisionShape3D` (present, and at the same
+world position, in both representations) instead of a specific visual
+node type. 12/12 assertions pass, plus the rest of `godot-smoke-tests`
+unaffected.
+
+**Not done:** placement of 3D props (chests, beds, tables, sarcophagi --
+matching Redbrand Hideout's own legend items) to dress the rooms shown in
+the map art. Scoped, not started: a manual `PROPS` list in
+`import-redbrand-hideout.js` (`{type, x, y}`, same spirit as `WALLS`),
+resolved against the `Environment/Props`/`Furniture` folders above.

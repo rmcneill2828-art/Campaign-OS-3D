@@ -73,10 +73,26 @@ func _test_raster_floor(board) -> void:
 ## Distinguishes a real generated wall body from GridManager's OWN pre-existing
 ## `_floor_body` -- both are plain StaticBody3D nodes, but _floor_body (the
 ## invisible click-to-move collision plane _build_floor_collision() always adds,
-## regardless of which floor path build() took) carries only a CollisionShape3D,
-## never a MeshInstance3D, so that's the distinguishing feature to filter on.
+## regardless of which floor path build() took) carries ONLY a CollisionShape3D
+## (one child total), while a real wall body always carries a visual child too
+## (two children total) -- a plain MeshInstance3D for the fallback BoxMesh, or a
+## rotation wrapper around a real wall-model duplicate when one is available
+## (see GridManager's own WALL_MODEL_PATH) -- so child COUNT, not the first
+## child's specific type, is the reliable distinguishing feature to filter on
+## across both cases.
 func _is_wall_body(node: Node) -> bool:
-	return node is StaticBody3D and node.get_child_count() > 0 and node.get_child(0) is MeshInstance3D
+	return node is StaticBody3D and node.get_child_count() > 1
+
+## The visual geometry differs (plain BoxMesh vs. a real wall model, see
+## GridManager's own _build_walls()), but every wall body always carries
+## exactly one CollisionShape3D with a BoxShape3D -- the thing hasLineOfSight()
+## consistency actually depends on -- regardless of which visual path was
+## taken, so tests assert against THIS, not the visual mesh.
+func _find_collision_shape(body: StaticBody3D) -> CollisionShape3D:
+	for child in body.get_children():
+		if child is CollisionShape3D:
+			return child
+	return null
 
 func _test_walls(board) -> void:
 	# A simple north wall spanning the whole width of a 12x8 board, plus a short
@@ -104,21 +120,26 @@ func _test_walls(board) -> void:
 	var expected_length: float = expected_p1.distance_to(expected_p2)
 
 	var straight_wall: StaticBody3D = wall_bodies[0]
-	var mesh: MeshInstance3D = straight_wall.get_child(0)
-	var box: BoxMesh = mesh.mesh
-	_check(is_equal_approx(box.size.z, expected_length), "The wall's own length (local Z, matching look_at()'s -Z-forward convention) matches the real distance between its two endpoints")
+	var collision: CollisionShape3D = _find_collision_shape(straight_wall)
+	var box: BoxShape3D = collision.shape
+	_check(is_equal_approx(box.size.z, expected_length), "The wall's own collision length (local Z, matching look_at()'s -Z-forward convention) matches the real distance between its two endpoints")
 
-	# Verify the ACTUAL resulting orientation/position by transforming the box's own
-	# local Z endpoints through its real global transform and checking they land on
-	# the real input points, as a set (order-independent -- which endpoint is
+	# Verify the ACTUAL resulting orientation/position by transforming the collision
+	# box's own local Z endpoints through its real global transform and checking they
+	# land on the real input points, as a set (order-independent -- which endpoint is
 	# local +Z vs -Z isn't the point; spanning the right two points in the world is).
+	# Uses the collision shape's own global_transform, not the body's -- the body
+	# itself sits at floor level for a real wall model (see _build_walls()'s own
+	# comment on the bottom-vs-center pivot difference), with the collision child
+	# carrying the wall_height/2 lift instead in that case.
 	var half := box.size.z / 2.0
-	var world_end_a: Vector3 = straight_wall.to_global(Vector3(0, 0, -half))
-	var world_end_b: Vector3 = straight_wall.to_global(Vector3(0, 0, half))
+	var collision_transform: Transform3D = collision.global_transform
+	var world_end_a: Vector3 = collision_transform * Vector3(0, 0, -half)
+	var world_end_b: Vector3 = collision_transform * Vector3(0, 0, half)
 	var matches_a := (world_end_a.is_equal_approx(expected_p1) and world_end_b.is_equal_approx(expected_p2))
 	var matches_b := (world_end_a.is_equal_approx(expected_p2) and world_end_b.is_equal_approx(expected_p1))
-	_check(matches_a or matches_b, "The wall box's real transformed endpoints land exactly on its two input vertex-space points, regardless of which local Z sign is which")
-	_check(is_equal_approx(straight_wall.position.y, (GridManager.WALL_HEIGHT_FEET * GridManager.METERS_PER_FOOT) / 2.0), "The wall is vertically centered at half its own height above the floor")
+	_check(matches_a or matches_b, "The wall's collision box real transformed endpoints land exactly on its two input vertex-space points, regardless of which local Z sign is which")
+	_check(is_equal_approx(collision_transform.origin.y, (GridManager.WALL_HEIGHT_FEET * GridManager.METERS_PER_FOOT) / 2.0), "The wall's collision box is vertically centered at half its own height above the floor")
 
 	# A zero-length ("degenerate") segment must not crash or produce a body with no
 	# real geometry to speak of.

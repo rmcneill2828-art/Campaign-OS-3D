@@ -28,12 +28,37 @@ const TILE_HEIGHT := 0.1
 const FLOOR_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor.glb"
 const FLOOR_DETAIL_TILE_PATH := "res://assets/Environment/dungeon-kit/Models/GLB format/floor-detail.glb"
 
-## Generated wall geometry (see _build_walls()) -- a plain stone-gray box per
-## encounter.js's own {x1,y1,x2,y2} wall segment, no bespoke wall asset (there isn't
-## one for an arbitrary imported map). 10 ft is a typical room wall height, not an
-## SRD rule this project models elsewhere.
+## Generated wall geometry (see _build_walls()) -- a real wall-model piece per
+## encounter.js's own {x1,y1,x2,y2} wall segment when one is available (see
+## WALL_MODEL_PATH below), a plain stone-gray box otherwise. 10 ft is a
+## typical room wall height, not an SRD rule this project models elsewhere.
 const WALL_HEIGHT_FEET := 10.0
 const WALL_THICKNESS := 0.15
+
+## A real dungeon-wall .glb from this machine's Meshy model-sourcing library
+## (I:\Campaign-OS-3D\Downloaded Static Models\, see that folder's own
+## campaign-os-3d-models-progress.md) -- kept OUTSIDE this repo and loaded at
+## RUNTIME via GLTFDocument (CharacterViewer.gd's own `_load_external_glb()`
+## pattern), same as MapImagePath.gd's raster map images and for the same
+## reason: Meshy-sourced content, unlike the Kenney/KayKit CC0 packs already
+## committed under assets/Environment/, isn't safe to redistribute inside this
+## git repo. EXPLICITLY PROVISIONAL and this-machine-specific, same as
+## MapImagePath.gd's own resolution convention -- a clone on another machine
+## just won't have this path, which _ready() below handles by falling back to
+## the original plain-box wall (see _has_real_wall_model).
+##
+## This exact file is a Meshy "Resize" re-export of an earlier candidate
+## (Height forced to exactly 4.0m, Origin: Bottom), specifically so its
+## height would already be correct and _build_walls() would only ever need
+## to scale the length axis -- the earlier, un-resized candidate was only
+## ~0.77m tall, and non-uniformly stretching that ~5x to reach a real wall's
+## height would have visibly distorted the stone texture (confirmed by
+## measuring several candidates' real AABBs before picking one, not by
+## eyeballing a thumbnail). Its real size is still measured at runtime into
+## _wall_model_size below, not trusted from the resize dialog's own claimed
+## number -- same "don't trust the file's claimed bounds" discipline
+## _measure_top_offset() already established for the floor tiles.
+const WALL_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Walls/Meshy_AI_Meshy_AI_a_wall_made_rm_0920162632_texture.glb"
 
 var columns := 0
 var rows := 0
@@ -46,6 +71,14 @@ var _dark_material: StandardMaterial3D
 var _tile_mesh: BoxMesh
 var _floor_scene: PackedScene
 var _floor_detail_scene: PackedScene
+
+## See WALL_MODEL_PATH's own doc comment. _wall_model_template is never itself
+## added to the board -- only `.duplicate()`s of it are, one per wall segment --
+## so it's kept in memory, not the scene tree, once loaded. _wall_model_size is
+## its real measured (Width, Height, Depth) AABB, from _measure_scene_size().
+var _wall_model_template: Node3D
+var _wall_model_size := Vector3.ZERO
+var _has_real_wall_model := false
 
 # Which hand-built map scene (if any, see build()'s own doc comment) is
 # currently instantiated -- tracked separately from columns/rows/cell_size so
@@ -79,6 +112,52 @@ func _ready() -> void:
 		_floor_scene = load(FLOOR_TILE_PATH) as PackedScene
 	if ResourceLoader.exists(FLOOR_DETAIL_TILE_PATH):
 		_floor_detail_scene = load(FLOOR_DETAIL_TILE_PATH) as PackedScene
+
+	# Same "degrade, don't fail" precedent every other optional/external asset in
+	# this project already follows -- WALL_MODEL_PATH is this-machine-specific and
+	# won't exist on another clone, so _build_walls() falls back to the original
+	# plain BoxMesh whenever _has_real_wall_model is false.
+	_wall_model_template = _load_wall_model(WALL_MODEL_PATH)
+	if _wall_model_template:
+		_wall_model_size = _measure_scene_size(_wall_model_template)
+		_has_real_wall_model = _wall_model_size.x > 0.01 and _wall_model_size.y > 0.01
+
+## Loads an arbitrary .glb file from anywhere on disk at RUNTIME, via
+## GLTFDocument -- the exact same technique CharacterViewer.gd's own
+## _load_external_glb() already established for the same reason (a file
+## outside this project's own res:// tree, with no real .import generated for
+## it, so ResourceLoader.load() can't be used).
+func _load_wall_model(path: String) -> Node3D:
+	if not FileAccess.file_exists(path):
+		return null
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	var error := document.append_from_file(path, state)
+	if error != OK:
+		return null
+	return document.generate_scene(state) as Node3D
+
+## Instantiates `scene` briefly (unscaled) just to measure its real rendered
+## (Width, Height, Depth) AABB, then removes it from the tree again -- same
+## "measure the real thing after Godot has already resolved it, don't trust
+## the file's claimed bounds" technique _measure_top_offset() already uses,
+## generalized from "just the top Y" to the full box.
+func _measure_scene_size(scene: Node3D) -> Vector3:
+	add_child(scene)
+	var combined := AABB()
+	var first := true
+	for visual in scene.find_children("*", "VisualInstance3D", true, false):
+		var vi := visual as VisualInstance3D
+		var aabb: AABB = vi.get_aabb()
+		for i in range(8):
+			var world_corner: Vector3 = vi.global_transform * aabb.get_endpoint(i)
+			if first:
+				combined = AABB(world_corner, Vector3.ZERO)
+				first = false
+			else:
+				combined = combined.expand(world_corner)
+	remove_child(scene)
+	return combined.size
 
 ## Cell coordinates are 1-indexed, matching every token's x/y in the engine state.
 func cell_to_world(x: int, y: int) -> Vector3:
@@ -205,21 +284,33 @@ func _build_raster_floor(image_path: String) -> void:
 	mesh_instance.position = board_center()
 	add_child(mesh_instance)
 
-## Generates a simple StaticBody3D wall box per {x1,y1,x2,y2} segment (encounter.js's
-## own addWall() shape) -- vertex-space coordinates where a vertex sits at an
+## Generates a StaticBody3D per {x1,y1,x2,y2} wall segment (encounter.js's own
+## addWall() shape) -- vertex-space coordinates where a vertex sits at an
 ## INTEGER cell-unit coordinate (world = vertex * cell_size, no extra 0.5 offset the
 ## way a cell CENTER needs; see AoeTemplate.gd's own class doc comment for the same
 ## convention already proven there). Generated fresh from the exact data the server
 ## already uses for real line-of-sight, so this can never disagree with what
 ## hasLineOfSight() itself sees, unlike a hand-authored map scene's own separately
 ## modeled walls (which a DM editing walls via the DM Assistant wouldn't update).
-## Uses Node3D's own look_at() to orient each wall box, not hand-derived trig/
+## Uses Node3D's own look_at() to orient each wall, not hand-derived trig/
 ## rotation -- see Token.gd's _face_direction() for why this project specifically
 ## avoids reasoning out a rotation sign by hand.
+##
+## When a real wall model is available (_has_real_wall_model, see WALL_MODEL_PATH),
+## each segment gets a duplicate of it instead of a plain box. The model's own
+## local X is its "along the wall" axis as authored (confirmed by measuring it,
+## not assumed), but this project's own wall convention runs length along local Z
+## (matching look_at()'s -Z-forward and the fallback BoxMesh below) -- so a
+## wrapper child with a fixed 90-degree Y rotation swaps which axis is which,
+## and the model itself is scaled in ITS OWN pre-rotation local space, only
+## along X (the length axis). Height and thickness are left at their real
+## authored proportions (scale 1.0) rather than also being stretched to fit --
+## the model was specifically resized at the source (see WALL_MODEL_PATH) so its
+## height would already be correct, precisely to avoid that distortion.
 func _build_walls(walls: Array) -> void:
 	var wall_height := WALL_HEIGHT_FEET * METERS_PER_FOOT
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.42, 0.4, 0.38) # plain stone-gray -- no bespoke wall asset for a generically-generated wall
+	var fallback_material := StandardMaterial3D.new()
+	fallback_material.albedo_color = Color(0.42, 0.4, 0.38) # only used without a real wall model
 
 	for wall in walls:
 		var p1 := Vector3(float(wall.get("x1", 0)) * cell_size, 0.0, float(wall.get("y1", 0)) * cell_size)
@@ -230,20 +321,35 @@ func _build_walls(walls: Array) -> void:
 		var midpoint := (p1 + p2) / 2.0
 
 		var body := StaticBody3D.new()
-		body.position = midpoint + Vector3(0, wall_height / 2.0, 0)
+		# The real wall model is bottom-pivoted (Meshy "Origin: Bottom" export),
+		# so the body sits directly at floor level and the model grows upward
+		# from there; the fallback BoxMesh is center-pivoted, so IT needs the
+		# classic half-height lift instead.
+		body.position = midpoint if _has_real_wall_model else midpoint + Vector3(0, wall_height / 2.0, 0)
 		add_child(body) # look_at() needs this node genuinely in the tree first, so its own global_transform resolves correctly against a real (already-_ready()'d) parent chain
 		body.look_at(Vector3(p2.x, body.position.y, p2.z), Vector3.UP) # local -Z now points from this wall's own midpoint toward p2
 
-		var mesh_instance := MeshInstance3D.new()
-		var box := BoxMesh.new()
-		box.size = Vector3(WALL_THICKNESS, wall_height, length) # length on local Z, matching look_at()'s own -Z-forward convention
-		mesh_instance.mesh = box
-		mesh_instance.material_override = material
-		body.add_child(mesh_instance)
+		var collision_thickness := WALL_THICKNESS
+		if _has_real_wall_model:
+			collision_thickness = _wall_model_size.z
+			var wrapper := Node3D.new()
+			wrapper.rotation_degrees.y = 90
+			body.add_child(wrapper)
+			var instance: Node3D = _wall_model_template.duplicate()
+			wrapper.add_child(instance)
+			instance.scale = Vector3(length / _wall_model_size.x, 1.0, 1.0)
+		else:
+			var mesh_instance := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(WALL_THICKNESS, wall_height, length) # length on local Z, matching look_at()'s own -Z-forward convention
+			mesh_instance.mesh = box
+			mesh_instance.material_override = fallback_material
+			body.add_child(mesh_instance)
 
 		var collision := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
-		shape.size = box.size
+		shape.size = Vector3(collision_thickness, wall_height, length)
+		collision.position = Vector3(0, wall_height / 2.0, 0) if _has_real_wall_model else Vector3.ZERO
 		collision.shape = shape
 		body.add_child(collision)
 
