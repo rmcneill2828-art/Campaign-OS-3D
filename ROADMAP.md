@@ -2440,15 +2440,19 @@ directly.
    exported via `copy(localStorage.getItem("campaign-os-encounter-state"))`
    in the browser console and handed over as JSON. This is the actual
    workflow this scope item always meant, not an approximation of it, and it
-   produced real, substantially better data: 83 wall segments across all
-   twelve rooms (up from this session's own 8-wall, 2-room slice), with a
-   notable cross-validation -- the user's own from-scratch grid calibration
-   independently landed on the exact same 30x21 grid this project's own
-   long-baseline pitch analysis had derived. `import-redbrand-hideout.js`'s
-   `WALLS` array now holds this real data verbatim (only the JSON
-   `{x1,y1,x2,y2}` object shape was mechanically converted to the file's own
-   array-tuple shape -- no coordinates changed), replacing both of this
-   session's own scripted attempts entirely.
+   produced real, substantially better data: an initial export of 83 wall
+   segments across all twelve rooms (up from this session's own 8-wall,
+   2-room slice), refined by the user to 115 in a follow-up pass the same
+   day, with a notable cross-validation -- the user's own from-scratch grid
+   calibration independently landed on the exact same 30x21 grid this
+   project's own long-baseline pitch analysis had derived.
+   `import-redbrand-hideout.js`'s `WALLS` array now holds this real data
+   verbatim (only the JSON `{x1,y1,x2,y2}` object shape was mechanically
+   converted to the file's own array-tuple shape, and cross-checked
+   programmatically against the export rather than trusted by eye -- no
+   coordinates changed), replacing both of this session's own scripted
+   attempts entirely. Re-exporting and re-running the import script is the
+   established way to pick up any further wall touch-ups.
 
    **A real limitation surfaced by actually using the tool, not by building
    it:** several of the map's real walls end partway across a square, not on
