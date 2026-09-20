@@ -2655,7 +2655,7 @@ fallback BoxMesh's specific node shape, since no machine had ever had a
 real wall model available to trigger the other path before) -- fixed by
 asserting against the wall's `CollisionShape3D` (present, and at the same
 world position, in both representations) instead of a specific visual
-node type. 12/12 assertions pass, plus the rest of `godot-smoke-tests`
+node type. 15/15 assertions pass, plus the rest of `godot-smoke-tests`
 unaffected.
 
 **Not done:** placement of 3D props (chests, beds, tables, sarcophagi --
