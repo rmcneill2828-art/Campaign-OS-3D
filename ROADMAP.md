@@ -2430,6 +2430,35 @@ directly.
    a real map's grid pitch over the longest baseline available (autocorrelate
    a large averaged span), never extrapolate a whole map's scale from one
    small local sample.
+
+   **Finally closed out for real, 2026-09-20, by the user actually doing it.**
+   Both passes above were still this session standing in for a human, since no
+   browser-automation tool was available to drive the 2D app's UI directly.
+   The user then did it for real: opened `Campaign-OS`'s own browser UI,
+   used **Adjust Grid** to calibrate against the map's real printed grid by
+   eye, and used the **Walls** tool to trace all twelve rooms by hand --
+   exported via `copy(localStorage.getItem("campaign-os-encounter-state"))`
+   in the browser console and handed over as JSON. This is the actual
+   workflow this scope item always meant, not an approximation of it, and it
+   produced real, substantially better data: 83 wall segments across all
+   twelve rooms (up from this session's own 8-wall, 2-room slice), with a
+   notable cross-validation -- the user's own from-scratch grid calibration
+   independently landed on the exact same 30x21 grid this project's own
+   long-baseline pitch analysis had derived. `import-redbrand-hideout.js`'s
+   `WALLS` array now holds this real data verbatim (only the JSON
+   `{x1,y1,x2,y2}` object shape was mechanically converted to the file's own
+   array-tuple shape -- no coordinates changed), replacing both of this
+   session's own scripted attempts entirely.
+
+   **A real limitation surfaced by actually using the tool, not by building
+   it:** several of the map's real walls end partway across a square, not on
+   a grid corner (a hand-painted dungeon's walls don't reliably follow a
+   rigid grid the way this project's own hand-built Godot scenes do) -- the
+   2D app's Walls tool only supports grid-VERTEX-aligned straight segments
+   (`addWall()`'s own documented coordinate space), so those couldn't be
+   traced exactly and were approximated to the nearest vertex instead. Real
+   future work, not solved here: see "Freeform map annotation" below, opened
+   directly because of this.
 2. **Built 2026-09-20.** On the Campaign-OS-3D side: read
    `state.maps[name]` (image reference, columns/rows/feetPerSquare, walls)
    and render it -- a textured floor plane using the calibrated image, plus
@@ -2501,3 +2530,50 @@ inspection. Wired into `godot-smoke-tests`.
 the custom manifest format, a from-scratch semantic layout editor, curated
 per-setting procedural dressing kits, and any CV-assisted wall/grid
 detection -- everything in the original report's Phases 3-5.
+
+## Freeform map annotation -- opened 2026-09-20, not started
+
+Directly motivated by tracing Redbrand Hideout's real walls above: several of
+the map's actual walls end partway across a square, not on a grid corner (a
+hand-painted dungeon doesn't reliably follow a rigid grid the way this
+project's own hand-built Godot scenes do), and the 2D app's Walls tool had no
+way to place them there -- they got approximated to the nearest vertex
+instead. User asked (2026-09-20) whether some freeform drawing capability on
+maps is possible.
+
+**Checked directly before scoping, rather than assumed:** this splits into
+two genuinely different features, not one --
+
+1. **Precise (non-grid-snapped) wall placement.** This is the actual fix for
+   the problem above, and it's small. `engine/encounter.js`'s `addWall(state,
+   mapName, x1, y1, x2, y2)` stores whatever numbers it's given with no
+   rounding, and `hasLineOfSight`'s `segmentsIntersect`/`orientation`/
+   `onSegment` are plain float geometry -- nothing in the engine assumes
+   integer vertices, that's a convention, not a constraint. `GridManager.gd`'s
+   `_build_walls()` likewise just does `float(wall.get("x1", 0)) * cell_size`
+   arithmetic on whatever it receives, no rounding either. The ONLY place
+   that forces integer vertices is `ui/app.js`'s own `gridVertexFromEvent()`
+   (`Math.round(fracX)`/`Math.round(fracY)`) -- a pure UI choice in the wall-
+   drawing click handler. Fixing this needs no engine work and no 3D-side
+   work at all: just let that function return the raw fractional position
+   (or snap to a finer sub-grid -- quarter-square, say -- rather than off
+   entirely), probably gated behind a modifier key or a second toggle state
+   so tracing an ordinary square room still snaps cleanly by default.
+2. **A general freeform sketch/annotation layer** (arbitrary curves, DM
+   notes, highlighting an escape route) -- genuinely bigger and separate from
+   (1): needs new shared state (a new `state.maps[name]` field holding stroke
+   point-lists, new `encounter.js` functions to add/clear them, ported to
+   both `Campaign-OS` and `Campaign-OS-3D` like every other engine change),
+   new rendering in the 2D app's SVG overlay, AND new rendering in Godot (a
+   `SurfaceTool`-built line-strip mesh, the same technique `AoeTemplate.gd`'s
+   overlay and `GridManager._build_grid_lines()` already use, so no new
+   Godot-side capability needs inventing, just applying it to a
+   DM-drawn point list instead of a computed shape). Whether a sketch stroke
+   should also be able to double as a real LOS-blocking wall (vs. purely
+   cosmetic) is an open design question this hasn't answered yet.
+
+**Recommended next step, not yet built:** (1) first -- it's the one with a
+concrete, already-hit motivating problem, costs a small UI change, and needs
+zero engine or Godot work. (2) is a real, separate feature to scope
+properly (design question above included) if/when general sketching turns
+out to be wanted beyond precise wall tracing.

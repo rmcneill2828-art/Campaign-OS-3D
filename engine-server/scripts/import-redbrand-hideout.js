@@ -14,14 +14,25 @@
 // engine-server/state/maps/ (gitignored, never committed, per the roadmap's own
 // hard licensing requirement).
 //
-// Scope: this v1 slice only wall-annotates two of the source map's twelve rooms
-// (11 and 12, in Lost Mine of Phandelver's "Redbrand Hideout") -- enough to prove
-// the pipeline handles real image calibration + real wall geometry + real rendered
-// line-of-sight, without needing to trace an entire hand-painted dungeon's every
-// wall by eye first. The rest of the map's rooms are simply left unannotated,
-// same "accepted, documented gap" precedent Prototype Chamber's own L-shaped void
-// already established -- hasLineOfSight's own documented behavior for a map with
-// no walls drawn in a given area is "no restriction," not an error.
+// Scope: all twelve of the source map's rooms are wall-annotated. This went
+// through two passes: an initial 2-room slice (11/12 only) that proved the
+// pipeline end to end, then a full-map attempt measured by eye from upscaled
+// image crops (DM-level precision, not a laser survey) -- both scripted,
+// since no browser-automation tool was available to drive the 2D app's own
+// UI directly. The WALLS below are neither of those: they're the REAL
+// output of the user actually doing the calibration/wall-drawing in
+// Campaign-OS's own browser UI (Adjust Grid + the Walls tool), exported from
+// that app's localStorage and transcribed here verbatim (only the object
+// {x1,y1,x2,y2} shape was converted to this file's own [x1,y1,x2,y2] array
+// shape -- no coordinates were changed). This is the actual workflow
+// ROADMAP.md's "decided v1 scope" always intended -- "a DM annotates the map
+// in the already-working 2D app" -- finally exercised for real instead of
+// approximated by a script guessing pixel positions. Notably, the user's own
+// grid calibration independently landed on the same 30x21 grid this
+// project's own long-baseline pitch measurement had already derived --
+// cross-validating that earlier fix. The central chasm (Room 8) has no
+// walls, matching this session's own call: a chasm doesn't block line of
+// sight in 5e rules, and this engine has no elevation/pit modeling anyway.
 //
 // Usage: node scripts/import-redbrand-hideout.js <path-to-source-image>
 // The source image is the DM version of Lost Mine of Phandelver's "Redbrand
@@ -48,55 +59,48 @@ const DEST_IMAGE_PATH = path.join(MAPS_DIR, "redbrand_hideout.jpg");
 // handles to a similar (not pixel-perfect) result; this is that same act,
 // scripted instead of dragged, per this session's own agreed methodology.
 //
-// IMPORTANT, found the hard way (see ROADMAP.md): GridManager's raster floor
-// stretches the ENTIRE source image across the ENTIRE COLUMNS x ROWS grid --
-// vertex (0,0) is the image's literal top-left pixel (parchment border and
-// all), not wherever a particular room happens to start. COLUMNS/ROWS must
-// therefore cover the WHOLE image at the map's real grid pitch, and every
-// wall coordinate must be measured from that same pixel-(0,0) origin -- not
-// from a room's own floor corner, which is what an earlier version of this
-// script got wrong (walls landed in the border above the title text instead
-// of on Rooms 11/12).
-//
-// A SECOND, subtler lesson from the same debugging session: an initial
-// pitch estimate of ~80px/square came from eyeballing a single 4-square span
-// inside Room 11 -- close, but a small per-square error like that compounds
-// across the WHOLE image width once used to derive a total column count (a
-// 2.5% pitch error x 31 columns is nearly a full square of drift at the far
-// edge, visible as the engine's grid overlay not matching the map's own
-// printed grid). Re-measured with a long-baseline column/row-average
-// brightness autocorrelation (averaging over ~1500 rows/columns cancels
-// per-tile furniture/texture noise, leaving the periodic grid-line signal;
-// checking the peak at several large multiples of the period, not just one,
-// pins the true pitch down far more precisely than any single local
-// measurement): true pitch is ~82.3px/square, not 80 -- Room 11/12's own
-// RELATIVE square counts (measured locally, and far more reliable as a
-// simple integer count) didn't need to change, only COLUMNS/ROWS.
+// IMPORTANT, found the hard way while this project's own scripted attempt
+// was still standing in for the real 2D-app workflow (see ROADMAP.md):
+// GridManager's raster floor stretches the ENTIRE source image across the
+// ENTIRE COLUMNS x ROWS grid -- vertex (0,0) is the image's literal
+// top-left pixel (parchment border and all), not wherever a particular room
+// happens to start. This is exactly what the 2D app's own Adjust Grid tool
+// gets right automatically (the drag handles are calibrated against the
+// whole visible image), which is a real point in favor of trusting its
+// output over a script's own pixel guesswork.
 const COLUMNS = 30;
 const ROWS = 21;
 const FEET_PER_SQUARE = 5;
 
 // Vertex-space wall segments (integer corners 0..COLUMNS / 0..ROWS, same
 // convention encounter.js's own addWall() documents and Prototype Chamber/
-// Entrance Hall's seedState() calls already use) for Rooms 11 and 12 only,
-// with door gaps left as separate segments. Room 11 occupies vertex (2,3) to
-// (6,7); Room 12 occupies (6,3) to (10,6) -- both measured from the full
-// image's own pixel (0,0), per the note above.
+// Entrance Hall's seedState() calls already use). Transcribed verbatim from
+// the user's own Campaign-OS session -- see the file header for provenance.
+// Not grouped/commented by room (unlike the two prior scripted attempts this
+// replaced) since these came out of the 2D app in whatever order the user
+// drew them, not room-by-room.
 const WALLS = [
-  // Rooms 11+12's shared north wall (one continuous run, no gap)
-  [2, 3, 10, 3],
-  // Room 11's west wall
-  [2, 3, 2, 7],
-  // Room 11's south wall, split around its door
-  [2, 7, 4, 7],
-  [5, 7, 6, 7],
-  // Shared wall between Room 11 and Room 12, split around its door
-  [6, 3, 6, 4],
-  [6, 5, 6, 7],
-  // Room 12's east wall (closing off toward Room 7, out of this slice's scope)
-  [10, 3, 10, 6],
-  // Room 12's south wall (shallower than Room 11's -- see ROADMAP.md notes)
-  [6, 6, 10, 6]
+  [2, 3, 19, 3], [2, 3, 2, 7], [2, 7, 4, 7], [5, 7, 6, 7], [6, 7, 6, 5],
+  [6, 3, 6, 4], [6, 6, 10, 6], [11, 3, 11, 6], [10, 3, 10, 6],
+  [16, 3, 16, 4], [16, 4, 15, 4], [15, 4, 15, 6], [15, 6, 14, 6],
+  [19, 3, 19, 5], [19, 6, 17, 6], [17, 4, 17, 5], [4, 7, 4, 8],
+  [7, 8, 7, 12], [8, 8, 8, 9], [8, 9, 10, 9], [7, 8, 5, 8], [4, 8, 2, 8],
+  [2, 8, 2, 13], [4, 13, 7, 13], [7, 12, 7, 13], [4, 13, 4, 15],
+  [4, 15, 7, 15], [3, 13, 3, 16], [11, 6, 12, 6], [16, 5, 16, 6],
+  [16, 4, 16, 5], [16, 7, 16, 6], [16, 6, 16, 12], [16, 12, 20, 12],
+  [20, 3, 20, 6], [20, 7, 20, 10], [20, 10, 23, 10], [23, 10, 23, 3],
+  [23, 3, 20, 3], [20, 12, 26, 12], [23, 10, 28, 10], [28, 10, 28, 12],
+  [28, 12, 27, 12], [27, 12, 27, 13], [26, 12, 26, 13], [3, 16, 2, 16],
+  [2, 16, 2, 19], [2, 19, 7, 19], [7, 19, 7, 16], [7, 16, 4, 16],
+  [19, 13, 16, 13], [16, 13, 16, 17], [16, 17, 19, 17], [19, 17, 19, 15],
+  [19, 15, 20, 15], [19, 13, 19, 14], [19, 14, 20, 14], [14, 16, 16, 16],
+  [13, 17, 15, 17], [15, 17, 15, 19], [15, 19, 20, 19], [16, 17, 16, 18],
+  [16, 18, 20, 18], [20, 15, 20, 18], [20, 19, 23, 19], [23, 19, 23, 18],
+  [23, 18, 25, 18], [25, 18, 25, 19], [25, 19, 28, 19], [28, 19, 28, 16],
+  [28, 14, 28, 13], [28, 14, 28, 15], [28, 13, 27, 13], [26, 13, 25, 13],
+  [25, 13, 25, 14], [25, 14, 23, 14], [23, 14, 23, 13], [23, 13, 20, 13],
+  [20, 13, 20, 14], [6, 7, 9, 7], [9, 7, 9, 8], [19, 6, 20, 6],
+  [20, 18, 20, 19]
 ];
 
 function main() {
@@ -136,7 +140,7 @@ function main() {
   }
 
   saveState(STATE_FILE, state);
-  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments (Rooms 11-12 only).`);
+  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments (all 12 rooms).`);
   console.log(`Switch to it with a "switch_map" action (or via the DM Assistant) to see it rendered.`);
 }
 
