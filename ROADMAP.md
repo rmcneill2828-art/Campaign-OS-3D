@@ -2583,7 +2583,7 @@ two genuinely different features, not one --
 question above included) if/when general sketching turns out to be wanted
 beyond precise wall tracing -- not started, not committed to.
 
-## Real wall retexturing -- 2026-09-20, wall half done; 3D item placement still open
+## Real wall retexturing and doors -- 2026-09-20, walls+doors done; freestanding props still open
 
 User asked for "retexture of walls and placement of 3D items" once the
 generated wall boxes (plain stone-gray `BoxMesh`, see `_build_walls()`)
@@ -2658,8 +2658,60 @@ world position, in both representations) instead of a specific visual
 node type. 15/15 assertions pass, plus the rest of `godot-smoke-tests`
 unaffected.
 
-**Not done:** placement of 3D props (chests, beds, tables, sarcophagi --
-matching Redbrand Hideout's own legend items) to dress the rooms shown in
-the map art. Scoped, not started: a manual `PROPS` list in
-`import-redbrand-hideout.js` (`{type, x, y}`, same spirit as `WALLS`),
-resolved against the `Environment/Props`/`Furniture` folders above.
+**Doors -- also done, 2026-09-20 (user asked "and doors" right after the
+wall model landed).** Picked the same rigorous way as the wall: 13 real
+door candidates from `Environment/Doors/` rendered side by side (twice --
+a first overview render, then a closer follow-up on the 4 most on-theme
+candidates once the first pass's camera angle turned out too flat/top-down
+to judge properly), not guessed from filenames. Picked
+`Ancient_wooden_dungeo` (a sturdy iron-banded plank door) over plainer
+options, a gothic/ornate one that read more "haunted mansion" than "bandit
+hideout," and a couple of plain stone archways with no door leaf at all.
+Measured at ~1.4m wide x 2.0m tall x 0.3m thick (a believable real door
+size) -- unlike the wall, needed no Meshy resize at all, since a door isn't
+stretched to fill its gap's exact width the way a wall is stretched to its
+segment's exact length (see below).
+
+Door POSITIONS weren't hand-identified from the map art a second time --
+found programmatically instead, by scanning `WALLS` for pairs of collinear
+segments with a gap between them. All 24 gaps found came out exactly 1.0
+grid squares wide, consistent enough to be confident these are intentional
+doorway openings the user left while tracing, not measurement noise.
+Deliberately not narrowed down further to "only the gaps with a door icon
+drawn on the source map" -- a plain gap in a stone wall reads as a doorway
+in the fiction either way, and doors here are pure decoration (see below),
+so there's no real gameplay reason to make that distinction. `DOORS` in
+`import-redbrand-hideout.js` reuses `WALLS`' own `{x1,y1,x2,y2}` vertex-
+space shape for exactly this reason -- so `GridManager.gd`'s new
+`_build_doors()` can reuse `_build_walls()`'s own `look_at()`-based
+orientation math directly, just without the length-scaling (a door isn't
+stretched -- its own real ~1.4m width already reads as believable within a
+2m-wide gap, and stretching a single recognizable object, unlike a
+repeating stone texture, would look obviously wrong).
+
+`doors` is deliberately NOT a real `encounter.js`/shared-engine concept --
+no `CampaignOS.addDoor()`, no port to `Campaign-OS`. Purely decorative
+(never reaches `hasLineOfSight()`, no `CollisionShape3D` either -- nothing
+here for Godot physics to enforce), so `import-redbrand-hideout.js` just
+writes the array directly onto the map object instead of inventing a new
+engine-level field for something the server itself never needs to know
+about; harmless extra data as far as the 2D app and the server's own LOS
+math are concerned, both of which only ever read `walls`. `build()`'s
+signature grew a `doors` parameter (both `Main.gd` and `PlayerView.gd`
+updated to pass `map_data.get("doors", [])` through) alongside the
+existing no-op-if-unchanged tracking.
+
+Verified the same three ways as the wall: a headless dump of all 24 live
+door transforms (Y position matched `_door_model_size.y / 2` exactly,
+world position matched each gap's real midpoint), a real non-headless
+screenshot of the live board (a door sitting flush and correctly sized in
+a real wall gap), and the existing `godot-smoke-tests`/`test_raster_map.gd`
+suite, unaffected this time (doors are additive, no existing assumption
+to break). 53/53 engine-server tests unaffected too.
+
+**Still not done:** placement of freestanding 3D props (chests, beds,
+tables, sarcophagi -- matching Redbrand Hideout's own legend items) to
+dress the rooms shown in the map art. Scoped, not started: a manual
+`PROPS` list in `import-redbrand-hideout.js` (`{type, x, y}`, same spirit
+as `WALLS`/`DOORS`), resolved against the `Environment/Props`/`Furniture`
+folders above.

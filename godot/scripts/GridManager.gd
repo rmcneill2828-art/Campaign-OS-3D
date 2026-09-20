@@ -60,6 +60,17 @@ const WALL_THICKNESS := 0.15
 ## _measure_top_offset() already established for the floor tiles.
 const WALL_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Walls/Meshy_AI_Meshy_AI_a_wall_made_rm_0920162632_texture.glb"
 
+## Same external-library/runtime-loading story as WALL_MODEL_PATH above, for a
+## real door instead of a real wall. Picked by rendering several candidates
+## side by side (not from filenames) -- a sturdy iron-banded plank door read
+## as the most "dungeon hideout" fitting of the set, over plainer or more
+## ornate/gothic alternatives. Unlike the wall model, this one's real
+## proportions (~1.4m wide, ~2.0m tall -- a believable real door size) needed
+## no Meshy resize at all: doors don't get stretched to fit their gap the way
+## a wall gets stretched to its segment length (see _build_doors()), so its
+## own authored scale is simply used as-is.
+const DOOR_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Doors/Meshy_AI_Ancient_wooden_dungeo_0919195528_texture.glb"
+
 var columns := 0
 var rows := 0
 var feet_per_square := 5.0
@@ -80,6 +91,11 @@ var _wall_model_template: Node3D
 var _wall_model_size := Vector3.ZERO
 var _has_real_wall_model := false
 
+## Same role as the three _wall_model_* vars above, for DOOR_MODEL_PATH.
+var _door_model_template: Node3D
+var _door_model_size := Vector3.ZERO
+var _has_real_door_model := false
+
 # Which hand-built map scene (if any, see build()'s own doc comment) is
 # currently instantiated -- tracked separately from columns/rows/cell_size so
 # build()'s own no-op-if-unchanged check also catches "same size map, but the
@@ -95,6 +111,7 @@ var _map_scene_instance: Node3D
 ## alone wouldn't catch.
 var _current_raster_image_path := ""
 var _current_walls: Array = []
+var _current_doors: Array = []
 
 func _ready() -> void:
 	_light_material = StandardMaterial3D.new()
@@ -114,20 +131,27 @@ func _ready() -> void:
 		_floor_detail_scene = load(FLOOR_DETAIL_TILE_PATH) as PackedScene
 
 	# Same "degrade, don't fail" precedent every other optional/external asset in
-	# this project already follows -- WALL_MODEL_PATH is this-machine-specific and
-	# won't exist on another clone, so _build_walls() falls back to the original
-	# plain BoxMesh whenever _has_real_wall_model is false.
-	_wall_model_template = _load_wall_model(WALL_MODEL_PATH)
+	# this project already follows -- WALL_MODEL_PATH/DOOR_MODEL_PATH are both
+	# this-machine-specific and won't exist on another clone, so _build_walls()/
+	# _build_doors() fall back to their original plain-geometry (or no-op, for
+	# doors) behavior whenever the corresponding _has_real_*_model is false.
+	_wall_model_template = _load_external_model(WALL_MODEL_PATH)
 	if _wall_model_template:
 		_wall_model_size = _measure_scene_size(_wall_model_template)
 		_has_real_wall_model = _wall_model_size.x > 0.01 and _wall_model_size.y > 0.01
+
+	_door_model_template = _load_external_model(DOOR_MODEL_PATH)
+	if _door_model_template:
+		_door_model_size = _measure_scene_size(_door_model_template)
+		_has_real_door_model = _door_model_size.x > 0.01 and _door_model_size.y > 0.01
 
 ## Loads an arbitrary .glb file from anywhere on disk at RUNTIME, via
 ## GLTFDocument -- the exact same technique CharacterViewer.gd's own
 ## _load_external_glb() already established for the same reason (a file
 ## outside this project's own res:// tree, with no real .import generated for
-## it, so ResourceLoader.load() can't be used).
-func _load_wall_model(path: String) -> Node3D:
+## it, so ResourceLoader.load() can't be used). Shared by both the wall and
+## door models above -- nothing about it is wall- or door-specific.
+func _load_external_model(path: String) -> Node3D:
 	if not FileAccess.file_exists(path):
 		return null
 	var document := GLTFDocument.new()
@@ -196,12 +220,16 @@ func board_center() -> Vector3:
 ## {x1,y1,x2,y2} segments) generates real 3D wall geometry -- but ONLY alongside a
 ## raster or procedural floor, never a hand-built scene, which already carries its
 ## own hand-placed wall geometry; doubling it here would just draw ugly overlapping
-## boxes on top of it.
-func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "", raster_image_path: String = "", walls: Array = []) -> void:
+## boxes on top of it. `doors` is NOT an encounter.js/engine concept at all --
+## purely decorative (see _build_doors()), a {x1,y1,x2,y2} pair marking a specific
+## wall gap to visually fill with a door model, sourced from a map's own extra
+## `doors` field (added by import-redbrand-hideout.js, ignored harmlessly by both
+## the 2D app and the server's own line-of-sight math, which only ever reads `walls`).
+func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "", raster_image_path: String = "", walls: Array = [], doors: Array = []) -> void:
 	var new_cell_size := new_feet_per_square * METERS_PER_FOOT
 	if new_columns == columns and new_rows == rows and is_equal_approx(new_cell_size, cell_size) \
 			and map_scene_path == _current_map_scene_path and raster_image_path == _current_raster_image_path \
-			and walls == _current_walls and get_child_count() > 0:
+			and walls == _current_walls and doors == _current_doors and get_child_count() > 0:
 		return
 	columns = new_columns
 	rows = new_rows
@@ -210,6 +238,7 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, ma
 	_current_map_scene_path = map_scene_path
 	_current_raster_image_path = raster_image_path
 	_current_walls = walls
+	_current_doors = doors
 
 	# free(), not queue_free() -- queue_free() only SCHEDULES removal for the next
 	# idle frame, so an old child is still technically present in get_children()
@@ -238,12 +267,15 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, ma
 	elif raster_image_path != "" and FileAccess.file_exists(raster_image_path):
 		_build_raster_floor(raster_image_path)
 		_build_walls(walls)
+		_build_doors(doors)
 	elif _floor_scene:
 		_build_real_floor_tiles()
 		_build_walls(walls)
+		_build_doors(doors)
 	else:
 		_build_fallback_checkerboard()
 		_build_walls(walls)
+		_build_doors(doors)
 
 	_build_grid_lines()
 	_build_floor_collision()
@@ -352,6 +384,52 @@ func _build_walls(walls: Array) -> void:
 		collision.position = Vector3(0, wall_height / 2.0, 0) if _has_real_wall_model else Vector3.ZERO
 		collision.shape = shape
 		body.add_child(collision)
+
+## Places a real door model (see DOOR_MODEL_PATH) at each {x1,y1,x2,y2} entry in
+## `doors` -- unlike _build_walls(), this is a no-op with no fallback box when
+## _has_real_door_model is false: a door is purely decorative (not an
+## encounter.js/line-of-sight concept at all -- see build()'s own doc comment
+## on the `doors` parameter), so skipping it on a machine without the asset
+## just means one less prop, not a missing wall. Deliberately NOT stretched to
+## fill its gap's exact width the way a wall is stretched to its segment's
+## exact length -- the door model's own real ~1.4m width already reads as a
+## believable door within a typically 2m-wide gap, and non-uniformly
+## stretching a single recognizable object (not a repeating stone/brick
+## texture) would look far more obviously wrong than mild wall-length
+## stretching does. No collision shape either -- movement/line-of-sight are
+## both purely server-side (hasLineOfSight is plain segment math against
+## `walls`; `doors` never reaches the server at all), so there's nothing here
+## for Godot physics to enforce.
+func _build_doors(doors: Array) -> void:
+	if not _has_real_door_model:
+		return
+
+	for door in doors:
+		var p1 := Vector3(float(door.get("x1", 0)) * cell_size, 0.0, float(door.get("y1", 0)) * cell_size)
+		var p2 := Vector3(float(door.get("x2", 0)) * cell_size, 0.0, float(door.get("y2", 0)) * cell_size)
+		if p1.distance_to(p2) < 0.001:
+			continue
+		var midpoint := (p1 + p2) / 2.0
+
+		# Same positioner -> wrapper -> instance structure _build_walls() uses,
+		# and for the same reason: the outer node gets look_at()'d toward p2
+		# (orienting its own local -Z along the gap), then the wrapper's fixed
+		# 90-degree Y rotation swaps the door model's own local X ("across the
+		# doorway," as measured -- same convention the wall model uses) onto
+		# that -Z-facing axis. Center-pivoted (unlike the bottom-pivoted wall
+		# model -- confirmed by measuring it, not assumed), so it needs the
+		# classic half-height lift to sit on the floor instead of half-buried
+		# in it.
+		var positioner := Node3D.new()
+		positioner.position = midpoint + Vector3(0, _door_model_size.y / 2.0, 0)
+		add_child(positioner) # look_at() needs this node genuinely in the tree first, same reason _build_walls()'s body is added before being oriented
+		positioner.look_at(Vector3(p2.x, positioner.position.y, p2.z), Vector3.UP)
+
+		var wrapper := Node3D.new()
+		wrapper.rotation_degrees.y = 90
+		positioner.add_child(wrapper)
+		var instance: Node3D = _door_model_template.duplicate()
+		wrapper.add_child(instance)
 
 ## A real stone floor texture has no per-tile visual break the way the old
 ## flat-colored checkerboard did -- without this, a DM has no way to actually

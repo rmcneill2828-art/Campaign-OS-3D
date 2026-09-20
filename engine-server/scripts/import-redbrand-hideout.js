@@ -110,6 +110,28 @@ const WALLS = [
   [9, 17, 8, 16], [8, 16, 7, 16], [22, 3, 23, 3], [2, 3, 19, 3]
 ];
 
+// Door positions, in the exact same {x1,y1,x2,y2} vertex-space shape as WALLS
+// (reused so GridManager.gd's own _build_doors() can share all of _build_walls()'s
+// orientation math directly) -- but this is NOT engine/line-of-sight data. Not
+// derived from anything the user drew or marked as a door specifically; found
+// PROGRAMMATICALLY by scanning WALLS above for exactly-1-grid-square gaps
+// between two collinear segments (24 found, every one exactly 1.0 squares wide
+// -- consistent enough to be confident these are intentional doorway openings
+// the user left, not tracing noise). Deliberately not narrowed down further to
+// "only the gaps the source map drew a door icon on" -- a plain gap in a stone
+// wall reads as a doorway in the fiction either way, icon or not, and doing
+// that narrowing would mean re-examining the map art gap-by-gap for no real
+// gameplay benefit (doors here are pure decoration, see GridManager.gd's own
+// build()/. _build_doors() doc comments -- they never reach hasLineOfSight()).
+const DOORS = [
+  [2, 7, 2, 8], [6, 4, 6, 5], [10, 6, 10, 7], [10, 8, 10, 9],
+  [16, 12, 16, 13], [15, 6, 15, 7], [19, 14, 19, 15], [20, 6, 20, 7],
+  [20, 14, 20, 15], [28, 12, 28, 13], [28, 15, 28, 16], [4, 7, 5, 7],
+  [9, 7, 10, 7], [10, 6, 11, 6], [4, 8, 5, 8], [3, 13, 4, 13],
+  [19, 13, 20, 13], [26, 13, 27, 13], [26, 12, 27, 12], [19, 3, 20, 3],
+  [3, 16, 4, 16], [10, 17, 11, 17], [12, 17, 13, 17], [15, 17, 16, 17]
+];
+
 function main() {
   const sourceImagePath = process.argv[2];
   if (!sourceImagePath) {
@@ -146,8 +168,20 @@ function main() {
     state = CampaignOS.addWall(state, MAP_NAME, x1, y1, x2, y2);
   }
 
+  // `doors` is NOT a real encounter.js/shared-engine field -- there's no
+  // CampaignOS.addDoor() to call, deliberately: doors are purely decorative
+  // (GridManager.gd's own _build_doors() never feeds line-of-sight), so this
+  // writes the array directly onto the map object instead of inventing a new
+  // shared-engine concept for something the server itself never needs to know
+  // about. Harmless extra data as far as the 2D app and encounter.js's own
+  // hasLineOfSight() are concerned -- both only ever read `walls`.
+  state = {
+    ...state,
+    maps: { ...state.maps, [MAP_NAME]: { ...state.maps[MAP_NAME], doors: DOORS.map(([x1, y1, x2, y2]) => ({ x1, y1, x2, y2 })) } }
+  };
+
   saveState(STATE_FILE, state);
-  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments (all 12 rooms).`);
+  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments, ${DOORS.length} doors (all 12 rooms).`);
   console.log(`Switch to it with a "switch_map" action (or via the DM Assistant) to see it rendered.`);
 }
 
