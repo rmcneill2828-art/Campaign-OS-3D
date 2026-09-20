@@ -2236,7 +2236,7 @@ first (7, then 1, then 3), the rest after.
    (23/23 passing). Wired into `.github/workflows/test.yml`'s
    `godot-smoke-tests` job alongside the three existing smoke tests.
 
-## Adventure map import -- reviewed 2026-09-19, Godot rendering slice built 2026-09-20
+## Adventure map import -- reviewed 2026-09-19, v1 slice (real map + Godot rendering) built and verified 2026-09-20
 
 A separate tool session (GitHub Copilot, per its own header) produced
 `CAMPAIGN_MAP_IMPORT_REPORT.md` at the repo root -- unprompted, found
@@ -2339,13 +2339,97 @@ used for D&D PDF text extraction elsewhere) and handles that one step
 directly.
 
 **Decided v1 scope**, a fraction of the full report:
-1. Confirm in the 2D app that a real published map (rasterized via
-   `pdftoppm` first, if it's a PDF page) can be uploaded, grid-calibrated,
-   and wall-annotated using the EXISTING 2D tools -- no new code, just
-   proving the existing pipeline handles this input. **Not done yet** --
-   item 2 below was built and tested against synthetic data first (a
-   deliberate choice, so the renderer is verified and ready the moment a
-   real map gets annotated, not blocked on that happening first).
+1. Confirm that a real published map can be uploaded, grid-calibrated, and
+   wall-annotated, then actually renders correctly -- no new engine code,
+   just proving the existing pipeline handles this input. **Done
+   2026-09-20**, with one deliberate methodology change from the original
+   plan: this session had no browser-automation tool available, so a human
+   couldn't actually click through the 2D app's UI within it. Rather than
+   skip the check, `engine-server/scripts/import-redbrand-hideout.js` (new,
+   committed -- contains no copyrighted map art, only measured grid/wall
+   geometry) calls the exact same shared-engine primitives the 2D UI's own
+   calibration/wall tools call (`setMapImage`/`setMapGrid`/`addWall`)
+   directly, the same "script it instead of clicking it" precedent
+   `seedState()`'s own Prototype Chamber/Entrance Hall walls already
+   established. Used Lost Mine of Phandelver's "Redbrand Hideout" (a real
+   DM-version map image already on hand at `I:\DnD\Adventures & Modules\`,
+   no PDF rasterization needed this time -- already a flat image), grid
+   pitch and origin measured directly off the image (upscaled crops,
+   counted by eye against its own printed 1-square-per-5-feet grid, same
+   precision an actual DM dragging grid handles in the 2D app would get,
+   not pixel-perfect survey data). Scope deliberately narrow, same
+   "accepted, documented gap" precedent Prototype Chamber's own L-shaped
+   void already set: only 2 of the source map's 12 rooms (11 and 12) got
+   real wall geometry (31x22 grid overall, 8 wall segments, 2 door gaps) --
+   enough to prove real image + real walls + real rendering + real
+   line-of-sight together, without first tracing an entire hand-painted
+   dungeon by eye. Verified against a real running `engine-server`
+   (`hasLineOfSight` correctly blocked through solid segments and open
+   through both door gaps, checked directly) and a real headless Godot
+   instance (`Main.tscn`'s own `Board` node: raster floor `PlaneMesh`
+   present, wall `StaticBody3D`s present, real grid dimensions read back
+   correctly) -- not just "the scene loads." The map image itself stays at
+   `engine-server/state/maps/redbrand_hideout.jpg`, gitignored like every
+   other file in that folder; the script takes the source image as a CLI
+   argument (point it at your own legally-owned copy) rather than
+   hardcoding a path, so it works for anyone with their own copy of the
+   adventure, not just this machine.
+
+   **A real bug found only by actually looking at it, not by the headless
+   checks above:** the first version placed the wall geometry nowhere near
+   Rooms 11/12 -- floating boxes near the map's title text instead, caught
+   by the user opening the real editor (the headless smoke tests use a
+   dummy renderer and can't catch a visual misalignment like this at all).
+   Root cause: `_build_raster_floor()`'s `PlaneMesh` stretches the ENTIRE
+   source image across the ENTIRE `columns x rows` grid -- vertex `(0,0)`
+   is the image's literal top-left pixel (parchment border included), not
+   wherever a particular room happens to start. The wall coordinates had
+   been measured relative to Room 11's own floor corner as if THAT were
+   vertex `(0,0)`, silently assuming the texture was cropped to the
+   playable area -- it isn't. Confirmed by dumping the actual generated
+   `StaticBody3D` transforms from a live headless run (they matched the
+   given input coordinates exactly -- no bug in `GridManager.gd` itself)
+   and separately confirming the `PlaneMesh`'s own UV mapping (world
+   `(0,0,0)` -> UV `(0,0)`, the image's true top-left), which together
+   isolated the bug to the calibration data, not the rendering code. Fixed
+   by recomputing every coordinate from the image's actual pixel `(0,0)` --
+   grid grew from 28x17 to 31x22 (covering the whole image at the same
+   measured ~80px/square pitch) and Room 11/12 shifted to vertex `(2,3)`-
+   `(6,7)`/`(6,3)`-`(10,6)` accordingly. Also fixed in the same pass:
+   `addWall()` only ever appends, so re-running the script to correct a
+   coordinate had been silently doubling up stale wall segments alongside
+   the fixed ones -- the script now calls `clearWalls()` first, making
+   re-runs idempotent. Worth remembering for any FUTURE real-map import:
+   measure wall coordinates from the image's own pixel origin, never from
+   a room's own corner, and re-verify by dumping real generated transforms
+   (or actually looking at it), not just "the scene loaded with no error."
+
+   **A second, subtler bug, found by the user after the fix above**:
+   `GridManager`'s own grid-LINE overlay (`_build_grid_lines()`, a plain
+   uniform `columns x rows` mesh) visibly didn't line up with the real grid
+   the map's own artist drew. Root cause: the initial ~80px/square pitch had
+   been eyeballed from a single 4-square span inside Room 11 -- a small
+   per-square error there (2475/80 = 30.9 vs. the map's real ratio) compounds
+   across the WHOLE image once used to derive a total column count, so by
+   the map's far edge the engine's uniformly-spaced overlay had drifted
+   nearly a full square from the artist's own (also uniform, just
+   differently-scaled) grid. Re-measured properly this time: averaged
+   column/row brightness over ~1500 rows/columns each (cancels per-tile
+   furniture/texture noise while the periodic grid-line signal reinforces),
+   high-pass filtered to remove slow parchment-shading drift, then
+   autocorrelated -- checking the peak at several large multiples of the
+   period (5x, 10x, 15x, 20x, 28x, 29x), not just one, to pin the true pitch
+   down precisely instead of trusting a single measurement. True pitch:
+   ~82.3px/square, not 80. Room 11/12's own wall coordinates didn't need to
+   change at all -- those came from a locally-measured, small-integer square
+   COUNT (4 wide, 4 tall, etc.), which is inherently far more reliable than
+   dividing a large pixel distance by an imprecise pitch. Only `COLUMNS`/
+   `ROWS` needed correcting (31x22 -> 30x21), which brought the engine's
+   implied pixels-per-square to 82.5x82.1 -- within 0.2% of the measured
+   true pitch, down from a 2.9% error before. Lesson for next time: measure
+   a real map's grid pitch over the longest baseline available (autocorrelate
+   a large averaged span), never extrapolate a whole map's scale from one
+   small local sample.
 2. **Built 2026-09-20.** On the Campaign-OS-3D side: read
    `state.maps[name]` (image reference, columns/rows/feetPerSquare, walls)
    and render it -- a textured floor plane using the calibrated image, plus
@@ -2386,10 +2470,11 @@ a sibling of the Godot project's own `res://` root, gitignored like
 into the 2D app's own browser-local IndexedDB image store
 (`CampaignOSImageStore`), unreachable from this Node-free, browser-free
 Godot process or from `engine-server` (also plain Node, no browser)
-either. Today the actual hand-off is manual: a DM saves/exports the same
-source image (already calibrated in the 2D app) into this folder
-themselves, named to match the map. Automating that hand-off is real
-future work, not assumed solved here -- see item 1 above, still open.
+either. Today the actual hand-off is manual (or scripted by hand, per item
+1's own `import-redbrand-hideout.js` above): a DM saves/exports the real
+source image into this folder themselves, named to match the map.
+Automating that hand-off end to end (server-side, keyed off the 2D app's
+own image store somehow) is real future work, not assumed solved here.
 
 **A real bug found and fixed along the way, not specific to maps:**
 `GridManager.build()`'s own child-rebuild loop used `queue_free()`, which
