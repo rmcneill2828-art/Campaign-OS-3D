@@ -2777,11 +2777,27 @@ own "Adventure map import" entry on why that mattered for walls). Synced
 here via `sync-engine.sh`; `import-redbrand-hideout.js` now calls the real
 `CampaignOS.addDoor()`/`clearDoors()` instead of hand-writing `doors` onto
 the map object (that workaround's whole reason for existing -- "no
-`CampaignOS.addDoor()` to call" -- no longer applies). **Still open:**
-re-tracing Redbrand Hideout's real doors with the new tool and
-transcribing the result into `DOORS` (and reopening any `WALLS` gap the
-audit above wrongly closed) -- this file's `WALLS`/`DOORS` still reflect
-the audit's guesses, not yet the user's own hand-marked ground truth.
+`CampaignOS.addDoor()` to call" -- no longer applies).
+
+**Real re-trace -- 2026-09-20, same day.** The user used the new Doors
+tool to mark real doorways by hand, alongside a full re-pass over `WALLS`
+itself (not just the audit's 24 candidate gaps), exported both from
+Campaign-OS's browser localStorage the same way the original wall trace
+was, and this is now transcribed into `WALLS`/`DOORS` verbatim -- see
+their own updated header comments for what changed and why. 133 wall
+segments (up from 126) and 11 doors (up from 9): 10 of the audit's 11
+gap-closures were reopened (real doors after all), 1 was confirmed correct
+as solid, a stairwell-area corner around (9-14, 9-16) was refined, the
+trace was extended out to the map's real x=29/y=20 edges the earlier
+passes hadn't reached, and one previously-kept door ([19,14,19,15]) was
+dropped -- WALLS still leaves that gap open, just with no door prop, the
+user's call on how that spot should read. Verified the same way as the
+audit before it: `hasLineOfSight()` checks against the reopened gaps (now
+open), the one still-solid gap (still blocked), and new doors (open); the
+full 53/53 engine-server suite; the existing `test_raster_map.gd` suite
+headless. This is ground truth, not inference, so no further audit is
+expected here -- if a problem turns up again, the fix is another real
+pass with the tools, not a fourth guessing method.
 
 **Still not done:** placement of freestanding 3D props (chests, beds,
 tables, sarcophagi -- matching Redbrand Hideout's own legend items) to

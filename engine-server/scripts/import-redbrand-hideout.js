@@ -79,72 +79,72 @@ const FEET_PER_SQUARE = 5;
 // Not grouped/commented by room (unlike the two prior scripted attempts this
 // replaced) since these came out of the 2D app in whatever order the user
 // drew them, not room-by-room.
+//
+// This is the SECOND real hand-trace, not the first -- see DOORS's own
+// comment for why. Superseded the entire prior WALLS array (itself the
+// first real hand-trace, plus 11 gap-closures from a since-disproven
+// automated door audit): the user re-opened every wrongly-closed gap except
+// one they confirmed should stay solid, refined a few segments around the
+// stairwell near (9-14, 9-16), and extended the trace to cover the map's
+// remaining rooms/corridors out to its real x=29/y=20 edges that the first
+// pass hadn't reached yet.
 const WALLS = [
   [2, 3, 2, 7], [2, 7, 4, 7], [5, 7, 6, 7], [6, 7, 6, 5], [6, 3, 6, 4],
-  [6, 6, 10, 6], [11, 3, 11, 6], [10, 3, 10, 6], [16, 3, 16, 4],
-  [16, 4, 15, 4], [15, 4, 15, 6], [15, 6, 14, 6], [19, 3, 19, 5],
-  [19, 6, 17, 6], [4, 7, 4, 8], [7, 8, 7, 12], [8, 8, 8, 9], [8, 9, 10, 9],
-  [7, 8, 5, 8], [4, 8, 2, 8], [2, 8, 2, 13], [4, 13, 7, 13], [7, 12, 7, 13],
-  [4, 13, 4, 15], [4, 15, 7, 15], [3, 13, 3, 16], [11, 6, 12, 6],
-  [16, 5, 16, 6], [16, 4, 16, 5], [16, 7, 16, 6], [16, 6, 16, 12],
-  [16, 12, 20, 12], [20, 3, 20, 6], [20, 7, 20, 10], [20, 10, 23, 10],
-  [23, 10, 23, 3], [23, 3, 20, 3], [20, 12, 26, 12], [23, 10, 28, 10],
-  [28, 10, 28, 12], [28, 12, 27, 12], [27, 12, 27, 13], [26, 12, 26, 13],
-  [3, 16, 2, 16], [2, 16, 2, 19], [7, 19, 7, 16], [7, 16, 4, 16],
-  [19, 13, 16, 13], [16, 13, 16, 17], [16, 17, 19, 17], [19, 17, 19, 15],
-  [19, 15, 20, 15], [19, 13, 19, 14], [19, 14, 20, 14], [14, 16, 16, 16],
-  [13, 17, 15, 17], [15, 17, 15, 19], [15, 19, 20, 19], [16, 17, 16, 18],
-  [16, 18, 20, 18], [20, 15, 20, 18], [20, 19, 23, 19], [23, 19, 23, 18],
-  [23, 18, 25, 18], [25, 18, 25, 19], [25, 19, 28, 19], [28, 19, 28, 16],
-  [28, 14, 28, 13], [28, 14, 28, 15], [28, 13, 27, 13], [26, 13, 25, 13],
-  [25, 13, 25, 14], [25, 14, 23, 14], [23, 14, 23, 13], [23, 13, 20, 13],
-  [20, 13, 20, 14], [6, 7, 9, 7], [9, 7, 9, 8], [19, 6, 20, 6],
-  [20, 18, 20, 19], [19, 5, 19, 6], [17, 5, 17, 6], [7, 15, 8, 15],
-  [2, 13, 3, 13], [15, 19, 16, 19], [8, 15, 8, 12], [8, 12, 9, 12],
-  [9, 12, 9, 11], [9, 11, 10, 11], [10, 11, 10, 9], [9, 8, 10, 8],
-  [10, 8, 10, 7], [10, 7, 11, 7], [12, 6, 12, 7], [12, 7, 11, 7],
-  [14, 6, 14, 7], [14, 7, 15, 7], [15, 7, 15, 10], [15, 10, 14, 11],
-  [14, 11, 13, 11], [13, 11, 13, 13], [13, 13, 14, 14], [14, 14, 14, 16],
-  [13, 17, 13, 18], [13, 18, 12, 18], [12, 18, 12, 17], [12, 17, 11, 17],
-  [11, 17, 11, 19], [11, 19, 11, 20], [10, 20, 10, 17], [10, 17, 9, 17],
-  [9, 17, 8, 16], [8, 16, 7, 16], [22, 3, 23, 3], [2, 3, 19, 3],
-  // Closes 11 of the 24 originally-detected 1-square wall gaps: the door
-  // audit below (see DOORS's own comment) checked the source map art at
-  // every gap and found no door icon drawn at these 11 -- just continuous
-  // stone wall texture, meaning the gap itself was a tracing bug rather than
-  // an intended doorway. Closing them is a real line-of-sight fix, not
-  // cosmetic (unlike DOORS, these gaps DID reach hasLineOfSight()).
-  [2, 7, 2, 8], [10, 6, 10, 7], [16, 12, 16, 13], [15, 6, 15, 7],
-  [28, 12, 28, 13], [9, 7, 10, 7], [10, 6, 11, 6], [26, 12, 27, 12],
-  [19, 3, 20, 3], [15, 17, 16, 17], [26, 13, 27, 13]
+  [6, 6, 10, 6], [11, 3, 11, 6], [10, 3, 10, 6], [16, 3, 16, 4], [16, 4, 15, 4],
+  [15, 4, 15, 6], [15, 6, 14, 6], [19, 3, 19, 5], [19, 6, 17, 6], [4, 7, 4, 8],
+  [7, 8, 7, 12], [8, 8, 8, 9], [8, 9, 10, 9], [7, 8, 5, 8], [4, 8, 2, 8],
+  [2, 8, 2, 13], [4, 13, 7, 13], [7, 12, 7, 13], [4, 13, 4, 15], [4, 15, 7, 15],
+  [3, 13, 3, 16], [11, 6, 12, 6], [16, 5, 16, 6], [16, 4, 16, 5], [16, 7, 16, 6],
+  [16, 6, 16, 12], [16, 12, 20, 12], [20, 3, 20, 6], [20, 7, 20, 10], [20, 10, 23, 10],
+  [23, 10, 23, 3], [23, 3, 20, 3], [20, 12, 26, 12], [23, 10, 28, 10], [28, 10, 28, 12],
+  [28, 12, 27, 12], [27, 12, 27, 13], [26, 12, 26, 13], [3, 16, 2, 16], [7, 19, 7, 16],
+  [19, 13, 16, 13], [16, 13, 16, 17], [16, 17, 19, 17], [19, 17, 19, 15], [19, 15, 20, 15],
+  [19, 13, 19, 14], [19, 14, 20, 14], [14, 16, 16, 16], [13, 17, 15, 17], [15, 17, 15, 19],
+  [15, 19, 20, 19], [16, 17, 16, 18], [16, 18, 20, 18], [20, 15, 20, 18], [20, 19, 23, 19],
+  [23, 19, 23, 18], [23, 18, 25, 18], [25, 18, 25, 19], [25, 19, 28, 19], [28, 19, 28, 16],
+  [28, 14, 28, 13], [28, 14, 28, 15], [28, 13, 27, 13], [26, 13, 25, 13], [25, 13, 25, 14],
+  [25, 14, 23, 14], [23, 14, 23, 13], [23, 13, 20, 13], [20, 13, 20, 14], [6, 7, 9, 7],
+  [9, 7, 9, 8], [19, 6, 20, 6], [20, 18, 20, 19], [19, 5, 19, 6], [17, 5, 17, 6],
+  [7, 15, 8, 15], [2, 13, 3, 13], [15, 19, 16, 19], [8, 15, 8, 12], [8, 12, 9, 12],
+  [9, 12, 9, 11], [9, 8, 10, 8], [10, 8, 10, 7], [10, 7, 11, 7], [12, 6, 12, 7],
+  [12, 7, 11, 7], [14, 6, 14, 7], [14, 7, 15, 7], [15, 7, 15, 10], [15, 10, 14, 11],
+  [13, 17, 13, 18], [13, 18, 12, 18], [12, 18, 12, 17], [12, 17, 11, 17], [11, 17, 11, 19],
+  [11, 19, 11, 20], [10, 20, 10, 17], [10, 17, 9, 17], [9, 17, 8, 16], [22, 3, 23, 3],
+  [2, 3, 19, 3], [14, 11, 13, 12], [13, 12, 13, 13], [9, 11, 10, 10], [10, 10, 10, 9],
+  [14, 15, 14, 16], [13, 13, 14, 14], [13, 14, 14, 14], [13, 14, 14, 15], [2, 19, 7, 19],
+  [2, 16, 2, 19], [4, 16, 7, 16], [8, 16, 7, 16], [2, 3, 1, 3], [23, 3, 24, 3],
+  [24, 3, 24, 9], [24, 9, 29, 9], [29, 9, 29, 15], [29, 15, 28, 15], [28, 16, 29, 16],
+  [29, 16, 29, 20], [29, 20, 11, 20], [10, 20, 1, 20], [1, 20, 1, 3], [17, 6, 17, 4],
+  [20, 3, 19, 3], [7, 8, 8, 8], [7, 8, 7, 13]
 ];
 
 // Door positions, in the exact same {x1,y1,x2,y2} vertex-space shape as WALLS
 // (reused so GridManager.gd's own _build_doors() can share all of _build_walls()'s
 // orientation math directly) -- but this is NOT engine/line-of-sight data.
 //
-// The original version of this array was every one of the 24 1-grid-square
-// gaps found by scanning WALLS programmatically, on the theory that any gap
-// reads as a doorway in the fiction regardless of whether the source map
-// actually drew a door icon there. That theory turned out wrong: the user
-// spotted real doors missing and fake ones present after the wall/door
-// models were wired in, which led to auditing all 24 gaps against the source
-// map art directly (the plain rectangular door-leaf icon, distinct from the
-// map's own "Locked Door" X and "Secret Door" S symbols -- neither of which
-// this array or WALLS models at all). Of the 24:
-//  - 9 had a real door icon drawn -- kept below.
-//  - 11 had no icon at all, just continuous wall texture -- these were
-//    tracing bugs, not doors, and are now closed to solid wall in WALLS
-//    above instead (a real line-of-sight fix).
-//  - 4 ([10,8,10,9], [19,13,20,13], [10,17,11,17], [12,17,13,17]) are gaps
-//    where the built structure meets the natural cave/chasm or a corridor
-//    cuts straight through a wall line -- correctly open in both the art
-//    and WALLS, just with no door leaf drawn, so they're dropped from this
-//    list without touching WALLS.
+// Third and (hopefully) final approach to this array, after two automated
+// ones that each got some doors wrong: first every WALLS gap was treated as
+// a doorway regardless of the map's own art; then, after the user caught
+// real problems, a full image-by-image audit of the map's actual door icons
+// against those gaps -- which STILL mis-marked some (closing a couple of
+// real doorways to solid wall in WALLS, a genuine hasLineOfSight() bug, not
+// just a cosmetic one). Both were an attempt to infer door placement after
+// the fact from a wall list and/or a picture, and both were wrong in ways
+// only the user, looking at the real map, could actually catch.
+//
+// This version is neither: it's the user's own real door-marking pass using
+// Campaign-OS's new Doors tool (see that project's ROADMAP.md's "Doors
+// tool" entry), done alongside a full re-trace of WALLS itself (see WALLS's
+// own comment above) -- exported from that app's localStorage and
+// transcribed here verbatim, the same "ground truth over inference"
+// workflow WALLS itself has followed from the start. addDoor()/clearDoors()
+// (real engine/encounter.js functions now, not a hand-written workaround --
+// see main() below) are what the Doors tool itself calls, so this array is
+// exactly what a fresh export of the same session would reproduce.
 const DOORS = [
-  [6, 4, 6, 5], [19, 14, 19, 15], [20, 6, 20, 7], [20, 14, 20, 15],
-  [28, 15, 28, 16], [4, 7, 5, 7], [4, 8, 5, 8], [3, 13, 4, 13],
-  [3, 16, 4, 16]
+  [6, 4, 6, 5], [4, 7, 5, 7], [4, 8, 5, 8], [3, 13, 4, 13],
+  [3, 16, 4, 16], [16, 6, 17, 6], [20, 6, 20, 7], [20, 11, 20, 10],
+  [20, 12, 20, 11], [20, 14, 20, 15], [28, 16, 28, 15]
 ];
 
 function main() {
