@@ -147,6 +147,61 @@ const DOORS = [
   [20, 12, 20, 11], [20, 14, 20, 15], [28, 16, 28, 15]
 ];
 
+// Freestanding room dressing (ROADMAP.md's "freestanding 3D props" item),
+// `{type, x, y}` with x/y in 1-indexed CELL space (matching token positions,
+// NOT the vertex space WALLS/DOORS use -- a prop sits inside a cell, it
+// doesn't run along a cell boundary). Identified directly from the source
+// map's own legend and art (same full-resolution image the door audit used),
+// not guessed or scripted -- reasonable here in a way it wasn't for doors:
+// a prop is purely decorative (GridManager.gd's own _build_props() never
+// touches hasLineOfSight(), no collision shape either), so a placement
+// mistake is cosmetic and easy to eyeball-fix, unlike a wall/door gap.
+//
+// The source legend lists nine icons: Bars, Bridge, Bunk Bed, Locked Door,
+// Supplies, Rack, Secret Door, Sarcophagus, Table. Locked Door/Secret Door
+// are door variants (not modeled by this project at all, same as a plain
+// Door -- see DOORS's own comment); Bridge is the chasm's own rope-bridge
+// art, already conveyed by the raster floor image itself, not a placeable
+// object. That leaves five real freestanding-prop types below -- Bars
+// (jail cell bars) is ALSO excluded: every instance on this map sits set
+// INTO a wall opening exactly like a door, not freestanding on a floor
+// cell, so it doesn't fit this shape; Rack (a wall-mounted weapon rack,
+// present in rooms 6 and 10) has no matching model in the current asset
+// library (checked Environment/Props and Environment/Furnature -- nothing
+// fit without looking anachronistic or wildly out of theme) and is left
+// out entirely rather than substituted with a poor visual match.
+//
+// type -> GridManager.gd's PROP_MODEL_PATHS key:
+//   table        - Dungeon_Table (rooms 11, 12, 10 -- workbench/nightstand/table)
+//   bed          - wooden_bunk_bed (rooms 12, 2, 9)
+//   barrel/crate - Wooden_Barrel / Wooden_Crate (the "Supplies" icon's barrel-
+//                  and-crate pile, rooms 7, 1, 2, 10 -- alternated across the
+//                  map's several piles for visual variety, not because the
+//                  art at any one spot is exclusively barrels or crates)
+//   sarcophagus  - Old_Wooden_Coffin (room 4's three coffins)
+const PROPS = [
+  { type: "table", x: 4, y: 5 },
+  { type: "table", x: 9, y: 4 },
+  { type: "bed", x: 10, y: 6 },
+  { type: "barrel", x: 12, y: 4 },
+  { type: "crate", x: 15, y: 5 },
+  { type: "sarcophagus", x: 17, y: 8 },
+  { type: "sarcophagus", x: 17, y: 10 },
+  { type: "sarcophagus", x: 20, y: 8 },
+  { type: "barrel", x: 22, y: 14 },
+  { type: "crate", x: 22, y: 19 },
+  { type: "bed", x: 17, y: 14 },
+  { type: "bed", x: 19, y: 14 },
+  { type: "barrel", x: 17, y: 16 },
+  { type: "bed", x: 3, y: 17 },
+  { type: "bed", x: 7, y: 17 },
+  { type: "bed", x: 3, y: 19 },
+  { type: "bed", x: 7, y: 19 },
+  { type: "table", x: 4, y: 10 },
+  { type: "crate", x: 7, y: 9 },
+  { type: "barrel", x: 6, y: 13 }
+];
+
 function main() {
   const sourceImagePath = process.argv[2];
   if (!sourceImagePath) {
@@ -195,8 +250,19 @@ function main() {
     state = CampaignOS.addDoor(state, MAP_NAME, x1, y1, x2, y2);
   }
 
+  // `props`, like `doors` before it gained a real engine function, is NOT an
+  // encounter.js/shared-engine concept -- no CampaignOS.addProp() exists (no
+  // 2D-app Props tool asked for it yet, unlike doors -- see PROPS's own
+  // comment on why hand-identifying these from the map art was fine this
+  // time). Written directly onto the map object, same spirit as the
+  // pre-addDoor() `doors` workaround this file used to have.
+  state = {
+    ...state,
+    maps: { ...state.maps, [MAP_NAME]: { ...state.maps[MAP_NAME], props: PROPS } }
+  };
+
   saveState(STATE_FILE, state);
-  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments, ${DOORS.length} doors (all 12 rooms).`);
+  console.log(`Added "${MAP_NAME}" to ${STATE_FILE}: ${COLUMNS}x${ROWS} grid, ${WALLS.length} wall segments, ${DOORS.length} doors, ${PROPS.length} props (all 12 rooms).`);
   console.log(`Switch to it with a "switch_map" action (or via the DM Assistant) to see it rendered.`);
 }
 

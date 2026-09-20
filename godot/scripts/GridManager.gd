@@ -74,6 +74,38 @@ const WALL_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment
 ## it, same fix for the same reason as the wall.
 const DOOR_MODEL_PATH := "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Doors/Meshy_AI_Meshy_AI_Ancient_wood_rm_0920173018_texture.glb"
 
+## Same external-library/runtime-loading story as WALL_MODEL_PATH/DOOR_MODEL_PATH,
+## for freestanding room dressing (ROADMAP.md's "freestanding 3D props" item) --
+## chests/beds/tables/etc. matching what the source map's OWN legend actually
+## draws (Bunk Bed, Supplies, Sarcophagus, Table -- see import-redbrand-hideout.js's
+## own PROPS comment for the "Rack"/"Bars" legend items this deliberately leaves
+## out, and why). One path per `type` string a PROPS entry can name -- picked by
+## rendering several candidates side by side (same technique as the wall/door
+## picks), not from filenames alone.
+const PROP_MODEL_PATHS := {
+	"table": "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Props/Meshy_AI_Dungeon_Table_0919213136_texture.glb",
+	"bed": "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Furnature/Meshy_AI_wooden_bunk_bed_de_0920164738_texture.glb",
+	"barrel": "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Furnature/Meshy_AI_Wooden_Barrel_0920160312_texture.glb",
+	"crate": "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Furnature/Meshy_AI_Wooden_Crate_0920161150_texture.glb",
+	"sarcophagus": "I:/Campaign-OS-3D/Downloaded Static Models/Environment/Furnature/Meshy_AI_Old_Wooden_Coffin_0920160949_texture.glb",
+}
+
+## Unlike WALL_MODEL_PATH's wall (resized at the source via Meshy so runtime
+## code never has to guess a scale), none of these props were re-exported --
+## measured real sizes (barrel/crate both came out ~1.95m across, a real
+## barrel/crate is closer to 0.55-0.65m) get a hardcoded correction factor
+## here instead. table/bed/sarcophagus all measured close to real-world
+## proportions already (a coffin at 1.9m long x 0.45m tall, a table at 0.79m
+## tall, a bunk bed at 2.0m x 1.6m) and are left at 1.0 -- scaling every prop
+## "to be safe" would just as easily introduce a wrong size as fix one; only
+## scale a specific model once its real measured AABB has actually shown a
+## problem, same discipline _measure_scene_size() exists to enforce elsewhere
+## in this file.
+const PROP_SCALE := {
+	"barrel": 0.35,
+	"crate": 0.3,
+}
+
 var columns := 0
 var rows := 0
 var feet_per_square := 5.0
@@ -107,6 +139,15 @@ var _door_model_size := Vector3.ZERO
 var _door_model_lift := 0.0
 var _has_real_door_model := false
 
+## Same role as the _wall_model_*/_door_model_* vars above, keyed by PROP_MODEL_PATHS'
+## own `type` string instead of a single fixed model -- a prop template/size/lift
+## per type that's actually loadable on this machine (a type missing from this
+## Dictionary just means _build_props() skips any entry naming it, same
+## degrade-don't-fail precedent _has_real_wall_model/_has_real_door_model follow).
+var _prop_templates: Dictionary = {}
+var _prop_sizes: Dictionary = {}
+var _prop_lifts: Dictionary = {}
+
 # Which hand-built map scene (if any, see build()'s own doc comment) is
 # currently instantiated -- tracked separately from columns/rows/cell_size so
 # build()'s own no-op-if-unchanged check also catches "same size map, but the
@@ -123,6 +164,7 @@ var _map_scene_instance: Node3D
 var _current_raster_image_path := ""
 var _current_walls: Array = []
 var _current_doors: Array = []
+var _current_props: Array = []
 
 func _ready() -> void:
 	_light_material = StandardMaterial3D.new()
@@ -156,6 +198,17 @@ func _ready() -> void:
 		_door_model_size = _measure_scene_size(_door_model_template)
 		_door_model_lift = _measure_scene_lift(_door_model_template)
 		_has_real_door_model = _door_model_size.x > 0.01 and _door_model_size.y > 0.01
+
+	for prop_type in PROP_MODEL_PATHS:
+		var template := _load_external_model(PROP_MODEL_PATHS[prop_type])
+		if not template:
+			continue
+		var size := _measure_scene_size(template)
+		if size.x <= 0.01 or size.y <= 0.01:
+			continue
+		_prop_templates[prop_type] = template
+		_prop_sizes[prop_type] = size
+		_prop_lifts[prop_type] = _measure_scene_lift(template)
 
 ## Loads an arbitrary .glb file from anywhere on disk at RUNTIME, via
 ## GLTFDocument -- the exact same technique CharacterViewer.gd's own
@@ -257,11 +310,16 @@ func board_center() -> Vector3:
 ## wall gap to visually fill with a door model, sourced from a map's own extra
 ## `doors` field (added by import-redbrand-hideout.js, ignored harmlessly by both
 ## the 2D app and the server's own line-of-sight math, which only ever reads `walls`).
-func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "", raster_image_path: String = "", walls: Array = [], doors: Array = []) -> void:
+## `props` is the same story as `doors` -- not an engine concept, purely decorative
+## (see _build_props()), a `{type, x, y}` dict per freestanding piece of room
+## dressing, `x`/`y` in the same 1-indexed CELL space cell_to_world() already uses
+## for tokens (not vertex space -- a prop sits inside a cell, it doesn't run along
+## a cell boundary the way a wall/door does).
+func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, map_scene_path: String = "", raster_image_path: String = "", walls: Array = [], doors: Array = [], props: Array = []) -> void:
 	var new_cell_size := new_feet_per_square * METERS_PER_FOOT
 	if new_columns == columns and new_rows == rows and is_equal_approx(new_cell_size, cell_size) \
 			and map_scene_path == _current_map_scene_path and raster_image_path == _current_raster_image_path \
-			and walls == _current_walls and doors == _current_doors and get_child_count() > 0:
+			and walls == _current_walls and doors == _current_doors and props == _current_props and get_child_count() > 0:
 		return
 	columns = new_columns
 	rows = new_rows
@@ -271,6 +329,7 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, ma
 	_current_raster_image_path = raster_image_path
 	_current_walls = walls
 	_current_doors = doors
+	_current_props = props
 
 	# free(), not queue_free() -- queue_free() only SCHEDULES removal for the next
 	# idle frame, so an old child is still technically present in get_children()
@@ -300,14 +359,17 @@ func build(new_columns: int, new_rows: int, new_feet_per_square: float = 5.0, ma
 		_build_raster_floor(raster_image_path)
 		_build_walls(walls)
 		_build_doors(doors)
+		_build_props(props)
 	elif _floor_scene:
 		_build_real_floor_tiles()
 		_build_walls(walls)
 		_build_doors(doors)
+		_build_props(props)
 	else:
 		_build_fallback_checkerboard()
 		_build_walls(walls)
 		_build_doors(doors)
+		_build_props(props)
 
 	_build_grid_lines()
 	_build_floor_collision()
@@ -461,6 +523,30 @@ func _build_doors(doors: Array) -> void:
 		positioner.add_child(wrapper)
 		var instance: Node3D = _door_model_template.duplicate()
 		wrapper.add_child(instance)
+
+## Places a real prop model (see PROP_MODEL_PATHS) at each `{type, x, y}` entry
+## in `props` -- same "skip silently, no fallback box" precedent _build_doors()
+## already follows for a purely decorative feature: a prop this machine doesn't
+## have the asset for (an unrecognized `type`, or one PROP_MODEL_PATHS names but
+## _ready() couldn't actually load) just means one less prop, never a build()
+## failure. No collision shape and no orientation -- movement/line-of-sight
+## don't involve props at all (same as doors), and the source map's own art
+## doesn't reliably convey which way a table or bed actually faces, so every
+## instance keeps its model's own authored orientation rather than guessing one.
+func _build_props(props: Array) -> void:
+	for prop in props:
+		var prop_type := String(prop.get("type", ""))
+		if not _prop_templates.has(prop_type):
+			continue
+
+		var template: Node3D = _prop_templates[prop_type]
+		var lift: float = _prop_lifts[prop_type]
+		var scale_factor: float = PROP_SCALE.get(prop_type, 1.0)
+
+		var instance: Node3D = template.duplicate()
+		instance.position = cell_to_world(int(prop.get("x", 1)), int(prop.get("y", 1))) + Vector3(0, lift * scale_factor, 0)
+		instance.scale = Vector3.ONE * scale_factor
+		add_child(instance)
 
 ## A real stone floor texture has no per-tile visual break the way the old
 ## flat-colored checkerboard did -- without this, a DM has no way to actually

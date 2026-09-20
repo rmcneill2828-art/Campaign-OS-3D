@@ -150,6 +150,39 @@ func _test_walls(board) -> void:
 			degenerate_bodies += 1
 	_check(degenerate_bodies == 0, "A zero-length wall segment is skipped, not turned into a zero-size body")
 
+## Freestanding room dressing -- see GridManager.gd's own PROP_MODEL_PATHS/
+## _build_props() doc comments. Real assertions on real node positions only
+## run when this machine actually has the external prop models loaded (same
+## "EXPLICITLY PROVISIONAL and this-machine-specific" situation WALL_MODEL_PATH/
+## DOOR_MODEL_PATH are already in -- a clone without I:\Campaign-OS-3D\... just
+## won't exercise this part, same as it already doesn't for walls/doors), but
+## the "unrecognized type is silently skipped" and "empty props array is a
+## no-op" behaviors are asserted unconditionally either way.
+func _test_props(board) -> void:
+	var has_real_props: bool = board._prop_templates.has("table")
+
+	# Baseline: same board, no props at all -- the child-count difference below
+	# isolates exactly what _build_props() added, without needing to pick a real
+	# prop instance back out from among the floor tiles/grid lines/etc. by
+	# position (fragile: _build_real_floor_tiles() already puts a Node3D at
+	# every cell, indistinguishable by class from a prop's own duplicated
+	# template, so a position-based search could false-match a floor tile).
+	board.build(10, 6, 5.0, "", "", [])
+	var baseline: int = board.get_child_count()
+
+	var props := [
+		{"type": "table", "x": 3, "y": 2},
+		{"type": "not_a_real_prop_type", "x": 5, "y": 5}
+	]
+	board.build(10, 6, 5.0, "", "", [], [], props)
+	var with_props: int = board.get_child_count()
+
+	if has_real_props:
+		_check(with_props == baseline + 1, "Exactly one node added for the one recognized prop type -- the unrecognized type is silently skipped, not a crash or a fallback box")
+	else:
+		_check(with_props == baseline, "No real prop models loaded on this machine -- both entries (recognized type included) are silently skipped, same degrade-don't-fail precedent as a missing wall/door model")
+		print("SKIP: no real prop models loaded on this machine -- can't assert a real prop node was actually added")
+
 func _test_no_op_gate(board) -> void:
 	var walls_a := [{"x1": 0, "y1": 0, "x2": 5, "y2": 0}]
 	board.build(10, 6, 5.0, "", "", walls_a)
@@ -163,6 +196,15 @@ func _test_no_op_gate(board) -> void:
 	for child in board.get_children():
 		if _is_wall_body(child):
 			straight_walls += 1
+
+	var props_a := [{"type": "table", "x": 1, "y": 1}]
+	board.build(10, 6, 5.0, "", "", walls_b, [], props_a)
+	var count_with_props: int = board.get_child_count()
+	board.build(10, 6, 5.0, "", "", walls_b, [], props_a) # identical, props included -- still a no-op
+	_check(board.get_child_count() == count_with_props, "An unchanged build() call (same props too) is a real no-op")
+
+	board.build(10, 6, 5.0, "", "", walls_b, [], []) # same walls, props REMOVED -- must actually rebuild
+	_check(board.get_child_count() != count_with_props or props_a.is_empty(), "Changing only the props array (same walls) still triggers a real rebuild")
 	_check(straight_walls == 2, "Changing only the walls array (same map size) still triggers a real rebuild")
 
 func _init() -> void:
@@ -177,6 +219,7 @@ func _process(_delta: float) -> bool:
 	_test_slugify()
 	_test_raster_floor(_board)
 	_test_walls(_board)
+	_test_props(_board)
 	_test_no_op_gate(_board)
 	if _tmp_dir != "":
 		# Best-effort cleanup of the one file this test creates -- the directory

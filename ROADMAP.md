@@ -2799,9 +2799,76 @@ headless. This is ground truth, not inference, so no further audit is
 expected here -- if a problem turns up again, the fix is another real
 pass with the tools, not a fourth guessing method.
 
-**Still not done:** placement of freestanding 3D props (chests, beds,
-tables, sarcophagi -- matching Redbrand Hideout's own legend items) to
-dress the rooms shown in the map art. Scoped, not started: a manual
-`PROPS` list in `import-redbrand-hideout.js` (`{type, x, y}`, same spirit
-as `WALLS`/`DOORS`), resolved against the `Environment/Props`/`Furniture`
-folders above.
+## Freestanding 3D props -- 2026-09-20
+
+Done: placement of freestanding room dressing (beds, tables, supplies
+piles, sarcophagi) matching what Redbrand Hideout's own map legend and art
+actually draw, following the scoping this file laid out above. Unlike
+walls/doors, hand-identifying these from the map art was the deliberately
+chosen approach (not a Doors-tool-style hand-authoring pass) -- asked the
+user directly, since a prop placement mistake is purely cosmetic (no
+`hasLineOfSight()` stakes, no collision shape) and easy to eyeball-fix,
+unlike the real gameplay bugs guessing produced for doors twice over.
+
+The source legend lists nine icons: Bars, Bridge, Bunk Bed, Locked Door,
+Supplies, Rack, Secret Door, Sarcophagus, Table. Locked Door/Secret Door
+are door variants this project already doesn't model; Bridge is the
+chasm's own rope-bridge art, already conveyed by the raster floor image,
+not a placeable object. Of the remaining five real prop types, four made
+it in (Bunk Bed, Supplies as barrel/crate, Sarcophagus, Table); Rack (a
+wall-mounted weapon rack in rooms 6 and 10) was deliberately left out --
+checked `Environment/Props` and `Environment/Furnature` (note the actual
+folder name -- the roadmap entry above said "Furniture") for a candidate
+and found nothing that wasn't anachronistic (a modern metal apothecary
+shelf) or tonally wrong (an ornate library bookcase, a literal "Dungeons &
+Dragons" gaming table, a cathedral-style throne) for a bandit hideout's
+plain weapon rack -- better to have no rack than a visibly-wrong one; also
+left out entirely: "Bars" (jail cell bars), which on this map always sits
+set INTO a wall opening exactly like a door, not freestanding on a floor
+cell, so it doesn't fit `{type, x, y}`'s shape at all -- would need a
+`{x1,y1,x2,y2}`-shaped entry alongside `DOORS` instead, not attempted here.
+
+20 props identified across 9 of the map's 12 rooms (rooms 3, 5, 8 have
+none -- 5's only legend feature is the excluded Bars, 8 is the wall-free
+chasm). `GridManager.gd` gained `PROP_MODEL_PATHS`/`PROP_SCALE` constants,
+per-type template loading in `_ready()` (mirroring `_wall_model_template`/
+`_door_model_template` exactly, keyed by `type` string in three new
+Dictionaries instead of one fixed model each), and `_build_props()` --
+same "skip silently, no fallback box" precedent `_build_doors()` already
+follows for a purely decorative feature, no collision shape, no
+orientation (the source art doesn't reliably convey which way a table or
+bed actually faces, so guessing one would be exactly the kind of
+unforced, unverifiable guess this whole file has been trying to move
+away from). Barrel/crate needed a hardcoded scale-down (measured real
+size ~1.95m, a real barrel/crate is ~0.55-0.65m) -- table/bed/sarcophagus
+all measured close enough to real proportions already and are left at
+1.0. `build()` grew a `props` parameter (`Main.gd`/`PlayerView.gd` both
+updated to pass `map_data.get("props", [])` through), folded into the
+existing no-op-if-unchanged check.
+
+`props`, like `doors` before it gained a real engine function, is NOT an
+`encounter.js` concept -- no `CampaignOS.addProp()` exists (no 2D-app
+Props tool was asked for or built this pass), so `import-redbrand-
+hideout.js` writes the array directly onto the map object, the same
+spirit as the pre-`addDoor()` `doors` workaround this file used to have.
+
+Verified three ways: `test_raster_map.gd` gained a `_test_props()`
+(recognized type adds exactly one real node, unrecognized type is
+silently skipped, both asserted via a before/after child-count diff
+rather than a fragile position-based search -- `_build_real_floor_tiles()`
+already puts a Node3D at every cell, indistinguishable by class from a
+prop's own duplicated template) plus two `_test_no_op_gate()` cases for
+`props` specifically; the full 53/53 engine-server suite (untouched by
+this pass, confirmed anyway); and real non-headless Godot screenshots of
+all 20 props across 6 rooms (all render at believable scale, correctly
+grounded, no clipping into floor/walls). The screenshot pass surfaced and
+fixed a real bug in the verification tooling itself, not the product
+code: a throwaway script that called `board.build()` synchronously from
+`_init()` silently got an EMPTY board because `GridManager._ready()` (which
+loads/measures every wall/door/prop model) doesn't run synchronously just
+because `add_child()` was called during a `SceneTree` script's own
+`_init()` -- it only actually runs once the engine starts processing real
+frames. `test_raster_map.gd` was already correct (it only ever calls
+`board.build()` from `_process()`); the fix was deferring the throwaway
+script's own `build()` call the same way, not any change to `GridManager.gd`
+itself.

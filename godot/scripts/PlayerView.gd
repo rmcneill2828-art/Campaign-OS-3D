@@ -87,7 +87,7 @@ func _apply_state(state: Dictionary, visibility: Dictionary) -> void:
 	var columns: int = int(map_data.get("columns", 12))
 	var rows: int = int(map_data.get("rows", 8))
 	var feet_per_square: float = float(map_data.get("feetPerSquare", 5))
-	_board.build(columns, rows, feet_per_square, MapScenes.resolve(map_name), MapImagePath.resolve(map_name), map_data.get("walls", []), map_data.get("doors", []))
+	_board.build(columns, rows, feet_per_square, MapScenes.resolve(map_name), MapImagePath.resolve(map_name), map_data.get("walls", []), map_data.get("doors", []), map_data.get("props", []))
 
 	# Re-centers whenever the ACTIVE map actually changes -- same fix as
 	# Main.gd's own _apply_state(), for the same reason: a one-shot flag left
