@@ -2985,3 +2985,76 @@ wrong line for the shorter name in a genuinely adversarial case. Not worth a
 real per-target structured result for a purely cosmetic effect; same
 "known, low-risk, handle it by hand" spirit as this project's other
 documented simplifications.
+
+## Performance review, part 1 -- the real wall model -- 2026-09-21
+
+Picked up the "Performance" item queued in "Also tracked, not yet phased" above
+(itself revisited 2026-09-21 after the user reported real slowdown moving around
+the board the night of 2026-09-20). Measured before touching anything, per this
+file's own discipline -- a throwaway diagnostic loaded the real wall/door/prop
+`.glb` files the exact way `GridManager.gd`'s `_load_external_model()` does and
+summed real triangle/vertex counts (`Mesh.surface_get_arrays()`), multiplied by
+each asset's real count on Redbrand Hideout (from the actual `encounter.json`,
+not assumed): **133 wall instances alone accounted for ~106 million of the
+board's ~109 million total triangles (97%)** -- a single wall segment measured
+796,637 triangles, absurd for a plain rectangular stone panel. Screenshotting it
+close-up showed why: the source Meshy export sculpted genuine 3D relief into
+every individual stone block instead of a normal-mapped texture trick a
+hand-authored game asset would use -- raw, unretouched AI-generated mesh
+density, never decimated before use. `bed`/`crate`/`barrel` measured similarly
+disproportionate (240,642 / 273,222 / 113,224 triangles for simple furniture)
+but are individually far less numerous (7/3/4 instances) and collectively a
+small fraction of the wall's own share -- left for a likely follow-up pass, not
+mixed into this one.
+
+**Also confirmed why it only felt slow while MOVING, not while looking at a
+static view:** `CameraRig.gd` has no per-frame logic at all -- purely
+event-driven off `_unhandled_input`'s mouse-motion events -- so a still camera
+just keeps re-displaying the same frame regardless of its real render cost,
+and only panning/orbiting exposes the true frame rate. Also confirmed (and
+worth knowing for any future runtime-loaded asset): these models load via
+`GLTFDocument` from outside `res://` entirely, so they never pass through
+Godot's normal import pipeline and get none of its automatic LOD generation a
+real `res://`-imported mesh would.
+
+**Fix, applied only to the wall model this pass:** `npx @gltf-transform/cli`
+(meshoptimizer-backed) `weld` then `simplify --ratio 0.02 --error 0.01` against
+the real file at `I:\Campaign-OS-3D\Downloaded Static Models\Environment\
+Walls\...texture.glb` -- geometry only, no texture recompression, keeping the
+change narrowly scoped to the actual measured problem. Original backed up
+alongside it (`...texture.original.glb`, not committed -- this whole folder is
+outside the git repo, see `WALL_MODEL_PATH`'s own "this-machine-specific"
+doc comment) before overwriting. Result: 796,637 -> 19,966 triangles per wall
+(a real ~40x reduction), confirmed both visually (a real non-headless
+side-by-side screenshot at close range -- individual stone relief still reads
+correctly, no holes/degenerate faces) and numerically.
+
+**Verified against the real board, not just the isolated model:** ran the
+real `Main.tscn` against the actual running `engine-server` with Redbrand
+Hideout as the live map (read-only `GET /state` polling only -- no `/action`
+calls, confirmed the real persisted `encounter.json` was untouched afterward)
+and sampled real frame times on this machine's own GPU (RTX 4060, Vulkan
+Forward+), swapping the wall file back and forth for a genuine same-machine
+before/after:
+
+| | Triangles (walls only) | Average FPS | Avg frame time |
+|---|---|---|---|
+| Before | ~106,000,000 | 13.3 | 75.4ms |
+| After | ~2,660,000 | 58.0 | 17.2ms |
+
+A real 4.3x improvement, from a genuinely unplayable stutter to a smooth
+~58fps, on a mid-range discrete GPU -- not a marginal tweak. A live screenshot
+of the real board (Redbrand Hideout, walls/doors/props/tokens all present)
+confirmed no visible quality loss at actual gameplay camera distance either.
+`smoke_test_main.gd`/`test_raster_map.gd` rerun afterward, unaffected (the fix
+touched only the external asset file's own content, not `GridManager.gd` or
+any other code -- the model's AABB survives simplification essentially
+unchanged, so every measured-offset/scale assumption `_build_walls()` already
+makes held without any code change needed).
+
+**Not yet done, tracked as a real follow-up, not a commitment:** the same
+treatment for `bed`/`crate`/`barrel` (each still 100-270k triangles for a
+simple furniture shape, collectively a small fraction of what the wall was
+but still avoidably dense) -- worth doing opportunistically with the same
+now-proven `weld` + `simplify` + before/after-screenshot workflow, not urgent
+enough on its own to justify a dedicated pass the way the wall was.
