@@ -3058,3 +3058,40 @@ simple furniture shape, collectively a small fraction of what the wall was
 but still avoidably dense) -- worth doing opportunistically with the same
 now-proven `weld` + `simplify` + before/after-screenshot workflow, not urgent
 enough on its own to justify a dedicated pass the way the wall was.
+
+## Performance review, part 2 -- bed/barrel/crate -- 2026-09-21, same day
+
+Picked up the part-1 follow-up above immediately, same session. Same
+`weld` + `simplify --ratio 0.02 --error 0.01` workflow, same
+backup-before-overwrite discipline (`...texture.original.glb` alongside each,
+outside the git repo). Real measured reductions, each a genuine ~50x:
+
+| Prop | Before (triangles) | After | Real count |
+|---|---|---|---|
+| Bed | 240,642 | 4,812 | 7 |
+| Crate | 273,222 | 5,463 | 3 |
+| Barrel | 113,224 | 2,264 | 4 |
+
+Verified the same two ways as the wall: real non-headless before/after
+screenshots per model (bed/barrel/crate all read as visually identical to
+the original at a normal viewing distance -- the barrel picked up one small
+faceted highlight artifact on its curved side, not visible at actual
+gameplay camera distance), and `smoke_test_main.gd`/`test_raster_map.gd`
+rerun clean afterward.
+
+**Combined with part 1, Redbrand Hideout's full walls+doors+props triangle
+budget is now ~3,002,879, down from ~109,198,049 -- a real 36x reduction.**
+Re-sampled FPS against the real board afterward: 57.9fps, statistically the
+same as part 1's own 58.0fps -- expected, since walls were already 97% of
+the original load and these three props' own combined share was always
+small (~3M of ~109M) even before this pass; the real value here is removing
+avoidable headroom risk for future maps that lean more heavily on furniture
+props, not a further FPS win on this specific board. `table`/`sarcophagus`
+were already a sane 10,000 triangles each and left untouched -- no
+comparable problem to fix there.
+
+Performance review considered closed for now -- both tracked follow-ups
+from part 1 are done, and the board's total triangle budget is solidly
+real-time-friendly on a mid-range GPU. Revisit only if a future map/asset
+reintroduces a similarly disproportionate model (same measure-first
+diagnostic approach, not a guess).
