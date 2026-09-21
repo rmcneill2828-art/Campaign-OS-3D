@@ -2888,3 +2888,100 @@ frames. `test_raster_map.gd` was already correct (it only ever calls
 `board.build()` from `_process()`); the fix was deferring the throwaway
 script's own `build()` call the same way, not any change to `GridManager.gd`
 itself.
+
+## Spell effects (item 6 of the Seven requested features) -- 2026-09-21
+
+Before this, `cast_spell`/`cast_area_spell` were purely mechanical in this
+client: dice, an HP change, one log line, zero particle/shader feedback --
+the last of the seven 2026-09-19 items still open (see that entry above;
+items 1/2/3/7 shipped that same day, 4/"Import campaigns + create assets"
+and 5/"High-quality environment assets" remain open, tracked there).
+
+New `godot/scripts/SpellEffect.gd` (`class_name SpellEffect`) -- a one-shot
+`GPUParticles3D` burst, colored/shaped by `Main.gd`'s new
+`SPELL_EFFECT_COLORS` table (one entry per real SRD damage type, matching
+`DAMAGE_TYPE_LIST`; fire/radiant drift upward, everything else scatters
+outward) or `SPELL_EFFECT_DEFAULT_COLOR` (a neutral arcane violet-white) for
+an untyped cast. Cleanup is a manually-accumulated `_process(delta)` timer --
+the exact same pattern `DiceRollVisual.gd` already uses -- deliberately NOT
+`GPUParticles3D`'s own `finished` signal (needs a real, non-dummy rendering
+backend to ever fire, so a `--headless` smoke-test run would leak every
+effect) and NOT `get_tree().create_timer(...)` either (real wall-clock-driven,
+so a headless test script can't deterministically fast-forward past it the
+way `DiceRollVisual`'s own test does with one large `_process(5.0)` call).
+
+**Trigger, mirroring `_try_show_dice_roll`'s own precedent:** `Main.gd`
+captures the caster's id and target id(s) at send time
+(`_last_spell_caster_id`/`_last_spell_target_ids`/`_last_spell_damage_type`,
+set by `_on_cast_spell_pressed`/`_on_cast_area_spell_pressed` right alongside
+the existing `_last_roll_token_id` capture, for the same "the selection might
+change before the response arrives" reason), then `_try_show_spell_effects()`
+scans the `/action` response's own messages for a real successful cast via
+new `_is_spell_cast_message()` -- true only when the text begins with
+`spendSpellSlot()`'s own success clause ("`<name> casts <spell>...`"), which
+every one of `castSpell()`/`castAreaSpell()`'s failure paths (no slots left,
+action economy, a bad save ability, no targets, caster not found) returns
+before ever reaching -- confirmed against every real failure string in
+`encounter.js`, not guessed. A cast always bursts at the caster's own
+position (a "casting" flash, felt even for a targetless cantrip) and, on a
+confirmed hit, also at each real target's: `cast_spell`'s own
+`resolveOneAttack()` message contains `" Hit."` (optionally `"Critical hit."`
+right after, for a bigger burst); `cast_area_spell`'s own per-target line is
+`"<name> takes N damage"`, checked by real token name and explicitly
+excluding `"<name> takes no damage."` (a save that fully negated the hit
+under `halfOnSave: false`) so a fully-resisted target gets no impact effect,
+only the caster's own flash. New `_token_id_by_name()` bridges the gap
+between the action's own by-NAME caster/target fields (matching
+`findTokenByName` server-side) and the real `Token` node needed to position
+a visual, keyed by id in `_tokens`.
+
+**A real, previously-shipped bug found and fixed along the way, confirmed
+against a real engine-server response, not assumed:** `castAreaSpell()`'s own
+compound message embeds each target's `rollSavingThrow()` text verbatim
+("`Probe Target 1 rolls a DEX save: 20 +1 = 21 vs DC 15. Success. ...`"),
+which `_extract_d20_rolls()`'s existing `save_check_regex` (built for the
+2026-09-19 Visual Dice Rolls pass, scoped to `saving_throw`/`ability_check`/
+`roll_initiative` only) already matched perfectly well on its own --
+`RegEx.search()` looks anywhere in a string, not just at its start -- so
+casting an area spell had been silently spawning a stray, mispositioned die
+(above whatever `_last_roll_token_id` was last set to; cast actions never
+touch that variable) ever since that pass shipped. Fixed with a guard at the
+top of `_extract_d20_rolls()`: a message `_is_spell_cast_message()` itself
+recognizes as a real cast is out of scope for that function entirely, same
+as its own doc comment already intended for attack/cast/damage rolls
+generally -- a failed cast never matches either regex anyway, so only the
+success case needed the guard. `test_dice_roll.gd` gained a regression case
+using the real captured fixture that exposed this.
+
+**Verified:** new `godot/tools/test_spell_effect.gd` -- 24 assertions:
+`_is_spell_cast_message()` against real captured fixtures (a hit, a miss, a
+targetless cast, a leveled area cast) and every real failure string from
+`encounter.js`; `_token_id_by_name()`; `_try_show_spell_effects()` end to end
+via a synthetic `_apply_state()` board (targetless cast = one effect, a miss
+= one, a hit = two, a failed cast = zero, an area cast with one resisted and
+one hit target = two) -- exactly the shape `test_aoe_template.gd`'s own
+`_test_main_integration()` established for driving `Main.gd` through
+synthetic state without a real engine-server; and `SpellEffect.start()`
+itself (real `GPUParticles3D`, correct color/direction, the
+`_process()`-driven cleanup timer firing on forced elapsed time, mirroring
+`DiceRollVisual.gd`'s own `_test_visual`). One real Godot gotcha hit and
+resolved while writing this test, confirmed with a throwaway probe script
+before trusting it: `Object.set()` (used throughout this project's tests to
+poke a script's own "private" fields) silently fails to assign a raw array
+LITERAL into a statically-typed `Array[String]` property -- it silently
+keeps the old value, no error printed -- while a value that passed through
+an `Array[String]`-typed parameter or variable first assigns correctly;
+`test_spell_effect.gd`'s own `_typed_ids()` helper exists for exactly this
+reason and is documented in place so the next test written against a typed
+array property doesn't lose time rediscovering it. 53/53 engine-server
+tests and the rest of `godot-smoke-tests` unaffected, confirmed anyway.
+Wired into `.github/workflows/test.yml`.
+
+Known, documented limitation (not a bug): `cast_area_spell`'s hit detection
+is a plain substring check against a target's real name, not a structured
+per-target field the response carries -- a target token named as an exact
+prefix of another's (e.g. "Goblin" and "Goblin Archer") could read the
+wrong line for the shorter name in a genuinely adversarial case. Not worth a
+real per-target structured result for a purely cosmetic effect; same
+"known, low-risk, handle it by hand" spirit as this project's other
+documented simplifications.

@@ -80,6 +80,12 @@ jobs:
       - name: test_raster_map.gd (adventure map import -- raster floor + generated walls)
         run: godot --headless --path godot --script res://tools/test_raster_map.gd
 
+      # ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 6, built
+      # 2026-09-21. Also covers the real _extract_d20_rolls()/cast_area_spell
+      # collision this pass found and fixed (see test_dice_roll.gd's own new case).
+      - name: test_spell_effect.gd (spell-cast detection + GPUParticles3D burst)
+        run: godot --headless --path godot --script res://tools/test_spell_effect.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce

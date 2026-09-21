@@ -58,6 +58,35 @@ const DAMAGE_TYPE_LIST: Array[String] = [
 ]
 const SPELL_TARGET_NONE := "(no target)"
 
+## Item 6 of ROADMAP.md's "Seven requested features" (2026-09-19) -- Spell effects.
+## One burst color/behavior per real SRD damage type (matching DAMAGE_TYPE_LIST above,
+## DAMAGE_TYPE_NONE excluded -- that one falls back to SPELL_EFFECT_DEFAULT_COLOR/`rise
+## = false` instead, same as any damage type this table doesn't recognize). `rise: true`
+## reads as "hot"/upward-drifting (fire, radiant); everything else scatters outward on
+## all axes, the more neutral "impact" look. Picked for a quick, unambiguous visual read
+## at a glance, not a rigorous color theory pass -- this is cosmetic flavor, not a rules
+## signal a DM needs to read precisely.
+const SPELL_EFFECT_COLORS := {
+	"acid": {"color": Color(0.55, 0.85, 0.25), "rise": false},
+	"bludgeoning": {"color": Color(0.65, 0.6, 0.55), "rise": false},
+	"cold": {"color": Color(0.65, 0.85, 1.0), "rise": false},
+	"fire": {"color": Color(1.0, 0.45, 0.1), "rise": true},
+	"force": {"color": Color(0.75, 0.55, 1.0), "rise": false},
+	"lightning": {"color": Color(1.0, 0.95, 0.4), "rise": false},
+	"necrotic": {"color": Color(0.25, 0.05, 0.3), "rise": false},
+	"piercing": {"color": Color(0.8, 0.8, 0.85), "rise": false},
+	"poison": {"color": Color(0.4, 0.75, 0.2), "rise": false},
+	"psychic": {"color": Color(0.9, 0.3, 0.75), "rise": false},
+	"radiant": {"color": Color(1.0, 0.95, 0.7), "rise": true},
+	"slashing": {"color": Color(0.85, 0.85, 0.9), "rise": false},
+	"thunder": {"color": Color(0.6, 0.65, 0.75), "rise": false},
+}
+## Used whenever a cast has no damageType at all (a save-based effect spell, an untyped
+## narrated cast, or simply nothing picked in the UI) -- a neutral arcane violet-white,
+## distinct from every real damage type's own color above.
+const SPELL_EFFECT_DEFAULT_COLOR := Color(0.8, 0.75, 1.0)
+const SPELL_EFFECT_HEIGHT_OFFSET := Vector3(0, 1.0, 0)
+
 ## Character Creator (ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 1)
 ## -- duplicated from engine-server/engine/characterCreator.js's own CLASS_LIST, same
 ## "no shared-module mechanism across these plain scripts" convention ABILITY_KEYS/
@@ -275,6 +304,20 @@ var _right_press_active := false
 ## follow-up, not included here), so _on_action_response() knows where to spawn the
 ## dice even if the selection changes before the response actually arrives.
 var _last_roll_token_id := ""
+
+## Item 6 of ROADMAP.md's "Seven requested features" (2026-09-19) -- Spell effects.
+## Captured at send time by _on_cast_spell_pressed()/_on_cast_area_spell_pressed(), same
+## "capture now, in case the selection changes before the response arrives" reasoning
+## _last_roll_token_id above already uses. Ids, not names -- the action itself is sent by
+## name (matching findTokenByName server-side), but positioning a visual effect needs the
+## real Token node, keyed by id in _tokens (see _token_id_by_name()). _last_spell_target_ids
+## holds 0 or 1 entries for a single-target cast_spell, or however many were checked for a
+## cast_area_spell -- one shared shape for both. Left stale (harmlessly) after a FAILED
+## cast attempt, same as _last_roll_token_id is -- _try_show_spell_effects() only ever acts
+## on a response whose own message proves the cast actually happened, never on these alone.
+var _last_spell_caster_id := ""
+var _last_spell_target_ids: Array[String] = []
+var _last_spell_damage_type := ""
 
 ## Phase 7 -- a SEPARATE in-flight flag from _action_in_flight: a DM-command
 ## round trip can take up to ~2 minutes (waiting on a real Claude call via
@@ -726,14 +769,21 @@ func _on_cast_spell_pressed() -> void:
 		"level": int(_spell_level_input.value),
 		"concentration": _spell_concentration_check.button_pressed
 	}
+	_last_spell_caster_id = _selected_token_id
+	_last_spell_target_ids = []
 	if _spell_target_option.selected > 0:
-		action["target"] = _spell_target_option.get_item_text(_spell_target_option.selected)
+		var target_name := _spell_target_option.get_item_text(_spell_target_option.selected)
+		action["target"] = target_name
+		var target_id := _token_id_by_name(target_name)
+		if target_id != "":
+			_last_spell_target_ids = [target_id]
 	var damage := _spell_damage_input.text.strip_edges()
 	if damage != "":
 		action["damageDice"] = damage
 		var damage_type := _spell_damage_type_option.get_item_text(_spell_damage_type_option.selected)
 		if damage_type != DAMAGE_TYPE_NONE:
 			action["damageType"] = damage_type
+	_last_spell_damage_type = action.get("damageType", "")
 	_send_action(_apply_roll_mode(action))
 
 ## cast_area_spell resolves a save-for-half effect (Fireball, Burning Hands)
@@ -776,6 +826,16 @@ func _on_cast_area_spell_pressed() -> void:
 	var damage_type := _spell_damage_type_option.get_item_text(_spell_damage_type_option.selected)
 	if damage_type != DAMAGE_TYPE_NONE:
 		action["damageType"] = damage_type
+
+	_last_spell_caster_id = _selected_token_id
+	var target_ids: Array[String] = []
+	for target_name in targets:
+		var target_id := _token_id_by_name(target_name)
+		if target_id != "":
+			target_ids.append(target_id)
+	_last_spell_target_ids = target_ids
+	_last_spell_damage_type = action.get("damageType", "")
+
 	_send_action(action)
 
 ## Builds the AoE Template controls entirely in code -- same convention the Conditions
@@ -1670,6 +1730,7 @@ func _on_action_response(result: int, response_code: int, _headers: PackedString
 		_apply_state(parsed["state"])
 	if typeof(parsed) == TYPE_DICTIONARY and parsed.has("messages"):
 		_try_show_dice_roll(parsed["messages"])
+		_try_show_spell_effects(parsed["messages"])
 
 ## Scans this action's own returned messages for a saving_throw/ability_check/
 ## roll_initiative roll (see _extract_d20_rolls()) and, if one matches, spawns a
@@ -1701,12 +1762,31 @@ func _try_show_dice_roll(messages: Array) -> void:
 ## Multiattack) that would need a genuinely different extraction approach, a real,
 ## separate follow-up rather than an incremental extension of this one.
 ##
+## **A real collision found while building spell effects (ROADMAP.md item 6,
+## 2026-09-21), confirmed against a real engine-server response, not assumed:**
+## castAreaSpell()'s own compound message embeds each target's rollSavingThrow() text
+## verbatim ("Probe Target 1 rolls a DEX save: 20 +1 = 21 vs DC 15. Success. ..."), which
+## the save_check_regex below already matches perfectly well since `.search()` looks
+## anywhere in the string, not just at its start -- so casting an area spell would have
+## spawned a stray die for whichever target's save happened to appear first, floating
+## above whatever _last_roll_token_id was last set to (stale -- cast_spell/
+## cast_area_spell never touch it), not even the right token. The guard below is the
+## fix: a message that's actually a successful spell cast (see _is_spell_cast_message())
+## is out of scope for this function entirely, same as this doc comment already intended
+## for attack/castSpell/damage rolls generally -- a FAILED cast (no slots left, action
+## already used, bad ability name, ...) never starts with that prefix and never matches
+## either regex below anyway, so it needs no guard. Spell casts get their own dedicated
+## visual now regardless of outcome (see _try_show_spell_effects()).
+##
 ## Returns {} if nothing matched, else {"kept": int, "pair": Array[int]} -- `pair` is
 ## empty for a normal roll, or the two raw d20s [a, b] rolled under advantage/
 ## disadvantage (in original roll order, NOT sorted by kept/discarded -- see
 ## rollD20WithMode's own doc comment in encounter.js). `kept` is always the one
 ## actually used for the total, whether or not `pair` is present.
 func _extract_d20_rolls(text: String) -> Dictionary:
+	if _is_spell_cast_message(text):
+		return {}
+
 	var save_check_regex := RegEx.new()
 	save_check_regex.compile("rolls a .+? (?:save|check): (\\d+)(?: \\((?:advantage|disadvantage): ([\\d, ]+)\\))? [+-]\\d+ = \\d+ vs DC \\d+\\. (?:Success|Failure)\\.")
 	# `match` is a GDScript keyword (the match statement) -- can't use it as a
@@ -1759,3 +1839,99 @@ func _spawn_one_die(value: int, origin: Vector3, color: Color) -> void:
 	var die := DiceRollVisual.new()
 	add_child(die)
 	die.start(value, origin, color)
+
+## Small helper both cast handlers below use -- the action itself addresses a caster/
+## target by NAME (matching findTokenByName server-side, see _on_cast_spell_pressed/
+## _on_cast_area_spell_pressed/_area_target_checkboxes), but positioning a spell-effect
+## visual needs the real Token node, keyed by id in _tokens. Returns "" if no currently
+## live token has this exact name -- callers already treat that as "skip this one,"
+## the same "found or silently skip" precedent castAreaSpell's own targetId lookups use
+## server-side.
+func _token_id_by_name(token_name: String) -> String:
+	for id in _tokens:
+		if _tokens[id].token_name == token_name:
+			return id
+	return ""
+
+## True only for a message that begins with spendSpellSlot()'s own success wording
+## ("<name> casts <spell>[, using a Nth-level spell slot (N remaining)].") -- both
+## castSpell() and castAreaSpell() build their whole returned message starting with
+## this exact clause the instant the slot actually spends, and every one of their
+## failure paths (no slots left, action economy, an invalid save ability, no targets,
+## caster not found) returns before ever reaching it -- confirmed against every real
+## failure string in encounter.js, not guessed. A reliable "did a cast genuinely happen"
+## signal with no dedicated response field needed, the same "parse the log message
+## itself" approach _extract_d20_rolls() already uses for a different action set.
+func _is_spell_cast_message(text: String) -> bool:
+	var regex := RegEx.new()
+	regex.compile("^\\S.*? casts .+\\.")
+	return regex.search(text) != null
+
+## Item 6 of ROADMAP.md's "Seven requested features" (2026-09-19) -- Spell effects.
+## Mirrors _try_show_dice_roll()'s own shape: scans this action's messages (in practice
+## always exactly one, since Main.gd only ever POSTs a single action per request -- see
+## server.js's own applyActions([action]) call) for a successful cast, and if found,
+## spawns the actual visual. Runs unconditionally alongside _try_show_dice_roll() in
+## _on_action_response() -- the two can never both fire for the same real cast now that
+## _extract_d20_rolls() itself bails on a cast message (see its own doc comment above for
+## the collision that guard fixes).
+func _try_show_spell_effects(messages: Array) -> void:
+	for message in messages:
+		var text := str(message)
+		if _is_spell_cast_message(text):
+			_spawn_spell_cast_effect(text)
+			return
+
+## Always bursts at the caster's own position (a "casting" flash, felt even for a
+## cantrip with no target/damage at all) and, on a confirmed hit, ALSO at each real
+## target's position. Color/behavior comes from SPELL_EFFECT_COLORS, keyed by whatever
+## damageType (if any) _last_spell_damage_type captured at send time -- falling back to
+## SPELL_EFFECT_DEFAULT_COLOR for an untyped cast or an unrecognized type string, same
+## "degrade, don't fail" precedent every other optional-field feature in this project
+## follows.
+##
+## "Confirmed hit" reads two DIFFERENT text shapes on purpose, matching which cast
+## action actually produced this message -- the two are mutually exclusive per real
+## action, so checking both unconditionally can't cross-fire:
+## - cast_spell's own resolveOneAttack() message contains " Hit." (never present in a
+##   cast_area_spell message at all -- that path uses rollSavingThrow, not an attack
+##   roll), optionally with "Critical hit." right after it for a bigger burst.
+## - cast_area_spell's own per-target line is "<name> takes N damage" -- checked by
+##   real token name (from _last_spell_target_ids, resolved back to the live token),
+##   explicitly excluding "<name> takes no damage." (a successful save that negated
+##   the hit entirely under halfOnSave: false) so a fully-resisted target gets no
+##   impact effect, only the caster's own casting flash.
+##
+## Known, deliberate limitation: this is a plain substring check against a token's
+## real name, not a per-target field the response carries -- one target token named
+## as an exact prefix of another's (e.g. "Goblin" and "Goblin Archer") could read the
+## wrong line for the shorter name in a genuinely adversarial case. Not worth a real
+## per-target structured result for a purely cosmetic effect; same "known, low-risk,
+## handle it by hand" spirit as this project's other documented simplifications
+## (Charmed/Frightened tag-only, Blinded not auto-failing a sight check, etc. -- see
+## Campaign-OS's own CLAUDE.md).
+func _spawn_spell_cast_effect(text: String) -> void:
+	var color: Color = SPELL_EFFECT_DEFAULT_COLOR
+	var rise := false
+	if SPELL_EFFECT_COLORS.has(_last_spell_damage_type):
+		var params: Dictionary = SPELL_EFFECT_COLORS[_last_spell_damage_type]
+		color = params["color"]
+		rise = params["rise"]
+
+	if _tokens.has(_last_spell_caster_id):
+		_spawn_one_spell_effect(color, _tokens[_last_spell_caster_id].position + SPELL_EFFECT_HEIGHT_OFFSET, rise, false)
+
+	var is_critical := text.contains("Critical hit.")
+	for target_id in _last_spell_target_ids:
+		if not _tokens.has(target_id):
+			continue
+		var target_name: String = _tokens[target_id].token_name
+		if text.contains("%s takes no damage." % target_name):
+			continue
+		if text.contains(" Hit.") or text.contains("%s takes " % target_name):
+			_spawn_one_spell_effect(color, _tokens[target_id].position + SPELL_EFFECT_HEIGHT_OFFSET, rise, is_critical)
+
+func _spawn_one_spell_effect(color: Color, origin: Vector3, rise: bool, big: bool) -> void:
+	var effect := SpellEffect.new()
+	add_child(effect)
+	effect.start(color, origin, rise, big)

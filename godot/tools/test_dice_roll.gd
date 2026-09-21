@@ -47,6 +47,18 @@ func _test_extraction(main) -> void:
 	var move_message: Dictionary = main.call("_extract_d20_rolls", "Darkhawk moves to (5, 5).")
 	_check(move_message.is_empty(), "A plain move confirmation is correctly NOT matched")
 
+	# Real regression, found building spell effects (ROADMAP.md item 6, 2026-09-21) --
+	# captured live: POST /action cast_area_spell against a caster with a real spell
+	# slot and two real monster targets. castAreaSpell()'s own compound message embeds
+	# each target's rollSavingThrow() text verbatim, which the save_check_regex above
+	# matches perfectly well on its own (.search() looks anywhere in the string, not
+	# just at its start) -- without _is_spell_cast_message()'s guard at the top of
+	# _extract_d20_rolls(), this would have spawned a stray die for whichever target's
+	# save happened to appear first, above whatever token _last_roll_token_id was last
+	# set to (never touched by a cast action at all -- not even the right token).
+	var area_cast_message: Dictionary = main.call("_extract_d20_rolls", "Probe Caster casts Fireball using a 3rd-level spell slot (1 remaining). Probe Target 1 rolls a DEX save: 20 +1 = 21 vs DC 15. Success. Probe Target 1 takes 9 damage (8d6). Probe Target 2 rolls a DEX save: 6 +1 = 7 vs DC 15. Failure. Probe Target 2 takes 19 damage (8d6).")
+	_check(area_cast_message.is_empty(), "A cast_area_spell message embedding real saving-throw text is correctly NOT matched (spell casts get their own dedicated visual instead -- see SpellEffect.gd)")
+
 func _test_spawning(main) -> void:
 	var tokens_root: Node = main
 	var before := tokens_root.get_child_count()
