@@ -197,6 +197,15 @@ func _test_no_op_gate(board) -> void:
 		if _is_wall_body(child):
 			straight_walls += 1
 
+	# Same "no real prop models loaded on this machine" situation _test_props()
+	# already guards -- when true, _build_props() silently skips every entry
+	# (recognized type included), so removing a non-empty props array adds zero
+	# visible nodes either way and the child count genuinely can't move. Without
+	# this guard the assertion below is unwinnable on a machine (like CI) that
+	# never had the real .glb loaded in the first place, regardless of whether
+	# the no-op gate itself is working correctly.
+	var has_real_props: bool = board._prop_templates.has("table")
+
 	var props_a := [{"type": "table", "x": 1, "y": 1}]
 	board.build(10, 6, 5.0, "", "", walls_b, [], props_a)
 	var count_with_props: int = board.get_child_count()
@@ -204,7 +213,10 @@ func _test_no_op_gate(board) -> void:
 	_check(board.get_child_count() == count_with_props, "An unchanged build() call (same props too) is a real no-op")
 
 	board.build(10, 6, 5.0, "", "", walls_b, [], []) # same walls, props REMOVED -- must actually rebuild
-	_check(board.get_child_count() != count_with_props or props_a.is_empty(), "Changing only the props array (same walls) still triggers a real rebuild")
+	if has_real_props:
+		_check(board.get_child_count() != count_with_props, "Changing only the props array (same walls) still triggers a real rebuild")
+	else:
+		print("SKIP: no real prop models loaded on this machine -- removing props has no visible node to lose, can't assert a real rebuild happened")
 	_check(straight_walls == 2, "Changing only the walls array (same map size) still triggers a real rebuild")
 
 func _init() -> void:
