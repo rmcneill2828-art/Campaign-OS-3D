@@ -1310,9 +1310,25 @@ Hall) have no equivalent need.
   devices, not just a second monitor) -- explicitly out of scope for now,
   the same "revisit only if actually needed" call the 2D app itself already
   made for this exact question.
-- **Performance** (one hidden AnimationPlayer + Skeleton3D per token, full
-  board rebuild on any map-size change) -- fine at current token/map counts;
-  no need to optimize preemptively.
+- **Performance** -- revisited 2026-09-21, now a real signal, not a
+  preemptive worry: the user reported genuinely slow responses while moving
+  around the board the night of 2026-09-20, not yet measured or profiled.
+  The original 2026-09-16 rationale here ("one hidden AnimationPlayer +
+  Skeleton3D per token") is now stale -- the animation system was archived
+  2026-09-17 (see that entry above), so that's no longer a real per-token
+  cost. Real candidates worth checking once this is actually investigated:
+  `GridManager.build()`'s full free()-then-rebuild of every child (floor
+  tiles, every wall/door/prop instance) whenever its no-op gate doesn't
+  hold -- Redbrand Hideout alone is 133 wall segments + 11 doors + 20 props,
+  each a duplicated real `.glb` instance, not a cheap primitive; the
+  per-poll `/state` diffing in `Main.gd`; and the growing real-asset budget
+  generally (raster floor texture, full-height stone wall models, door/prop
+  models), all added since the original note above was written.
+  **Deliberately not investigated now** -- queued as an explicit performance
+  review pass at the end of the current run of visual-feature work (spell
+  effects and whatever follows it), once the added visual load has stopped
+  growing and there's a stable, representative board (Redbrand Hideout) to
+  profile against, rather than chasing a target that's still changing.
 
 ## CI -- 2026-09-16, built, not yet verified against a real run
 
