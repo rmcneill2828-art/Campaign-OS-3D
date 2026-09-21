@@ -1108,13 +1108,163 @@ function pollUpdateCharacter() {
   });
 }
 
+// --- Import Campaign write-back ------------------------------------------------------
+//
+// Godot's Campaign Browser (Campaign-OS-3D only, ROADMAP.md's "Seven requested features"
+// item 4) has no browser FileList/File System Access API to read a folder of campaign
+// markdown with -- unlike ui/app.js's own Campaign Browser, which reads one directly via
+// engine/campaign.js's importMarkdownFiles(). Same deterministic (no Claude call, no
+// cost) write-back-style mailbox as Create/Update Character above, just reading instead
+// of writing: recursively walks DND_REPO_PATH for real .md files, wraps each as a small
+// object satisfying importMarkdownFiles()'s own duck-typed File interface (it only ever
+// calls .name/.webkitRelativePath/.lastModified/.text() on what it's given -- confirmed
+// by reading that function directly, not assumed), and returns the exact same parsed
+// campaign structure (files/categories) engine/campaign.js already produces for the 2D
+// app -- no new parsing logic, just a different way of feeding it real files.
+// webkitRelativePath matters, not just name: classify() reads folder segments like
+// "characters/"/"npcs/" out of it to sort each file into the right category, so a bare
+// filename with no path would misclassify everything as "notes".
+//
+// engine/campaign.js's own location differs between the two projects this file is kept
+// byte-identical across (see sync-engine.sh's own header comment): Campaign-OS has it at
+// engine/campaign.js, a sibling of this dm-bridge/ folder; Campaign-OS-3D nests it under
+// engine-server/engine/campaign.js instead. Rather than hardcode either path (which would
+// silently break in whichever project doesn't use it), loadCampaignEngine() checks both
+// candidates and uses whichever actually exists on disk.
+function loadCampaignEngine() {
+  const candidates = [
+    path.join(bridgeDir, "..", "engine", "campaign.js"),
+    path.join(bridgeDir, "..", "engine-server", "engine", "campaign.js")
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!found) return null;
+  const code = fs.readFileSync(found, "utf8");
+  const engineWindow = {};
+  new Function("window", "console", code)(engineWindow, console);
+  return engineWindow.CampaignOSCampaign;
+}
+const CampaignEngine = loadCampaignEngine();
+
+const importCampaignRequestPath = path.join(bridgeDir, "import-campaign-request.json");
+const importCampaignResponsePath = path.join(bridgeDir, "import-campaign-response.json");
+let lastProcessedImportCampaignId = primeLastProcessedId(importCampaignRequestPath);
+
+function writeImportCampaignResponse(id, ok, message, campaign) {
+  const response = { id, ok, message, campaign: campaign || null, respondedAt: new Date().toISOString() };
+  writeJsonResponseFile(
+    importCampaignResponsePath,
+    response,
+    `[dm-bridge] import-campaign ${id} ${ok ? "succeeded" : "failed"}: ${message}`,
+    "import-campaign-response.json"
+  );
+}
+
+// Every relative path fs.readdirSync(dir, {recursive: true}) returns is relative to
+// `dndRepoPath` already -- exactly the shape webkitRelativePath needs -- so this just
+// filters to real .md files (a directory that happens to be named "notes.md" is
+// vanishingly unlikely but checked anyway, same defensive spirit as everywhere else
+// this file treats "found but not actually a file" as skip-not-crash) and pairs each
+// with its absolute path for the actual read.
+function listMarkdownFiles(dndRepoPath) {
+  return fs.readdirSync(dndRepoPath, { recursive: true })
+    .filter((relativePath) => relativePath.toLowerCase().endsWith(".md"))
+    .map((relativePath) => ({
+      relativePath: relativePath.split(path.sep).join("/"),
+      absolutePath: path.join(dndRepoPath, relativePath)
+    }))
+    .filter(({ absolutePath }) => {
+      try {
+        return fs.statSync(absolutePath).isFile();
+      } catch {
+        return false;
+      }
+    });
+}
+
+function handleImportCampaignRequest(request) {
+  console.log(`[dm-bridge] processing import-campaign ${request.id}`);
+  if (!CampaignEngine) {
+    writeImportCampaignResponse(request.id, false,
+      "Couldn't load engine/campaign.js on this machine (expected next to dm-bridge/, or under engine-server/engine/).");
+    return;
+  }
+  const dndRepoPath = process.env.DND_REPO_PATH;
+  if (!dndRepoPath) {
+    writeImportCampaignResponse(request.id, false,
+      "DND_REPO_PATH isn't set. Stop the watcher, set it to your campaign repo's path (e.g. " +
+      "DND_REPO_PATH=/path/to/DND/Campaign node dm-bridge/watch.js), and try again.");
+    return;
+  }
+  if (!fs.existsSync(dndRepoPath)) {
+    writeImportCampaignResponse(request.id, false, `DND_REPO_PATH is set to "${dndRepoPath}", but that path doesn't exist.`);
+    return;
+  }
+
+  let entries;
+  try {
+    entries = listMarkdownFiles(dndRepoPath);
+  } catch (err) {
+    writeImportCampaignResponse(request.id, false, `Couldn't read the campaign repo: ${err.message}`);
+    return;
+  }
+
+  const fileList = entries.map(({ relativePath, absolutePath }) => {
+    let mtimeMs = 0;
+    try {
+      mtimeMs = fs.statSync(absolutePath).mtimeMs;
+    } catch {
+      // fall back to 0 -- only used to build a stable-ish id, not load-bearing otherwise
+    }
+    return {
+      name: path.basename(absolutePath),
+      webkitRelativePath: relativePath,
+      lastModified: mtimeMs,
+      text: () => Promise.resolve(fs.readFileSync(absolutePath, "utf8"))
+    };
+  });
+
+  CampaignEngine.importMarkdownFiles(fileList).then((campaign) => {
+    // Pre-computed here (not left for Godot/engine-server to ask for separately later)
+    // since tokenDraftFromItem() is a cheap, synchronous, pure function already loaded
+    // in this same process -- one less round trip before a DM can actually spawn someone.
+    // Mutating item.draft in place is enough: campaign.categories.characters and
+    // campaign.files hold the SAME object references per item (see campaign.js's own
+    // importMarkdownFiles(), which pushes one item into both arrays), not copies.
+    campaign.categories.characters.forEach((item) => {
+      item.draft = CampaignEngine.tokenDraftFromItem(item);
+    });
+    writeImportCampaignResponse(request.id, true, `Imported ${campaign.files.length} file(s) from the campaign repo.`, campaign);
+  }).catch((err) => {
+    writeImportCampaignResponse(request.id, false, `Import failed: ${err.message}`);
+  });
+}
+
+function pollImportCampaign() {
+  fs.readFile(importCampaignRequestPath, "utf8", (err, data) => {
+    if (!err) {
+      try {
+        const request = JSON.parse(data);
+        if (request.id && request.id !== lastProcessedImportCampaignId) {
+          lastProcessedImportCampaignId = request.id;
+          handleImportCampaignRequest(request);
+        }
+      } catch {
+        // partial write mid-poll -- try again next tick
+      }
+    }
+    setTimeout(pollImportCampaign, 1500);
+  });
+}
+
 console.log(`[dm-bridge] watching ${requestPath}`);
 console.log(`[dm-bridge] model: ${process.env.DM_BRIDGE_MODEL || "haiku"} (override with DM_BRIDGE_MODEL env var)`);
 console.log(`[dm-bridge] watching ${endSessionRequestPath}`);
 console.log(`[dm-bridge] watching ${createCharacterRequestPath}`);
 console.log(`[dm-bridge] watching ${updateCharacterRequestPath}`);
-console.log(`[dm-bridge] DND_REPO_PATH: ${process.env.DND_REPO_PATH || "(not set -- End Session, Create Character, and character HP edits will fail until this is set)"}`);
+console.log(`[dm-bridge] watching ${importCampaignRequestPath}`);
+console.log(`[dm-bridge] DND_REPO_PATH: ${process.env.DND_REPO_PATH || "(not set -- End Session, Create Character, character HP edits, and Campaign Import will fail until this is set)"}`);
 poll();
 pollEndSession();
 pollCreateCharacter();
 pollUpdateCharacter();
+pollImportCampaign();
