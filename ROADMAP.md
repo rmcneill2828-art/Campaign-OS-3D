@@ -3095,3 +3095,101 @@ from part 1 are done, and the board's total triangle budget is solidly
 real-time-friendly on a mid-range GPU. Revisit only if a future map/asset
 reintroduces a similarly disproportionate model (same measure-first
 diagnostic approach, not a guess).
+
+## Import Campaign (item 4 of the Seven requested features) -- 2026-09-21
+
+The spawn-ready half of item 4 (map/asset generation is a fully separate, manual
+Meshy/Higgsfield pipeline -- see that item's own original scoping note above). Two
+real decisions made before writing anything, per a scoping discussion (user choice):
+**(1)** route through `dm-bridge/watch.js` as a fourth mailbox pair, matching every
+other DnD-repo-touching feature here (Create/Update Character, End Session) rather
+than giving `engine-server` its own direct `DND_REPO_PATH` access -- keeps the one
+architectural boundary this project already follows everywhere else; **(2)** the
+full campaign browser (characters + locations + sessions + notes, searchable), not
+just characters-only.
+
+**A real cross-repo consequence, checked before writing anything:** `dm-bridge/
+watch.js` is one of the files `engine-sync-check` diffs byte-for-byte against the
+canonical `Campaign-OS` (2D) repo, which has no automated sync script for it
+(hand-diffed only, per `sync-engine.sh`'s own header comment). Since the 2D app
+already imports campaigns directly in-browser (no need for this new mailbox at
+all), this pass's `watch.js` addition is genuinely 3D-only in practice but still had
+to be hand-mirrored into `Campaign-OS`'s own copy (both committed and pushed, user
+choice) purely to keep the two byte-identical -- confirmed identical post-commit by
+diffing the actual staged git blobs, not just the working-tree files (which
+differed only in local line-ending style, a red herring: `core.autocrlf` normalizes
+both to LF on commit regardless).
+
+**`dm-bridge/watch.js`:** new `import-campaign-request.json`/`-response.json`
+mailbox, same deterministic (no Claude call) pattern as Create/Update Character.
+Recursively reads `DND_REPO_PATH` for real `.md` files and feeds them through
+`engine/campaign.js`'s own `importMarkdownFiles()` completely unchanged -- checked
+its real signature first rather than assumed: it only ever calls `.name`/
+`.webkitRelativePath`/`.lastModified`/`.text()` on what it's given, a plain
+duck-typed interface a small `fs.readFileSync`-backed adapter object satisfies
+exactly, so no shared-engine-file edit was needed at all. `engine/campaign.js`'s own
+location differs between the two projects this file is byte-identical across
+(`engine/campaign.js` in Campaign-OS, `engine-server/engine/campaign.js` here) --
+`loadCampaignEngine()` checks both candidate paths and uses whichever exists,
+rather than hardcoding either (which would silently break the other project).
+Also pre-computes a spawn-ready `tokenDraftFromItem()` draft per character/NPC item
+right here (cheap, synchronous, already loaded) so Godot never needs a second round
+trip before a DM can spawn someone. Verified live against a throwaway fake campaign
+folder (never the real one) via a real running `watch.js` instance: correct
+characters/npcs/locations/sessions classification, real ability scores/HP/AC
+extracted, and the `DND_REPO_PATH`-unset failure path.
+
+**`engine-server/server.js`:** new `POST /import-campaign`, mirroring
+`/create-character`'s exact lock+timeout+mailbox pattern (its own
+`importCampaignLock`, a 30s ceiling -- more files to read than one character write,
+still just a deterministic local fs walk). 3 new tests (56/56 engine-server-wide):
+happy path, a real `ok:false` outcome correctly not treated as an HTTP error, two
+concurrent calls serialized rather than raced.
+
+**Godot -- new `CampaignBrowser.gd`:** entirely code-built (no `.tscn`), opened as
+its own singleton `Window` (a new "Campaign Browser" button, a code-built sibling of
+the real `$HUD/OpenPlayerWindowButton` .tscn node, same "new controls get built in
+code" convention `_build_view_character_button()` already established) -- an Import
+button, a search box, a `TabContainer` with one `ItemList` per category, and a
+detail pane with a Spawn as Token button for `canSpawnToken` items. One-shot import,
+not a live poll -- a campaign's markdown doesn't change out from under a DM
+mid-session the way encounter state does.
+
+**Spawning uses the existing `add_token` action as-is** -- a deliberate, narrower
+scope decision (user choice) over widening it: `add_token`'s DM-bridge case only
+forwards `name`/`type`/`hp`/`maxHp`/`ac`/`abilityScores`, not the richer
+`attackBonus`/`damageDice`/`skills`/`savingThrows`/`spellcasting` fields
+`tokenDraftFromItem()` also extracts. `abilityScores` alone is enough for saves/
+checks to resolve reasonably (`savingThrowBonus()`/`abilityCheckBonus()` fall back
+to the raw ability modifier with no stated override) -- the rest can be filled in
+by hand on the token sheet after spawning, same as any manually-added token.
+Widening `add_token` itself would mean editing the shared, sync-checked
+`dmBridge.js` -- a real, separate follow-up if this gap ever actually bites in
+play, not bundled into this pass.
+
+**A real bug found and fixed while building this, confirmed with a screenshot
+before assuming the fix worked:** a `Control` added directly as a child of a
+runtime-created `Window` does NOT automatically pick up that window's size via
+`anchors_preset(PRESET_FULL_RECT)` alone -- that propagation only fires reactively
+when the parent's size changes AFTER the child is already present, and a `Window`'s
+`size` set before its one `add_child()` call never triggers it. First screenshot
+showed every control collapsed to its children's combined minimum size in the
+window's top-left corner, not filling it at all. Fixed in
+`_on_campaign_browser_pressed()` by pushing `browser.size = window.size` explicitly
+once, then keeping it live on the window's own `size_changed` signal (a real
+OS-level drag-to-resize). Confirmed this is a genuinely new failure mode, not a
+latent bug elsewhere -- `PlayerView`/`CharacterViewer`, this project's only other
+two runtime-created `Window`s, both root a `Node3D` (a 3D scene with its own
+`CanvasLayer` HUD, which fills a viewport unconditionally) rather than a bare
+`Control`, so neither was ever exposed to it.
+
+**Verified:** new `godot/tools/test_campaign_browser.gd` -- 20 assertions: list/
+category population and search filtering against a synthetic campaign dict (the
+real shape `dm-bridge/watch.js`'s own response produces), item selection updating
+the detail pane and the Spawn button's visibility, `_build_spawn_action()`'s own
+field mapping (hero vs. monster `tokenType`, `abilityScores` carried through only
+when the draft actually has one), and `_on_import_response()`'s parsing of both a
+success and a real `ok:false` outcome. Plus a real non-headless screenshot of the
+live panel (post-size-fix) confirming the layout actually fills the window
+correctly, not just that the logic is right. 56/56 engine-server tests and the
+rest of `godot-smoke-tests` unaffected.

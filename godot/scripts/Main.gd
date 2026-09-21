@@ -128,6 +128,7 @@ const FULL_HEAL_AMOUNT := 9999
 @onready var _hint_timer: Timer = $HUD/HintTimer
 @onready var _next_turn_button: Button = $HUD/NextTurnButton
 @onready var _open_player_window_button: Button = $HUD/OpenPlayerWindowButton
+@onready var _hud: CanvasLayer = $HUD
 
 ## Found live: a DM clicked Roll Initiative and saw no confirmation at all --
 ## the action DID succeed server-side (confirmed by checking /state directly),
@@ -335,6 +336,11 @@ var _dm_command_in_flight := false
 ## existing window to front instead of spawning a duplicate.
 var _player_window: Window
 
+## Same singleton-window precedent as _player_window above -- a second click should
+## refocus the existing Campaign Browser, not spawn a duplicate that would just import
+## the same campaign into a second, disconnected window.
+var _campaign_browser_window: Window
+
 func _ready() -> void:
 	_poll_timer.wait_time = poll_interval_seconds
 	_poll_timer.timeout.connect(_poll_state)
@@ -382,6 +388,7 @@ func _ready() -> void:
 	_build_template_controls()
 	_build_character_creator_controls()
 	_build_view_character_button()
+	_build_campaign_browser_button()
 
 	_heal_button.pressed.connect(_on_heal_pressed)
 	_full_heal_button.pressed.connect(_on_full_heal_pressed)
@@ -654,6 +661,57 @@ func _on_open_player_window_pressed() -> void:
 	get_tree().root.add_child(_player_window)
 	_player_window.show()
 	_player_window.grab_focus()
+
+## Item 4 of ROADMAP.md's "Seven requested features" (2026-09-19) -- built in code as a
+## sibling of the real $HUD/OpenPlayerWindowButton .tscn node (same "new controls get
+## built in code, not hand-edited into the .tscn" convention _build_view_character_button()
+## below already documents) -- not gated on a selected token, so it belongs at this
+## top-level HUD row alongside Next Turn/Open Player Window, not inside a per-token
+## action section the way View Character (3D) is.
+func _build_campaign_browser_button() -> void:
+	var button := Button.new()
+	button.text = "Campaign Browser"
+	button.offset_left = 396.0
+	button.offset_top = 200.0
+	button.offset_right = 596.0
+	button.offset_bottom = 240.0
+	button.add_theme_font_size_override("font_size", 18)
+	button.pressed.connect(_on_campaign_browser_pressed)
+	_hud.add_child(button)
+
+## Same singleton-window precedent _on_open_player_window_pressed() above already
+## establishes -- a second click refocuses the existing browser (and whatever it already
+## imported) rather than opening a second, disconnected one.
+func _on_campaign_browser_pressed() -> void:
+	if _campaign_browser_window and is_instance_valid(_campaign_browser_window):
+		_campaign_browser_window.grab_focus()
+		return
+	var browser := CampaignBrowser.new()
+	browser.open(server_base_url)
+	_campaign_browser_window = Window.new()
+	_campaign_browser_window.title = "Campaign OS 3D -- Campaign Browser"
+	_campaign_browser_window.size = Vector2i(1000, 700)
+	_campaign_browser_window.close_requested.connect(func():
+		_campaign_browser_window.queue_free()
+		_campaign_browser_window = null
+	)
+	_campaign_browser_window.add_child(browser)
+	# A Control's own anchors_preset(PRESET_FULL_RECT) (see CampaignBrowser._build_ui())
+	# only auto-resizes it to match a Control OR Viewport ancestor's size when that
+	# ancestor's own size actually CHANGES after the child is already present -- a bare
+	# Window's `size` set before this add_child() never fires that, so a Control parented
+	# directly under a freshly-created Window is left at its own default (0, 0) size
+	# despite correct anchors (confirmed directly: a real screenshot showed every control
+	# collapsed to its children's minimum size in the top-left corner, not filling the
+	# window at all). Pushing the size explicitly once, then keeping it live on the
+	# window's own size_changed (a real OS-level drag-to-resize), fixes both.
+	browser.size = _campaign_browser_window.size
+	_campaign_browser_window.size_changed.connect(func():
+		browser.size = _campaign_browser_window.size
+	)
+	get_tree().root.add_child(_campaign_browser_window)
+	_campaign_browser_window.show()
+	_campaign_browser_window.grab_focus()
 
 ## Item 3 of ROADMAP.md's "Seven requested features" (2026-09-19) -- adds a "View
 ## Character (3D)" button to the existing Other Actions section (built in code, same

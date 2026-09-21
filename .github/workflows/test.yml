@@ -86,6 +86,13 @@ jobs:
       - name: test_spell_effect.gd (spell-cast detection + GPUParticles3D burst)
         run: godot --headless --path godot --script res://tools/test_spell_effect.gd
 
+      # ROADMAP.md's "Seven requested features" 2026-09-19 entry, item 4, built
+      # 2026-09-21. Drives CampaignBrowser.gd through a synthetic campaign dict
+      # (the real shape dm-bridge/watch.js's new import-campaign-response.json
+      # produces) rather than a real engine-server/watch.js round trip.
+      - name: test_campaign_browser.gd (Campaign Browser list/search/spawn wiring)
+        run: godot --headless --path godot --script res://tools/test_campaign_browser.gd
+
   # engine/*.js and dm-bridge/watch.js are supposed to be byte-for-byte copies of
   # Campaign-OS's own canonical files (see engine-server/scripts/sync-engine.sh's own
   # header comment) -- kept in sync by hand, with no shared module/package to enforce
