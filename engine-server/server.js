@@ -55,6 +55,12 @@ const DM_BRIDGE_POLL_MS = 1000;
 // 2D app's own reasoning).
 const CREATE_CHARACTER_TIMEOUT_MS = 20000;
 
+// A real campaign folder is more files to read than a single character write, but still
+// a deterministic local fs walk (no LLM call) -- generous over CREATE_CHARACTER_TIMEOUT_MS
+// mostly to cover "watch.js was slow to start," not because parsing itself is expected to
+// take anywhere near this long.
+const IMPORT_CAMPAIGN_TIMEOUT_MS = 30000;
+
 // The largest real client-sent body today is a /dm-command's optional
 // {title, text} context -- itself capped at 6000 chars by the 2D app's own
 // dmBridgeContextMaxChars (ui/app.js), not currently even wired up from the 3D
@@ -516,6 +522,10 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   // can't clobber each other's files.
   const createCharacterRequestPath = path.join(bridgeDir, "create-character-request.json");
   const createCharacterResponsePath = path.join(bridgeDir, "create-character-response.json");
+  // Same independent-mailbox reasoning as create-character-request.json above -- its own
+  // pollImportCampaign() in dm-bridge/watch.js, never touching the other three pairs.
+  const importCampaignRequestPath = path.join(bridgeDir, "import-campaign-request.json");
+  const importCampaignResponsePath = path.join(bridgeDir, "import-campaign-response.json");
 
   // request.json/response.json are a single shared mailbox -- fixed filenames
   // dm-bridge/watch.js (verbatim-copied from the 2D app, never hand-edited) reads and
@@ -546,6 +556,15 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
   function withCreateCharacterLock(fn) {
     const result = createCharacterLock.then(fn, fn);
     createCharacterLock = result.then(() => {}, () => {});
+    return result;
+  }
+
+  // Same "serialize the whole cycle" reasoning as withCreateCharacterLock above, for
+  // import-campaign-request.json/import-campaign-response.json's own mailbox pair.
+  let importCampaignLock = Promise.resolve();
+  function withImportCampaignLock(fn) {
+    const result = importCampaignLock.then(fn, fn);
+    importCampaignLock = result.then(() => {}, () => {});
     return result;
   }
 
@@ -735,6 +754,42 @@ function createServer({ stateFile = DEFAULT_STATE_FILE, bridgeDir = DEFAULT_DM_B
         // POST /action's own attack/save results already establish. The caller checks
         // body.ok, same as ui/app.js's own response.ok branch does.
         return { status: 200, body: { ok: response.ok, message: response.message, fileName, character } };
+      });
+      return sendJson(res, outcome.status, outcome.body);
+    }
+
+    // Seven requested features (ROADMAP.md, 2026-09-19), item 4 -- Import Campaign, the
+    // spawn-ready half (see that item's own note on why "generate 3D assets" is a
+    // separate, unrelated system). No body needed -- unlike Create Character, there's
+    // nothing for the caller to have computed first; this just asks dm-bridge/watch.js
+    // to read DND_REPO_PATH and hand back what engine/campaign.js's own
+    // importMarkdownFiles()/tokenDraftFromItem() already produce for the 2D app, the same
+    // "no new parsing logic, just a different way of feeding it real files" reasoning
+    // watch.js's own new mailbox handler documents.
+    if (req.method === "POST" && req.url === "/import-campaign") {
+      const outcome = await withImportCampaignLock(async () => {
+        const id = `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        try {
+          fs.mkdirSync(bridgeDir, { recursive: true });
+          fs.writeFileSync(
+            importCampaignRequestPath,
+            JSON.stringify({ id, createdAt: new Date().toISOString() }, null, 2)
+          );
+        } catch (err) {
+          return { status: 500, body: { error: `Could not write to the DM bridge folder: ${err.message}` } };
+        }
+
+        const response = await waitForBridgeResponse(importCampaignResponsePath, id, IMPORT_CAMPAIGN_TIMEOUT_MS);
+        if (!response) {
+          return {
+            status: 504,
+            body: { error: `No response after ${Math.round(IMPORT_CAMPAIGN_TIMEOUT_MS / 1000)}s -- make sure "node dm-bridge/watch.js" is running, then try again.` }
+          };
+        }
+        // Same "a miss isn't a 500" precedent /create-character's own response.ok
+        // branch already establishes -- DND_REPO_PATH not set/not found is a real,
+        // correctly-answered outcome, not a server error.
+        return { status: 200, body: { ok: response.ok, message: response.message, campaign: response.campaign } };
       });
       return sendJson(res, outcome.status, outcome.body);
     }
